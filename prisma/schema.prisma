@@ -1,0 +1,163 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TipoPessoa {
+  FISICA
+  JURIDICA
+}
+
+enum TipoItemEstoque {
+  PECA
+  INSUMO
+}
+
+enum StatusOrdemServico {
+  RECEBIDA
+  EM_DIAGNOSTICO
+  AGUARDANDO_APROVACAO
+  EM_EXECUCAO
+  FINALIZADA
+  ENTREGUE
+}
+
+model Usuario {
+  id                    String         @id @default(uuid())
+  nome                  String
+  email                 String         @unique
+  senhaHash             String
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  ordensServicoCriadas  OrdemServico[]
+}
+
+model Cliente {
+  id             String         @id @default(uuid())
+  nome           String
+  tipoPessoa     TipoPessoa
+  cpfCnpj        String         @unique
+  telefone       String?
+  email          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  veiculos       Veiculo[]
+  ordensServico  OrdemServico[]
+}
+
+model Veiculo {
+  id             String         @id @default(uuid())
+  clienteId      String
+  placa          String         @unique
+  marca          String
+  modelo         String
+  ano            Int
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  cliente        Cliente        @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  ordensServico  OrdemServico[]
+}
+
+model Servicos {
+  id               String        @id @default(uuid())
+  nome             String
+  descricao        String?
+  precoBase        Decimal       @db.Decimal(10, 2)
+  tempoEstimadoMin Int
+  ativo            Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  osServicos       OSServicos[]
+}
+
+model ItemEstoque {
+  id                 String          @id @default(uuid())
+  nome               String
+  tipo               TipoItemEstoque
+  sku                String          @unique
+  descricao          String?
+  precoUnitario      Decimal         @db.Decimal(10, 2)
+  quantidadeEstoque  Int
+  estoqueMinimo      Int
+  ativo              Boolean         @default(true)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  osItensEstoque     OSItemEstoque[]
+}
+
+model OrdemServico {
+  id                String             @id @default(uuid())
+  codigo            String             @unique
+  clienteId         String
+  veiculoId         String
+  usuarioCriadorId  String
+  status            StatusOrdemServico @default(RECEBIDA)
+  observacoes       String?
+  valorServicos     Decimal            @default(0) @db.Decimal(10, 2)
+  valorPecas        Decimal            @default(0) @db.Decimal(10, 2)
+  valorTotal        Decimal            @default(0) @db.Decimal(10, 2)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  finalizadaAt      DateTime?
+  entregueAt        DateTime?
+
+  cliente           Cliente            @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  veiculo           Veiculo            @relation(fields: [veiculoId], references: [id], onDelete: Restrict)
+  usuarioCriador    Usuario            @relation(fields: [usuarioCriadorId], references: [id], onDelete: Restrict)
+  osServicos        OSServicos[]
+  osItensEstoque    OSItemEstoque[]
+  historicoStatus   HistoricoStatusOS[]
+}
+
+model OSServicos {
+  id              String         @id @default(uuid())
+  ordemServicoId  String
+  servicoId       String
+  nomeSnapshot    String
+  precoUnitario   Decimal        @db.Decimal(10, 2)
+  quantidade      Int
+  subtotal        Decimal        @db.Decimal(10, 2)
+  createdAt       DateTime       @default(now())
+
+  ordemServico    OrdemServico   @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  servico         Servicos       @relation(fields: [servicoId], references: [id], onDelete: Restrict)
+}
+
+model OSItemEstoque {
+  id              String         @id @default(uuid())
+  ordemServicoId  String
+  itemEstoqueId   String
+  nomeSnapshot    String
+  precoUnitario   Decimal        @db.Decimal(10, 2)
+  quantidade      Int
+  subtotal        Decimal        @db.Decimal(10, 2)
+  createdAt       DateTime       @default(now())
+
+  ordemServico    OrdemServico   @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  itemEstoque     ItemEstoque    @relation(fields: [itemEstoqueId], references: [id], onDelete: Restrict)
+}
+
+model HistoricoStatusOS {
+  id              String             @id @default(uuid())
+  ordemServicoId  String
+  status          StatusOrdemServico
+  observacao      String?
+  createdAt       DateTime           @default(now())
+
+  ordemServico    OrdemServico       @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+}
