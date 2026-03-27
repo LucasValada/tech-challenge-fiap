@@ -26,16 +26,5 @@
 - **Docker Compose:** `v5.1.0`
 
 ---
-
-## Pré-requisitos
-
-Antes de rodar o projeto, você precisa ter instalado:
-
-- Node.js `24.14.0`
-- npm `11.9.0`
-- Docker Desktop
-- Git
-
----
 ```env
 DATABASE_URL="postgresql://oficina_user:oficina_pass@localhost:5432/oficina_db?schema=public"
