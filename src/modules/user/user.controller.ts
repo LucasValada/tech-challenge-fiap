@@ -1,12 +1,12 @@
-import { Controller, Get } from "@nestjs/common";
-import { UserService } from "./user.service";
+import { Controller, Get } from '@nestjs/common';
+import { UserService } from './user.service.js';
+import { UserRepository } from './user.repository.js';
 
 @Controller('user')
 export class UserController {
-  constructor(private readonly UserService: UserService) {}
-
   @Get()
-  getUser(): string {
-    return this.UserService.getUser();
+  async getUser() {
+    const service = new UserService(new UserRepository());
+    return await service.getAllUser();
   }
 }
