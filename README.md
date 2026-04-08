@@ -26,9 +26,22 @@
 - **Docker Compose:** `v5.1.0`
 
 ---
-```env
-DATABASE_URL="postgresql://oficina_user:oficina_pass@localhost:5432/oficina_db?schema=public"
+
+## Variáveis de ambiente
+
+Copie o arquivo `.env.example` para `.env` na raiz do projeto e preencha os valores:
+
+```bash
+cp .env.example .env
 ```
+
+| Variável         | Obrigatória | Descrição                                                                 |
+| ---------------- | ----------- | ------------------------------------------------------------------------- |
+| `DATABASE_URL`   | sim         | String de conexão do PostgreSQL usada pelo Prisma (driver pg adapter).    |
+| `JWT_SECRET`     | sim         | Segredo para assinar e validar os tokens JWT da autenticação.             |
+| `JWT_EXPIRES_IN` | não         | Tempo de expiração do access token. Default `1h` se não definido.         |
+
+O `.env` é ignorado pelo git — nunca commite segredos. Sempre que adicionar uma variável nova, atualize também o `.env.example`.
 
 # File Tree: src
 
