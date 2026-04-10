@@ -1,1 +1,2 @@
-//instancia do module para só importar em app / main
+export { AuthModule } from "./auth.module";
+export { AuthService } from "./auth.service";

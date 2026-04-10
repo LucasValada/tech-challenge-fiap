@@ -1,16 +1,15 @@
-// config/env.ts
-import dotenv from 'dotenv';
-import path from 'path';
+import dotenv from "dotenv";
+import path from "path";
 
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
-function must(name: string): string {
-  const val = process.env[name];
-  if (!val) throw new Error(`Env ${name} is missing`);
-  return val;
+function must(name: string): void {
+  if (!process.env[name]) {
+    throw new Error(`Variável de ambiente obrigatória ausente: ${name}`);
+  }
 }
 
-// variables to export
-// export const using must function to validate
-
-// export const PORT = must('APPLICATION_PORT');
+export function validateEnv(): void {
+  must("DATABASE_URL");
+  must("JWT_SECRET");
+}
