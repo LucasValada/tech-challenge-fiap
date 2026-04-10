@@ -1,4 +1,4 @@
-import { Usuario } from '../../../generated/prisma/client.js';
+import { Usuario } from '../../generated/prisma/client';
 
 export type GenericResponse = {
   message: string;
@@ -12,7 +12,5 @@ export interface UserResponse extends GenericResponse {
 }
 
 export interface OneUserResponse extends GenericResponse {
-  message: string;
-  user: Usuario | null;
-  error: boolean;
+  user: Usuario;
 }

@@ -1,22 +1,38 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service.js';
-import { Usuario } from '../../../generated/prisma/client.js';
+import { PrismaService } from '../prisma/prisma.service';
+import { Usuario } from '../../generated/prisma/client';
+import {
+  UsuarioCreateInput,
+  UsuarioUpdateInput,
+} from '../../generated/prisma/models';
 
 @Injectable()
 export class UserRepository {
   constructor(private prisma: PrismaService) {}
 
-  getAllUser(): Promise<Usuario[]> {
-    return this.prisma.usuario.findMany();
+  async getAllUser(): Promise<Usuario[]> {
+    const user = await this.prisma.usuario.findMany();
+    return user;
   }
 
   async getUserById(id: string): Promise<Usuario | null> {
     const user = await this.prisma.usuario.findUnique({ where: { id } });
 
-    if (!user) {
-      return null;
-    }
+    return user;
+  }
 
+  async getUserByEmail(email: string): Promise<Usuario | null> {
+    const user = await this.prisma.usuario.findUnique({ where: { email } });
+    return user;
+  }
+
+  async createUser(data: UsuarioCreateInput): Promise<Usuario> {
+    const user = await this.prisma.usuario.create({ data });
+    return user;
+  }
+
+  async updateUser(id: string, data: UsuarioUpdateInput): Promise<Usuario> {
+    const user = await this.prisma.usuario.update({ where: { id }, data });
     return user;
   }
 }

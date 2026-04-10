@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { UserRepository } from './user.repository.js';
-import { Usuario } from '../../../generated/prisma/client.js';
 import { OneUserResponse, UserResponse } from './user.types.js';
+import { Usuario } from '../../generated/prisma/client.js';
+import { UsuarioCreateInput } from '../../generated/prisma/models.js';
 
 @Injectable()
 export class UserService {
@@ -24,14 +25,7 @@ export class UserService {
     const user: Usuario | null = await this.userRepository.getUserById(id);
 
     if (!user) {
-      const message: string = 'Usuário nao encontrado';
-
-      const payload: OneUserResponse = {
-        message,
-        user: null,
-        error: false,
-      };
-      return payload;
+      throw new Error('Usuário não encontrado');
     }
     const message: string = 'Usuário encontrado com sucesso';
 
@@ -41,5 +35,29 @@ export class UserService {
       error: false,
     };
     return payload;
+  }
+
+  async createUser(data: UsuarioCreateInput): Promise<Usuario> {
+    data.email = data.email.toLowerCase();
+
+    //funcao para verificar se o email ja esta cadastrado
+    const user = await this.userRepository.getUserByEmail(data.email);
+    if (user) {
+      throw new Error('Email ja cadastrado');
+    }
+
+    return await this.userRepository.createUser(data);
+  }
+
+  async updateUser(id: string, data: UsuarioCreateInput): Promise<Usuario> {
+    data.email = data.email.toLowerCase();
+
+    //funcao para verificar se o email ja esta cadastrado
+    const user = await this.userRepository.getUserByEmail(data.email);
+    if (user) {
+      throw new Error('Email ja cadastrado');
+    }
+
+    return await this.userRepository.updateUser(id, data);
   }
 }
