@@ -1,1 +1,2 @@
-//instancia do module para só importar em app / main
+export { VeiculoModule } from "./veiculo.module";
+export { VeiculoService } from "./veiculo.service";
