@@ -83,7 +83,8 @@
       "**/*.(t|j)s"
     ],
     "moduleNameMapper": {
-      "^(\\.\\.?/.*)\\.js$": "$1"
+      "^(\\.\\.?/.*)\\.js$": "$1",
+      ".*/generated/prisma/client": "<rootDir>/__mocks__/prisma-client.ts"
     },
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
