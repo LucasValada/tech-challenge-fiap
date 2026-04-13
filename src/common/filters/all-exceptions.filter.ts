@@ -49,7 +49,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     return {
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-      message: "Erro interno do servidor",
+      message: "Internal server error",
       error: "Internal Server Error",
     };
   }
@@ -93,31 +93,31 @@ export class AllExceptionsFilter implements ExceptionFilter {
     switch (exception.code) {
       case "P2002": {
         const target =
-          (exception.meta?.target as string[])?.join(", ") ?? "campo";
+          (exception.meta?.target as string[])?.join(", ") ?? "field";
         return {
           statusCode: HttpStatus.CONFLICT,
-          message: `Registro com ${target} já existe`,
+          message: `Record with ${target} already exists`,
           error: "Conflict",
         };
       }
       case "P2025":
         return {
           statusCode: HttpStatus.NOT_FOUND,
-          message: "Registro não encontrado",
+          message: "Record not found",
           error: "Not Found",
         };
       case "P2003": {
-        const field = (exception.meta?.field_name as string) ?? "campo";
+        const field = (exception.meta?.field_name as string) ?? "field";
         return {
           statusCode: HttpStatus.BAD_REQUEST,
-          message: `Referência inválida no campo: ${field}`,
+          message: `Invalid reference in field: ${field}`,
           error: "Bad Request",
         };
       }
       default:
         return {
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: "Erro interno do servidor",
+          message: "Internal server error",
           error: "Internal Server Error",
         };
     }

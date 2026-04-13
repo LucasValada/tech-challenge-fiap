@@ -42,9 +42,9 @@ describe("AllExceptionsFilter", () => {
     jest.spyOn(filter["logger"], "error").mockImplementation();
   });
 
-  it("deve retornar 401 com mensagem original para UnauthorizedException", () => {
+  it("should return 401 with original message for UnauthorizedException", () => {
     const { host, status, json } = createMockHost();
-    const exception = new UnauthorizedException("Credenciais inválidas");
+    const exception = new UnauthorizedException("Invalid credentials");
 
     filter.catch(exception, host);
 
@@ -52,15 +52,15 @@ describe("AllExceptionsFilter", () => {
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({
         statusCode: HttpStatus.UNAUTHORIZED,
-        message: "Credenciais inválidas",
+        message: "Invalid credentials",
       }),
     );
   });
 
-  it("deve retornar 400 com array de mensagens para erros de validação", () => {
+  it("should return 400 with message array for validation errors", () => {
     const { host, status, json } = createMockHost();
     const exception = new BadRequestException({
-      message: ["nome não pode ser vazio", "email deve ser válido"],
+      message: ["name must not be empty", "email must be valid"],
       error: "Bad Request",
       statusCode: 400,
     });
@@ -71,15 +71,15 @@ describe("AllExceptionsFilter", () => {
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({
         statusCode: HttpStatus.BAD_REQUEST,
-        message: ["nome não pode ser vazio", "email deve ser válido"],
+        message: ["name must not be empty", "email must be valid"],
         error: "Bad Request",
       }),
     );
   });
 
-  it("deve retornar 404 para NotFoundException", () => {
+  it("should return 404 for NotFoundException", () => {
     const { host, status, json } = createMockHost();
-    const exception = new NotFoundException("Cliente não encontrado");
+    const exception = new NotFoundException("Client not found");
 
     filter.catch(exception, host);
 
@@ -87,12 +87,12 @@ describe("AllExceptionsFilter", () => {
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({
         statusCode: HttpStatus.NOT_FOUND,
-        message: "Cliente não encontrado",
+        message: "Client not found",
       }),
     );
   });
 
-  it("deve retornar 409 para Prisma P2002 (unique constraint)", () => {
+  it("should return 409 for Prisma P2002 (unique constraint)", () => {
     const { host, status, json } = createMockHost("/clientes", "POST");
     const exception = createPrismaError("P2002", { target: ["email"] });
 
@@ -102,13 +102,13 @@ describe("AllExceptionsFilter", () => {
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({
         statusCode: HttpStatus.CONFLICT,
-        message: "Registro com email já existe",
+        message: "Record with email already exists",
         error: "Conflict",
       }),
     );
   });
 
-  it("deve retornar 404 para Prisma P2025 (registro não encontrado)", () => {
+  it("should return 404 for Prisma P2025 (record not found)", () => {
     const { host, status, json } = createMockHost();
     const exception = createPrismaError("P2025");
 
@@ -118,13 +118,13 @@ describe("AllExceptionsFilter", () => {
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({
         statusCode: HttpStatus.NOT_FOUND,
-        message: "Registro não encontrado",
+        message: "Record not found",
         error: "Not Found",
       }),
     );
   });
 
-  it("deve retornar 400 para Prisma P2003 (chave estrangeira)", () => {
+  it("should return 400 for Prisma P2003 (foreign key constraint)", () => {
     const { host, status, json } = createMockHost();
     const exception = createPrismaError("P2003", {
       field_name: "clienteId",
@@ -136,13 +136,13 @@ describe("AllExceptionsFilter", () => {
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({
         statusCode: HttpStatus.BAD_REQUEST,
-        message: "Referência inválida no campo: clienteId",
+        message: "Invalid reference in field: clienteId",
         error: "Bad Request",
       }),
     );
   });
 
-  it("deve retornar 500 para erros Prisma desconhecidos", () => {
+  it("should return 500 for unknown Prisma errors", () => {
     const { host, status, json } = createMockHost();
     const exception = createPrismaError("P2010");
 
@@ -152,13 +152,13 @@ describe("AllExceptionsFilter", () => {
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: "Erro interno do servidor",
+        message: "Internal server error",
         error: "Internal Server Error",
       }),
     );
   });
 
-  it("deve retornar 500 com mensagem genérica para erros desconhecidos", () => {
+  it("should return 500 with generic message for unknown errors", () => {
     const { host, status, json } = createMockHost();
     const exception = new Error("SELECT * FROM users WHERE id = 1");
 
@@ -168,12 +168,12 @@ describe("AllExceptionsFilter", () => {
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: "Erro interno do servidor",
+        message: "Internal server error",
       }),
     );
   });
 
-  it("não deve vazar detalhes internos para erros genéricos", () => {
+  it("should not leak internal details for unknown errors", () => {
     const { host, json } = createMockHost();
     const exception = new Error(
       "Connection refused: postgresql://user:pass@localhost:5432",
@@ -183,12 +183,12 @@ describe("AllExceptionsFilter", () => {
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const responseBody = json.mock.calls[0][0] as Record<string, unknown>;
-    expect(responseBody.message).toBe("Erro interno do servidor");
+    expect(responseBody.message).toBe("Internal server error");
     expect(JSON.stringify(responseBody)).not.toContain("postgresql");
     expect(JSON.stringify(responseBody)).not.toContain("Connection refused");
   });
 
-  it("deve incluir timestamp e path na resposta", () => {
+  it("should include timestamp and path in response", () => {
     const { host, json } = createMockHost("/veiculos/123", "GET");
     const exception = new NotFoundException();
 
