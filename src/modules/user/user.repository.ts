@@ -35,4 +35,9 @@ export class UserRepository {
     const user = await this.prisma.usuario.update({ where: { id }, data });
     return user;
   }
+
+  async deleteUser(id: string): Promise<Usuario> {
+    const user = await this.prisma.usuario.delete({ where: { id } });
+    return user;
+  }
 }

@@ -1,12 +1,21 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { UserRepository } from './user.repository.js';
 import { OneUserResponse, UserResponse } from './user.types.js';
 import { Usuario } from '../../generated/prisma/client.js';
-import { UsuarioCreateInput } from '../../generated/prisma/models.js';
+import { generateRandomPassword } from './utils/generateRandomPassword.js';
+// import { MailService } from '../../core/mail.service.js';
 
 @Injectable()
 export class UserService {
-  constructor(private userRepository: UserRepository) {}
+  constructor(
+    private userRepository: UserRepository,
+    // private mailService: MailService,
+  ) {}
 
   async getAllUser(): Promise<UserResponse> {
     const user: Usuario[] = await this.userRepository.getAllUser();
@@ -25,8 +34,9 @@ export class UserService {
     const user: Usuario | null = await this.userRepository.getUserById(id);
 
     if (!user) {
-      throw new Error('Usuário não encontrado');
+      throw new NotFoundException('Usuário nao encontrado');
     }
+
     const message: string = 'Usuário encontrado com sucesso';
 
     const payload: OneUserResponse = {
@@ -37,27 +47,56 @@ export class UserService {
     return payload;
   }
 
-  async createUser(data: UsuarioCreateInput): Promise<Usuario> {
-    data.email = data.email.toLowerCase();
+  async createUser(data: { email: string; nome: string }): Promise<Usuario> {
+    const senha = generateRandomPassword(8);
+    const senhaHash = await bcrypt.hash(senha, 10);
+
+    const payload = {
+      email: data.email.toLowerCase(),
+      nome: data.nome,
+      senhaHash,
+    };
 
     //funcao para verificar se o email ja esta cadastrado
-    const user = await this.userRepository.getUserByEmail(data.email);
+    const user = await this.userRepository.getUserByEmail(payload.email);
     if (user) {
-      throw new Error('Email ja cadastrado');
+      throw new ConflictException('Email ja cadastrado');
     }
 
-    return await this.userRepository.createUser(data);
+    // await this.mailService.sendWelcomeEmail(payload.email);
+
+    return await this.userRepository.createUser(payload);
   }
 
-  async updateUser(id: string, data: UsuarioCreateInput): Promise<Usuario> {
+  async updateUser(
+    id: string,
+    data: {
+      email: string;
+      nome: string;
+    },
+  ): Promise<Usuario> {
     data.email = data.email.toLowerCase();
 
+    const target: Usuario | null = await this.userRepository.getUserById(id);
+
+    if (!target) {
+      throw new NotFoundException('Usuário nao encontrado');
+    }
+
     //funcao para verificar se o email ja esta cadastrado
-    const user = await this.userRepository.getUserByEmail(data.email);
-    if (user) {
-      throw new Error('Email ja cadastrado');
+    const duplicate = await this.userRepository.getUserByEmail(data.email);
+    if (duplicate) {
+      throw new ConflictException('Email ja cadastrado');
     }
 
     return await this.userRepository.updateUser(id, data);
+  }
+
+  async deleteUser(id: string): Promise<Usuario> {
+    const user = await this.userRepository.getUserById(id);
+    if (!user) {
+      throw new NotFoundException('Usuário nao encontrado');
+    }
+    return await this.userRepository.deleteUser(id);
   }
 }
