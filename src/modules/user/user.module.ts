@@ -4,7 +4,7 @@ import { UserController } from './user.controller.js';
 import { UserRepository } from './user.repository.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { generateRandomPassword } from './utils/generateRandomPassword.js';
-import { MailService } from '../../core/mail.service.js';
+// import { MailService } from '../../core/mail.service.js';
 
 //instancia do module para só importar em app / main
 @Module({
@@ -12,7 +12,7 @@ import { MailService } from '../../core/mail.service.js';
   controllers: [UserController],
   providers: [
     UserService,
-    MailService,
+    // MailService,
     UserRepository,
     { provide: 'GENERATE_PASSWORD', useValue: generateRandomPassword },
   ],
