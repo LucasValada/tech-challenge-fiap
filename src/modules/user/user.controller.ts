@@ -10,7 +10,7 @@ import {
   Put,
 } from '@nestjs/common';
 import { UserService } from './user.service.js';
-import { UserUpdateDto, UsuarioDto } from './dto/user.dto.js';
+import { UserUpdateDto, UsuarioCreateDto } from './dto/user.dto.js';
 @Controller('user')
 export class UserController {
   constructor(private userService: UserService) {}
@@ -29,7 +29,7 @@ export class UserController {
 
   @Post('create')
   @HttpCode(HttpStatus.CREATED)
-  async createUser(@Body() dto: UsuarioDto) {
+  async createUser(@Body() dto: UsuarioCreateDto) {
     const user = await this.userService.createUser(dto);
     return user;
   }
