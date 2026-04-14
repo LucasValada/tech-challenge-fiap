@@ -1,22 +1,30 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { Test, TestingModule } from "@nestjs/testing";
+import { AppController } from "./app.controller";
+import { AppService } from "./app.service";
 
-describe('AppController', () => {
-  let appController: AppController;
+const mockAppService = {
+  getHello: jest.fn(),
+};
+
+describe("AppController", () => {
+  let controller: AppController;
 
   beforeEach(async () => {
-    const app: TestingModule = await Test.createTestingModule({
+    const module: TestingModule = await Test.createTestingModule({
       controllers: [AppController],
-      providers: [AppService],
+      providers: [{ provide: AppService, useValue: mockAppService }],
     }).compile();
 
-    appController = app.get<AppController>(AppController);
+    controller = module.get<AppController>(AppController);
+    jest.clearAllMocks();
   });
 
-  describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
-    });
+  it("deve retornar a resposta do AppService.getHello", async () => {
+    mockAppService.getHello.mockResolvedValue("Chegou no banco carai");
+
+    const result = await controller.getHello();
+
+    expect(result).toBe("Chegou no banco carai");
+    expect(mockAppService.getHello).toHaveBeenCalled();
   });
 });

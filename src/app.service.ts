@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from './modules/prisma/prisma.service.js';
+import { Injectable } from "@nestjs/common";
+import { PrismaService } from "./modules/prisma/prisma.service";
 
 @Injectable()
 export class AppService {
@@ -7,6 +7,6 @@ export class AppService {
 
   async getHello(): Promise<string> {
     await this.prisma.$queryRaw`SELECT 1`;
-    return 'Chegou no banco carai';
+    return "Chegou no banco carai";
   }
 }

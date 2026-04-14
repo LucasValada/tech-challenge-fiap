@@ -1,10 +1,11 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
-import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
-import { JwtStrategy } from './strategies/jwt.strategy';
+import { Module } from "@nestjs/common";
+import { ConfigModule, ConfigService } from "@nestjs/config";
+import { JwtModule, JwtSignOptions } from "@nestjs/jwt";
+import { PassportModule } from "@nestjs/passport";
+import { AuthController } from "./auth.controller";
+import { AuthRepository } from "./auth.repository";
+import { AuthService } from "./auth.service";
+import { JwtStrategy } from "./strategies/jwt.strategy";
 
 @Module({
   imports: [
@@ -13,19 +14,19 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const secret = config.get<string>('JWT_SECRET');
+        const secret = config.get<string>("JWT_SECRET");
         if (!secret) {
-          throw new Error('JWT_SECRET não está definida.');
+          throw new Error("JWT_SECRET não está definida.");
         }
         const signOptions = {
-          expiresIn: config.get<string>('JWT_EXPIRES_IN') ?? '1h',
+          expiresIn: config.get<string>("JWT_EXPIRES_IN") ?? "1h",
         } as JwtSignOptions;
         return { secret, signOptions };
       },
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthRepository, AuthService, JwtStrategy],
   exports: [AuthService],
 })
 export class AuthModule {}
