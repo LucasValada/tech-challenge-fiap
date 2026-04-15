@@ -51,6 +51,8 @@ export class UserService {
     const senha = generateRandomPassword(8);
     const senhaHash = await bcrypt.hash(senha, 10);
 
+    console.log(senha)
+
     const payload = {
       email: data.email.toLowerCase(),
       nome: data.nome,
@@ -94,5 +96,9 @@ export class UserService {
       throw new NotFoundException('Usuário nao encontrado');
     }
     return await this.userRepository.deleteUser(id);
+  }
+
+  async getUserByEmail(email: string): Promise<Usuario | null> {
+    return await this.userRepository.getUserByEmail(email);
   }
 }
