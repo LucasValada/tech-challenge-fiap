@@ -1,20 +1,20 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { UserRepository } from './user.repository.js';
+import { USER_REPOSITORY, UserRepository } from './user.repository.js';
 import { OneUserResponse, UserResponse } from './user.types.js';
 import { Usuario } from '../../generated/prisma/client.js';
 import { generateRandomPassword } from './utils/generateRandomPassword.js';
-// import { MailService } from '../../core/mail.service.js';
 
 @Injectable()
 export class UserService {
   constructor(
+    @Inject(USER_REPOSITORY)
     private userRepository: UserRepository,
-    // private mailService: MailService,
   ) {}
 
   async getAllUser(): Promise<UserResponse> {
@@ -57,13 +57,10 @@ export class UserService {
       senhaHash,
     };
 
-    //funcao para verificar se o email ja esta cadastrado
     const user = await this.userRepository.getUserByEmail(payload.email);
     if (user) {
       throw new ConflictException('Email ja cadastrado');
     }
-
-    // await this.mailService.sendWelcomeEmail(payload.email);
 
     return await this.userRepository.createUser(payload);
   }
@@ -83,7 +80,6 @@ export class UserService {
       throw new NotFoundException('Usuário nao encontrado');
     }
 
-    //funcao para verificar se o email ja esta cadastrado
     const duplicate = await this.userRepository.getUserByEmail(data.email);
     if (duplicate) {
       throw new ConflictException('Email ja cadastrado');

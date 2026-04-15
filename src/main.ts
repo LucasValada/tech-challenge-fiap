@@ -1,7 +1,7 @@
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
-import { validateEnv } from "./config/env";
+import { validateEnv } from "./core/config/env";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/filters";
 

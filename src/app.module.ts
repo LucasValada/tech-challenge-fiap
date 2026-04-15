@@ -12,23 +12,6 @@ import { VeiculoModule } from "./modules/veiculo";
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    // MailerModule.forRootAsync({
-    //   useFactory: (configService: ConfigService) => ({
-    //     transport: {
-    //       host: configService.get<string>('MAIL_HOST'),
-    //       secure: true,
-    //       port: 465,
-    //       auth: {
-    //         user: configService.get<string>('MAIL_USER'),
-    //         pass: configService.get<string>('MAIL_PASS'),
-    //       },
-    //     },
-    //     defaults: {
-    //       from: '"Team" <noreply@example.com>',
-    //     },
-    //   }),
-    //   inject: [ConfigService],
-    // }),
     UserModule,
     PrismaModule,
     AuthModule,
