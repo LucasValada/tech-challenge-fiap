@@ -6,6 +6,7 @@ import { PrismaModule } from './modules/prisma/prisma.module';
 import { UserModule } from './modules/user/user.module';
 import { AuthModule } from './modules/auth';
 import { VeiculoModule } from './modules/veiculo';
+import { ItemEstoqueModule } from './modules/item-estoque';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { VeiculoModule } from './modules/veiculo';
     PrismaModule,
     AuthModule,
     VeiculoModule,
+    ItemEstoqueModule,
   ],
   controllers: [AppController],
   providers: [AppService],
