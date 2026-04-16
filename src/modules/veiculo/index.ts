@@ -1,2 +1,2 @@
-export { VeiculoModule } from "./veiculo.module";
-export { VeiculoService } from "./veiculo.service";
+export { VeiculoModule } from './veiculo.module';
+export { VeiculoService } from './veiculo.service';

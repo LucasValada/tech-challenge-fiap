@@ -5,9 +5,9 @@ import {
   HttpException,
   HttpStatus,
   Logger,
-} from "@nestjs/common";
-import { Request, Response } from "express";
-import { PrismaClientKnownRequestError } from "@prisma/client-runtime-utils";
+} from '@nestjs/common';
+import { Request, Response } from 'express';
+import { PrismaClientKnownRequestError } from '@prisma/client-runtime-utils';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -49,8 +49,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     return {
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-      message: "Internal server error",
-      error: "Internal Server Error",
+      message: 'Internal server error',
+      error: 'Internal Server Error',
     };
   }
 
@@ -63,9 +63,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const exceptionResponse = exception.getResponse();
 
     if (
-      typeof exceptionResponse === "object" &&
+      typeof exceptionResponse === 'object' &&
       exceptionResponse !== null &&
-      "message" in exceptionResponse
+      'message' in exceptionResponse
     ) {
       const resp = exceptionResponse as Record<string, unknown>;
       return {
@@ -78,7 +78,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     return {
       statusCode: status,
       message:
-        typeof exceptionResponse === "string"
+        typeof exceptionResponse === 'string'
           ? exceptionResponse
           : exception.message,
       error: exception.name,
@@ -91,34 +91,34 @@ export class AllExceptionsFilter implements ExceptionFilter {
     error: string;
   } {
     switch (exception.code) {
-      case "P2002": {
+      case 'P2002': {
         const target =
-          (exception.meta?.target as string[])?.join(", ") ?? "field";
+          (exception.meta?.target as string[])?.join(', ') ?? 'field';
         return {
           statusCode: HttpStatus.CONFLICT,
           message: `Record with ${target} already exists`,
-          error: "Conflict",
+          error: 'Conflict',
         };
       }
-      case "P2025":
+      case 'P2025':
         return {
           statusCode: HttpStatus.NOT_FOUND,
-          message: "Record not found",
-          error: "Not Found",
+          message: 'Record not found',
+          error: 'Not Found',
         };
-      case "P2003": {
-        const field = (exception.meta?.field_name as string) ?? "field";
+      case 'P2003': {
+        const field = (exception.meta?.field_name as string) ?? 'field';
         return {
           statusCode: HttpStatus.BAD_REQUEST,
           message: `Invalid reference in field: ${field}`,
-          error: "Bad Request",
+          error: 'Bad Request',
         };
       }
       default:
         return {
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: "Internal server error",
-          error: "Internal Server Error",
+          message: 'Internal server error',
+          error: 'Internal Server Error',
         };
     }
   }

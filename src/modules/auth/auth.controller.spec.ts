@@ -1,13 +1,13 @@
-import { Test, TestingModule } from "@nestjs/testing";
-import { UnauthorizedException } from "@nestjs/common";
-import { AuthController } from "./auth.controller";
-import { AuthService } from "./auth.service";
+import { Test, TestingModule } from '@nestjs/testing';
+import { UnauthorizedException } from '@nestjs/common';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
 
 const mockAuthService = {
   login: jest.fn(),
 };
 
-describe("AuthController", () => {
+describe('AuthController', () => {
   let controller: AuthController;
 
   beforeEach(async () => {
@@ -20,28 +20,28 @@ describe("AuthController", () => {
     jest.clearAllMocks();
   });
 
-  it("deve encaminhar email e senha para AuthService.login e retornar o token", async () => {
-    mockAuthService.login.mockResolvedValue({ accessToken: "token-fake" });
+  it('deve encaminhar email e senha para AuthService.login e retornar o token', async () => {
+    mockAuthService.login.mockResolvedValue({ accessToken: 'token-fake' });
 
     const result = await controller.login({
-      email: "admin@oficina.com",
-      senha: "senha123",
+      email: 'admin@oficina.com',
+      senha: 'senha123',
     });
 
-    expect(result).toEqual({ accessToken: "token-fake" });
+    expect(result).toEqual({ accessToken: 'token-fake' });
     expect(mockAuthService.login).toHaveBeenCalledWith(
-      "admin@oficina.com",
-      "senha123",
+      'admin@oficina.com',
+      'senha123',
     );
   });
 
-  it("deve propagar erros lançados pelo AuthService", async () => {
+  it('deve propagar erros lançados pelo AuthService', async () => {
     mockAuthService.login.mockRejectedValue(
-      new UnauthorizedException("Credenciais inválidas"),
+      new UnauthorizedException('Credenciais inválidas'),
     );
 
     await expect(
-      controller.login({ email: "admin@oficina.com", senha: "senhaerrada" }),
+      controller.login({ email: 'admin@oficina.com', senha: 'senhaerrada' }),
     ).rejects.toThrow(UnauthorizedException);
   });
 });

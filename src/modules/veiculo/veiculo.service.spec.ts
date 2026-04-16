@@ -1,18 +1,18 @@
-import { Test, TestingModule } from "@nestjs/testing";
-import { NotFoundException } from "@nestjs/common";
-import { VeiculoService } from "./veiculo.service";
-import { VeiculoRepository } from "./veiculo.repository";
+import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
+import { VeiculoService } from './veiculo.service';
+import { VeiculoRepository } from './veiculo.repository';
 
 const mockVeiculo = {
-  id: "veiculo-uuid-1",
-  clienteId: "cliente-uuid-1",
-  placa: "ABC1D23",
-  marca: "Toyota",
-  modelo: "Corolla",
+  id: 'veiculo-uuid-1',
+  clienteId: 'cliente-uuid-1',
+  placa: 'ABC1D23',
+  marca: 'Toyota',
+  modelo: 'Corolla',
   ano: 2023,
   createdAt: new Date(),
   updatedAt: new Date(),
-  cliente: { id: "cliente-uuid-1", nome: "John Doe" },
+  cliente: { id: 'cliente-uuid-1', nome: 'John Doe' },
 };
 
 const mockVeiculoRepository = {
@@ -24,7 +24,7 @@ const mockVeiculoRepository = {
   delete: jest.fn(),
 };
 
-describe("VeiculoService", () => {
+describe('VeiculoService', () => {
   let service: VeiculoService;
 
   beforeEach(async () => {
@@ -39,14 +39,14 @@ describe("VeiculoService", () => {
     jest.clearAllMocks();
   });
 
-  describe("create", () => {
-    it("should create a vehicle and return it", async () => {
+  describe('create', () => {
+    it('should create a vehicle and return it', async () => {
       const dto = {
-        placa: "ABC1D23",
-        marca: "Toyota",
-        modelo: "Corolla",
+        placa: 'ABC1D23',
+        marca: 'Toyota',
+        modelo: 'Corolla',
         ano: 2023,
-        clienteId: "cliente-uuid-1",
+        clienteId: 'cliente-uuid-1',
       };
       mockVeiculoRepository.create.mockResolvedValue(mockVeiculo);
 
@@ -57,8 +57,8 @@ describe("VeiculoService", () => {
     });
   });
 
-  describe("findAll", () => {
-    it("should return an array of vehicles", async () => {
+  describe('findAll', () => {
+    it('should return an array of vehicles', async () => {
       mockVeiculoRepository.findAll.mockResolvedValue([mockVeiculo]);
 
       const result = await service.findAll();
@@ -68,69 +68,69 @@ describe("VeiculoService", () => {
     });
   });
 
-  describe("findById", () => {
-    it("should return the vehicle when it exists", async () => {
+  describe('findById', () => {
+    it('should return the vehicle when it exists', async () => {
       mockVeiculoRepository.findById.mockResolvedValue(mockVeiculo);
 
-      const result = await service.findById("veiculo-uuid-1");
+      const result = await service.findById('veiculo-uuid-1');
 
       expect(result).toEqual(mockVeiculo);
       expect(mockVeiculoRepository.findById).toHaveBeenCalledWith(
-        "veiculo-uuid-1",
+        'veiculo-uuid-1',
       );
     });
 
-    it("should throw NotFoundException when vehicle does not exist", async () => {
+    it('should throw NotFoundException when vehicle does not exist', async () => {
       mockVeiculoRepository.findById.mockResolvedValue(null);
 
-      await expect(service.findById("nonexistent-id")).rejects.toThrow(
+      await expect(service.findById('nonexistent-id')).rejects.toThrow(
         NotFoundException,
       );
     });
   });
 
-  describe("update", () => {
-    it("should update and return the vehicle when it exists", async () => {
-      const dto = { marca: "Honda" };
-      const updatedVeiculo = { ...mockVeiculo, marca: "Honda" };
+  describe('update', () => {
+    it('should update and return the vehicle when it exists', async () => {
+      const dto = { marca: 'Honda' };
+      const updatedVeiculo = { ...mockVeiculo, marca: 'Honda' };
       mockVeiculoRepository.findById.mockResolvedValue(mockVeiculo);
       mockVeiculoRepository.update.mockResolvedValue(updatedVeiculo);
 
-      const result = await service.update("veiculo-uuid-1", dto);
+      const result = await service.update('veiculo-uuid-1', dto);
 
       expect(result).toEqual(updatedVeiculo);
       expect(mockVeiculoRepository.update).toHaveBeenCalledWith(
-        "veiculo-uuid-1",
+        'veiculo-uuid-1',
         dto,
       );
     });
 
-    it("should throw NotFoundException when vehicle does not exist", async () => {
+    it('should throw NotFoundException when vehicle does not exist', async () => {
       mockVeiculoRepository.findById.mockResolvedValue(null);
 
       await expect(
-        service.update("nonexistent-id", { marca: "Honda" }),
+        service.update('nonexistent-id', { marca: 'Honda' }),
       ).rejects.toThrow(NotFoundException);
       expect(mockVeiculoRepository.update).not.toHaveBeenCalled();
     });
   });
 
-  describe("delete", () => {
-    it("should delete the vehicle when it exists", async () => {
+  describe('delete', () => {
+    it('should delete the vehicle when it exists', async () => {
       mockVeiculoRepository.findById.mockResolvedValue(mockVeiculo);
       mockVeiculoRepository.delete.mockResolvedValue(mockVeiculo);
 
-      await service.delete("veiculo-uuid-1");
+      await service.delete('veiculo-uuid-1');
 
       expect(mockVeiculoRepository.delete).toHaveBeenCalledWith(
-        "veiculo-uuid-1",
+        'veiculo-uuid-1',
       );
     });
 
-    it("should throw NotFoundException when vehicle does not exist", async () => {
+    it('should throw NotFoundException when vehicle does not exist', async () => {
       mockVeiculoRepository.findById.mockResolvedValue(null);
 
-      await expect(service.delete("nonexistent-id")).rejects.toThrow(
+      await expect(service.delete('nonexistent-id')).rejects.toThrow(
         NotFoundException,
       );
       expect(mockVeiculoRepository.delete).not.toHaveBeenCalled();
