@@ -9,15 +9,15 @@ import {
   Post,
   Put,
   UseGuards,
-} from "@nestjs/common";
-import { ApiTags } from "@nestjs/swagger";
-import { JwtAuthGuard } from "../../common/guards";
-import { CreateVeiculoDto, UpdateVeiculoDto } from "./dto";
-import { VeiculoService } from "./veiculo.service";
+} from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards';
+import { CreateVeiculoDto, UpdateVeiculoDto } from './dto';
+import { VeiculoService } from './veiculo.service';
 
-@ApiTags("Veiculos")
+@ApiTags('Veiculos')
 @UseGuards(JwtAuthGuard)
-@Controller("veiculos")
+@Controller('veiculos')
 export class VeiculoController {
   constructor(private readonly veiculoService: VeiculoService) {}
 
@@ -31,19 +31,19 @@ export class VeiculoController {
     return this.veiculoService.findAll();
   }
 
-  @Get(":id")
-  async findById(@Param("id") id: string) {
+  @Get(':id')
+  async findById(@Param('id') id: string) {
     return this.veiculoService.findById(id);
   }
 
-  @Put(":id")
-  async update(@Param("id") id: string, @Body() dto: UpdateVeiculoDto) {
+  @Put(':id')
+  async update(@Param('id') id: string, @Body() dto: UpdateVeiculoDto) {
     return this.veiculoService.update(id, dto);
   }
 
-  @Delete(":id")
+  @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async delete(@Param("id") id: string) {
+  async delete(@Param('id') id: string) {
     await this.veiculoService.delete(id);
   }
 }

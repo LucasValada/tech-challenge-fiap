@@ -1,7 +1,7 @@
-import dotenv from "dotenv";
-import path from "path";
+import dotenv from 'dotenv';
+import path from 'path';
 
-dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 function must(name: string): void {
   if (!process.env[name]) {
@@ -10,6 +10,6 @@ function must(name: string): void {
 }
 
 export function validateEnv(): void {
-  must("DATABASE_URL");
-  must("JWT_SECRET");
+  must('DATABASE_URL');
+  must('JWT_SECRET');
 }

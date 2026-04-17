@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-import { CreateVeiculoDto, UpdateVeiculoDto } from "./dto";
-import { VeiculoRepository } from "./veiculo.repository";
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { CreateVeiculoDto, UpdateVeiculoDto } from './dto';
+import { VeiculoRepository } from './veiculo.repository';
 
 @Injectable()
 export class VeiculoService {
