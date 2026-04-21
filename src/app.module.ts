@@ -7,6 +7,7 @@ import { UserModule } from './modules/user/user.module';
 import { AuthModule } from './modules/auth';
 import { VeiculoModule } from './modules/veiculo';
 import { ItemEstoqueModule } from './modules/item-estoque';
+import { ServicoModule } from './modules/servico';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { ItemEstoqueModule } from './modules/item-estoque';
     AuthModule,
     VeiculoModule,
     ItemEstoqueModule,
+    ServicoModule,
   ],
   controllers: [AppController],
   providers: [AppService],
