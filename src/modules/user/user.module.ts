@@ -1,13 +1,11 @@
 import { Module } from '@nestjs/common';
-import { UserService } from './user.service';
-import { UserController } from './user.controller';
-import { PrismaModule } from '../prisma/prisma.module';
-import { generateRandomPassword } from './utils/generateRandomPassword';
-import { PrismaUserRepository } from '../../infra/database/prisma/repositories/prisma.user.repository';
+import { UserService } from './application/use-case/user.service.js';
+import { UserController } from './interface/controller/user.controller.js';
+import { generateRandomPassword } from './domain/services/generateRandomPassword.js';
+import { PrismaUserRepository } from '../../infra/database/prisma/repositories/prisma.user.repository.js';
 
 //instancia do module para só importar em app / main
 @Module({
-  imports: [PrismaModule],
   controllers: [UserController],
   providers: [
     UserService,

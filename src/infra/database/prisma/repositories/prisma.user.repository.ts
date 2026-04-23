@@ -1,19 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../modules/prisma/prisma.service';
-import { Usuario } from '../../../../modules/user/user.entity';
+import { Usuario } from '../../../../modules/user/domain/entity/User';
 import {
   UsuarioCreateInput,
   UsuarioUpdateInput,
 } from '../../../../generated/prisma/models';
-import { UserRepository } from '../../../../modules/user/user.repository';
+import { UserRepository } from '../../../../modules/user/domain/repository/user.repository';
 
 @Injectable()
 export class PrismaUserRepository implements UserRepository {
   constructor(private prisma: PrismaService) {}
 
-  async getAllUser(): Promise<Usuario[]> {
+  async getAllUser(): Promise<{ user: Usuario[]; count: number }> {
     const user = await this.prisma.usuario.findMany();
-    return user;
+    return { user, count: user.length };
   }
 
   async getUserById(id: string): Promise<Usuario | null> {
@@ -22,8 +22,11 @@ export class PrismaUserRepository implements UserRepository {
     return user;
   }
 
-  async getUserByEmail(email: string): Promise<Usuario | null> {
-    const user = await this.prisma.usuario.findUnique({ where: { email } });
+  async getUserByEmail(email: string, excludeId?: string): Promise<Usuario | null> {
+
+    const where = excludeId ? { email, NOT: { id: excludeId } } : { email };
+
+    const user = await this.prisma.usuario.findUnique({ where });
     return user;
   }
 

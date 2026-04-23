@@ -9,9 +9,9 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import { UserService } from './user.service';
-import { UserUpdateDto, UsuarioCreateDto } from './dto/user.dto';
-@Controller('user')
+import { UserService } from '../../application/use-case/user.service.js';
+import { UserUpdateDto, UsuarioCreateDto } from '../../application/dto/user.dto.js';
+@Controller("user")
 export class UserController {
   constructor(private userService: UserService) {}
 
@@ -27,7 +27,7 @@ export class UserController {
     return await this.userService.getUserById(id);
   }
 
-  @Post('create')
+  @Post('/')
   @HttpCode(HttpStatus.CREATED)
   async createUser(@Body() dto: UsuarioCreateDto) {
     const user = await this.userService.createUser(dto);
