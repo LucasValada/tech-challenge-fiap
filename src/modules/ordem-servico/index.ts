@@ -1,1 +1,1 @@
-//instancia do module para só importar em app / main
+export { OrdemServicoModule } from './ordem-servico.module';

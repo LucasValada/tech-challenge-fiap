@@ -8,7 +8,8 @@ import { AuthModule } from './modules/auth';
 import { VeiculoModule } from './modules/veiculo';
 import { ItemEstoqueModule } from './modules/item-estoque';
 import { ServicoModule } from './modules/servico';
-import { ClientModule } from "./modules/cliente/client.module";
+import { ClientModule } from './modules/cliente/client.module';
+import { OrdemServicoModule } from './modules/ordem-servico';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ClientModule } from "./modules/cliente/client.module";
     ItemEstoqueModule,
     ServicoModule,
     ClientModule,
+    OrdemServicoModule,
   ],
   controllers: [AppController],
   providers: [AppService],
