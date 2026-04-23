@@ -1,5 +1,5 @@
-import { Injectable } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class ItemEstoqueRepository {
@@ -7,7 +7,7 @@ export class ItemEstoqueRepository {
 
   async create(data: {
     nome: string;
-    tipo: "PECA" | "INSUMO";
+    tipo: 'PECA' | 'INSUMO';
     sku: string;
     descricao?: string;
     precoUnitario: number;
@@ -17,7 +17,7 @@ export class ItemEstoqueRepository {
     return this.prisma.itemEstoque.create({ data });
   }
 
-  async findAll(tipo?: "PECA" | "INSUMO") {
+  async findAll(tipo?: 'PECA' | 'INSUMO') {
     return this.prisma.itemEstoque.findMany({
       where: {
         ativo: true,
@@ -47,7 +47,7 @@ export class ItemEstoqueRepository {
     id: string,
     data: {
       nome?: string;
-      tipo?: "PECA" | "INSUMO";
+      tipo?: 'PECA' | 'INSUMO';
       sku?: string;
       descricao?: string;
       precoUnitario?: number;

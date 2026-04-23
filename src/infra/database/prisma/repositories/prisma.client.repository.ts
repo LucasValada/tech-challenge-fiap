@@ -56,10 +56,13 @@ export class PrismaClientRepository implements ClientRepository {
     return this.ToEntity(response);
   }
 
-  async getByCpfCnpj(cpfCnpj: string, excludeId?: string): Promise<Cliente | null> {
+  async getByCpfCnpj(
+    cpfCnpj: string,
+    excludeId?: string,
+  ): Promise<Cliente | null> {
     const where = excludeId ? { cpfCnpj, id: { not: excludeId } } : { cpfCnpj };
     const response = await this.prisma.cliente.findFirst({
-      where
+      where,
     });
 
     if (!response) {

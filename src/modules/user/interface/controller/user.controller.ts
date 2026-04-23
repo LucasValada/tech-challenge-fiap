@@ -10,8 +10,11 @@ import {
   Put,
 } from '@nestjs/common';
 import { UserService } from '../../application/use-case/user.service.js';
-import { UserUpdateDto, UsuarioCreateDto } from '../../application/dto/user.dto.js';
-@Controller("user")
+import {
+  UserUpdateDto,
+  UsuarioCreateDto,
+} from '../../application/dto/user.dto.js';
+@Controller('user')
 export class UserController {
   constructor(private userService: UserService) {}
 

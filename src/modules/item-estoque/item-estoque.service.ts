@@ -2,9 +2,9 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-} from "@nestjs/common";
-import { CreateItemEstoqueDto, UpdateItemEstoqueDto } from "./dto";
-import { ItemEstoqueRepository } from "./item-estoque.repository";
+} from '@nestjs/common';
+import { CreateItemEstoqueDto, UpdateItemEstoqueDto } from './dto';
+import { ItemEstoqueRepository } from './item-estoque.repository';
 
 @Injectable()
 export class ItemEstoqueService {
@@ -18,7 +18,7 @@ export class ItemEstoqueService {
     return this.itemEstoqueRepository.create(dto);
   }
 
-  async findAll(tipo?: "PECA" | "INSUMO") {
+  async findAll(tipo?: 'PECA' | 'INSUMO') {
     return this.itemEstoqueRepository.findAll(tipo);
   }
 
