@@ -1,4 +1,4 @@
-import { Usuario } from '../../generated/prisma/client';
+import { Usuario } from '../../../../generated/prisma/client';
 
 export type GenericResponse = {
   message: string;

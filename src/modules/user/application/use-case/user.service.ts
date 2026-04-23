@@ -5,10 +5,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { USER_REPOSITORY, UserRepository } from './user.repository';
-import { OneUserResponse, UserResponse } from './user.types';
-import { Usuario } from '../../generated/prisma/client';
-import { generateRandomPassword } from './utils/generateRandomPassword';
+import { USER_REPOSITORY, UserRepository } from '../../domain/repository/user.repository.js';
+import { OneUserResponse, UserResponse } from '../dto/user.dto.js';
+import { Usuario } from '../../../../generated/prisma/client.js';
+import { generateRandomPassword } from '../../domain/services/generateRandomPassword.js';
 
 @Injectable()
 export class UserService {
@@ -51,7 +51,7 @@ export class UserService {
     const senha = generateRandomPassword(8);
     const senhaHash = await bcrypt.hash(senha, 10);
 
-    console.log(senha);
+    console.log(senha)
 
     const payload = {
       email: data.email.toLowerCase(),
