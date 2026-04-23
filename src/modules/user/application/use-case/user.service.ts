@@ -5,7 +5,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { USER_REPOSITORY, UserRepository } from '../../domain/repository/user.repository.js';
+import {
+  USER_REPOSITORY,
+  UserRepository,
+} from '../../domain/repository/user.repository.js';
 import { Usuario } from '../../../../generated/prisma/client.js';
 import { generateRandomPassword } from '../../domain/services/generateRandomPassword.js';
 import { EmailPolicyService } from '../../domain/services/EmailPolicy.js';
@@ -38,7 +41,7 @@ export class UserService {
     const senhaHash = await bcrypt.hash(senha, 10);
 
     // para verificar a senha criada
-    console.log(senha)
+    console.log(senha);
 
     const email = new EmailPolicyService(this.userRepository, data.email);
     await email.IsDuplicate();
@@ -51,7 +54,7 @@ export class UserService {
 
     const newUser = await this.userRepository.createUser(payload);
 
-    return newUser
+    return newUser;
   }
 
   async updateUser(
@@ -77,7 +80,7 @@ export class UserService {
 
     const user = await this.userRepository.updateUser(id, payload);
 
-    return user
+    return user;
   }
 
   async deleteUser(id: string): Promise<Usuario> {
@@ -85,7 +88,7 @@ export class UserService {
     if (!user) {
       throw new NotFoundException('Usuário nao encontrado');
     }
-    
+
     return await this.userRepository.deleteUser(id);
   }
 

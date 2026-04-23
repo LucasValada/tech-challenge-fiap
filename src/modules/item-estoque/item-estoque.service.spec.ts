@@ -1,14 +1,14 @@
-import { Test, TestingModule } from "@nestjs/testing";
-import { ConflictException, NotFoundException } from "@nestjs/common";
-import { ItemEstoqueService } from "./item-estoque.service";
-import { ItemEstoqueRepository } from "./item-estoque.repository";
+import { Test, TestingModule } from '@nestjs/testing';
+import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ItemEstoqueService } from './item-estoque.service';
+import { ItemEstoqueRepository } from './item-estoque.repository';
 
 const mockItem = {
-  id: "item-uuid-1",
-  nome: "Filtro de óleo",
-  tipo: "PECA",
-  sku: "FLT-OLEO-001",
-  descricao: "Filtro de óleo para motores 1.0 a 2.0",
+  id: 'item-uuid-1',
+  nome: 'Filtro de óleo',
+  tipo: 'PECA',
+  sku: 'FLT-OLEO-001',
+  descricao: 'Filtro de óleo para motores 1.0 a 2.0',
   precoUnitario: 45.9,
   quantidadeEstoque: 50,
   estoqueMinimo: 10,
@@ -27,7 +27,7 @@ const mockItemEstoqueRepository = {
   delete: jest.fn(),
 };
 
-describe("ItemEstoqueService", () => {
+describe('ItemEstoqueService', () => {
   let service: ItemEstoqueService;
 
   beforeEach(async () => {
@@ -45,13 +45,13 @@ describe("ItemEstoqueService", () => {
     jest.clearAllMocks();
   });
 
-  describe("create", () => {
-    it("should create an item and return it", async () => {
+  describe('create', () => {
+    it('should create an item and return it', async () => {
       const dto = {
-        nome: "Filtro de óleo",
-        tipo: "PECA" as const,
-        sku: "FLT-OLEO-001",
-        descricao: "Filtro de óleo para motores 1.0 a 2.0",
+        nome: 'Filtro de óleo',
+        tipo: 'PECA' as const,
+        sku: 'FLT-OLEO-001',
+        descricao: 'Filtro de óleo para motores 1.0 a 2.0',
         precoUnitario: 45.9,
         quantidadeEstoque: 50,
         estoqueMinimo: 10,
@@ -65,11 +65,11 @@ describe("ItemEstoqueService", () => {
       expect(mockItemEstoqueRepository.create).toHaveBeenCalledWith(dto);
     });
 
-    it("should throw ConflictException when SKU already exists", async () => {
+    it('should throw ConflictException when SKU already exists', async () => {
       const dto = {
-        nome: "Filtro de óleo",
-        tipo: "PECA" as const,
-        sku: "FLT-OLEO-001",
+        nome: 'Filtro de óleo',
+        tipo: 'PECA' as const,
+        sku: 'FLT-OLEO-001',
         precoUnitario: 45.9,
         quantidadeEstoque: 50,
         estoqueMinimo: 10,
@@ -81,8 +81,8 @@ describe("ItemEstoqueService", () => {
     });
   });
 
-  describe("findAll", () => {
-    it("should return an array of items", async () => {
+  describe('findAll', () => {
+    it('should return an array of items', async () => {
       mockItemEstoqueRepository.findAll.mockResolvedValue([mockItem]);
 
       const result = await service.findAll();
@@ -91,39 +91,39 @@ describe("ItemEstoqueService", () => {
       expect(mockItemEstoqueRepository.findAll).toHaveBeenCalledWith(undefined);
     });
 
-    it("should filter by tipo when provided", async () => {
+    it('should filter by tipo when provided', async () => {
       mockItemEstoqueRepository.findAll.mockResolvedValue([mockItem]);
 
-      const result = await service.findAll("PECA");
+      const result = await service.findAll('PECA');
 
       expect(result).toEqual([mockItem]);
-      expect(mockItemEstoqueRepository.findAll).toHaveBeenCalledWith("PECA");
+      expect(mockItemEstoqueRepository.findAll).toHaveBeenCalledWith('PECA');
     });
   });
 
-  describe("findById", () => {
-    it("should return the item when it exists", async () => {
+  describe('findById', () => {
+    it('should return the item when it exists', async () => {
       mockItemEstoqueRepository.findById.mockResolvedValue(mockItem);
 
-      const result = await service.findById("item-uuid-1");
+      const result = await service.findById('item-uuid-1');
 
       expect(result).toEqual(mockItem);
       expect(mockItemEstoqueRepository.findById).toHaveBeenCalledWith(
-        "item-uuid-1",
+        'item-uuid-1',
       );
     });
 
-    it("should throw NotFoundException when item does not exist", async () => {
+    it('should throw NotFoundException when item does not exist', async () => {
       mockItemEstoqueRepository.findById.mockResolvedValue(null);
 
-      await expect(service.findById("nonexistent-id")).rejects.toThrow(
+      await expect(service.findById('nonexistent-id')).rejects.toThrow(
         NotFoundException,
       );
     });
   });
 
-  describe("findBaixoEstoque", () => {
-    it("should return items with low stock", async () => {
+  describe('findBaixoEstoque', () => {
+    it('should return items with low stock', async () => {
       const lowStockItem = { ...mockItem, quantidadeEstoque: 5 };
       mockItemEstoqueRepository.findBaixoEstoque.mockResolvedValue([
         lowStockItem,
@@ -136,74 +136,74 @@ describe("ItemEstoqueService", () => {
     });
   });
 
-  describe("update", () => {
-    it("should update and return the item when it exists", async () => {
-      const dto = { nome: "Filtro de óleo premium" };
-      const updatedItem = { ...mockItem, nome: "Filtro de óleo premium" };
+  describe('update', () => {
+    it('should update and return the item when it exists', async () => {
+      const dto = { nome: 'Filtro de óleo premium' };
+      const updatedItem = { ...mockItem, nome: 'Filtro de óleo premium' };
       mockItemEstoqueRepository.findById.mockResolvedValue(mockItem);
       mockItemEstoqueRepository.update.mockResolvedValue(updatedItem);
 
-      const result = await service.update("item-uuid-1", dto);
+      const result = await service.update('item-uuid-1', dto);
 
       expect(result).toEqual(updatedItem);
       expect(mockItemEstoqueRepository.update).toHaveBeenCalledWith(
-        "item-uuid-1",
+        'item-uuid-1',
         dto,
       );
     });
 
-    it("should throw NotFoundException when item does not exist", async () => {
+    it('should throw NotFoundException when item does not exist', async () => {
       mockItemEstoqueRepository.findById.mockResolvedValue(null);
 
       await expect(
-        service.update("nonexistent-id", { nome: "Novo nome" }),
+        service.update('nonexistent-id', { nome: 'Novo nome' }),
       ).rejects.toThrow(NotFoundException);
       expect(mockItemEstoqueRepository.update).not.toHaveBeenCalled();
     });
 
-    it("should throw ConflictException when updating SKU to an existing one", async () => {
-      const otherItem = { ...mockItem, id: "item-uuid-2", sku: "FLT-AR-001" };
+    it('should throw ConflictException when updating SKU to an existing one', async () => {
+      const otherItem = { ...mockItem, id: 'item-uuid-2', sku: 'FLT-AR-001' };
       mockItemEstoqueRepository.findById.mockResolvedValue(mockItem);
       mockItemEstoqueRepository.findBySku.mockResolvedValue(otherItem);
 
       await expect(
-        service.update("item-uuid-1", { sku: "FLT-AR-001" }),
+        service.update('item-uuid-1', { sku: 'FLT-AR-001' }),
       ).rejects.toThrow(ConflictException);
       expect(mockItemEstoqueRepository.update).not.toHaveBeenCalled();
     });
 
-    it("should allow updating SKU to the same value", async () => {
-      const dto = { sku: "FLT-OLEO-001" };
+    it('should allow updating SKU to the same value', async () => {
+      const dto = { sku: 'FLT-OLEO-001' };
       mockItemEstoqueRepository.findById.mockResolvedValue(mockItem);
       mockItemEstoqueRepository.findBySku.mockResolvedValue(mockItem);
       mockItemEstoqueRepository.update.mockResolvedValue(mockItem);
 
-      const result = await service.update("item-uuid-1", dto);
+      const result = await service.update('item-uuid-1', dto);
 
       expect(result).toEqual(mockItem);
       expect(mockItemEstoqueRepository.update).toHaveBeenCalled();
     });
   });
 
-  describe("delete", () => {
-    it("should soft-delete the item when it exists", async () => {
+  describe('delete', () => {
+    it('should soft-delete the item when it exists', async () => {
       mockItemEstoqueRepository.findById.mockResolvedValue(mockItem);
       mockItemEstoqueRepository.delete.mockResolvedValue({
         ...mockItem,
         ativo: false,
       });
 
-      await service.delete("item-uuid-1");
+      await service.delete('item-uuid-1');
 
       expect(mockItemEstoqueRepository.delete).toHaveBeenCalledWith(
-        "item-uuid-1",
+        'item-uuid-1',
       );
     });
 
-    it("should throw NotFoundException when item does not exist", async () => {
+    it('should throw NotFoundException when item does not exist', async () => {
       mockItemEstoqueRepository.findById.mockResolvedValue(null);
 
-      await expect(service.delete("nonexistent-id")).rejects.toThrow(
+      await expect(service.delete('nonexistent-id')).rejects.toThrow(
         NotFoundException,
       );
       expect(mockItemEstoqueRepository.delete).not.toHaveBeenCalled();

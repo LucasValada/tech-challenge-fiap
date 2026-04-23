@@ -1,4 +1,4 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty } from '@nestjs/swagger';
 import {
   IsEnum,
   IsInt,
@@ -7,32 +7,32 @@ import {
   IsOptional,
   IsString,
   Min,
-} from "class-validator";
+} from 'class-validator';
 
 enum TipoItemEstoque {
-  PECA = "PECA",
-  INSUMO = "INSUMO",
+  PECA = 'PECA',
+  INSUMO = 'INSUMO',
 }
 
 export class CreateItemEstoqueDto {
-  @ApiProperty({ example: "Filtro de óleo" })
+  @ApiProperty({ example: 'Filtro de óleo' })
   @IsString()
   @IsNotEmpty()
   nome!: string;
 
-  @ApiProperty({ enum: TipoItemEstoque, example: "PECA" })
+  @ApiProperty({ enum: TipoItemEstoque, example: 'PECA' })
   @IsEnum(TipoItemEstoque, {
-    message: "tipo must be PECA or INSUMO",
+    message: 'tipo must be PECA or INSUMO',
   })
   tipo!: TipoItemEstoque;
 
-  @ApiProperty({ example: "FLT-OLEO-001" })
+  @ApiProperty({ example: 'FLT-OLEO-001' })
   @IsString()
   @IsNotEmpty()
   sku!: string;
 
   @ApiProperty({
-    example: "Filtro de óleo para motores 1.0 a 2.0",
+    example: 'Filtro de óleo para motores 1.0 a 2.0',
     required: false,
   })
   @IsString()

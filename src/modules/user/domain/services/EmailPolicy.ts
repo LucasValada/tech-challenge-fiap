@@ -8,7 +8,10 @@ export class EmailPolicyService {
   ) {}
 
   async IsDuplicate(excludeId?: string): Promise<void> {
-    const alreadyExist = await this.userRepository.getUserByEmail(this.email, excludeId);
+    const alreadyExist = await this.userRepository.getUserByEmail(
+      this.email,
+      excludeId,
+    );
 
     if (alreadyExist) {
       throw new ConflictException('Email ja cadastrado');

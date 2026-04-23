@@ -10,15 +10,15 @@ import {
   Put,
   Query,
   UseGuards,
-} from "@nestjs/common";
-import { ApiQuery, ApiTags } from "@nestjs/swagger";
-import { JwtAuthGuard } from "../../common/guards";
-import { CreateItemEstoqueDto, UpdateItemEstoqueDto } from "./dto";
-import { ItemEstoqueService } from "./item-estoque.service";
+} from '@nestjs/common';
+import { ApiQuery, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards';
+import { CreateItemEstoqueDto, UpdateItemEstoqueDto } from './dto';
+import { ItemEstoqueService } from './item-estoque.service';
 
-@ApiTags("Itens de Estoque")
+@ApiTags('Itens de Estoque')
 @UseGuards(JwtAuthGuard)
-@Controller("itens-estoque")
+@Controller('itens-estoque')
 export class ItemEstoqueController {
   constructor(private readonly itemEstoqueService: ItemEstoqueService) {}
 
@@ -28,29 +28,29 @@ export class ItemEstoqueController {
   }
 
   @Get()
-  @ApiQuery({ name: "tipo", enum: ["PECA", "INSUMO"], required: false })
-  async findAll(@Query("tipo") tipo?: "PECA" | "INSUMO") {
+  @ApiQuery({ name: 'tipo', enum: ['PECA', 'INSUMO'], required: false })
+  async findAll(@Query('tipo') tipo?: 'PECA' | 'INSUMO') {
     return this.itemEstoqueService.findAll(tipo);
   }
 
-  @Get("baixo-estoque")
+  @Get('baixo-estoque')
   async findBaixoEstoque() {
     return this.itemEstoqueService.findBaixoEstoque();
   }
 
-  @Get(":id")
-  async findById(@Param("id") id: string) {
+  @Get(':id')
+  async findById(@Param('id') id: string) {
     return this.itemEstoqueService.findById(id);
   }
 
-  @Put(":id")
-  async update(@Param("id") id: string, @Body() dto: UpdateItemEstoqueDto) {
+  @Put(':id')
+  async update(@Param('id') id: string, @Body() dto: UpdateItemEstoqueDto) {
     return this.itemEstoqueService.update(id, dto);
   }
 
-  @Delete(":id")
+  @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async delete(@Param("id") id: string) {
+  async delete(@Param('id') id: string) {
     await this.itemEstoqueService.delete(id);
   }
 }

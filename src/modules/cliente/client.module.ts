@@ -16,5 +16,4 @@ import { PrismaModule } from '../prisma/prisma.module';
   ],
   exports: [],
 })
-
 export class ClientModule {}
