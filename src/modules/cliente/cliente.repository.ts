@@ -1,17 +1,17 @@
 import { count } from "console";
 import { Cliente } from "./domain/entity/Client";
-import { createClientDto } from "./application/dto/client.dto";
+import { clientDto } from "./application/dto/client.dto";
 
 export interface ClientRepository {
     getOne(id: string): Promise<Cliente | null>
 
     getAllClient(): Promise<{client: Cliente[], count: number}>
 
-    createClient(client: createClientDto): Promise<Cliente>
+    createClient(client: clientDto): Promise<Cliente>
 
-    getByCpfCnpj(cpfCnpj: string): Promise<Cliente | null>
+    getByCpfCnpj(cpfCnpj: string, excludeId?: string): Promise<Cliente | null>
 
-    updateClient(id, client: createClientDto): Promise<Cliente>
+    updateClient(id: string, client: clientDto): Promise<Cliente>
 
     deleteClient(id: string): Promise<void>
 }

@@ -17,7 +17,7 @@ export class UserService {
     private userRepository: UserRepository,
   ) {}
 
-  async getAllUser(): Promise<Usuario[]> {
+  async getAllUser(): Promise<{ user: Usuario[]; count: number }> {
     const user = await this.userRepository.getAllUser();
 
     return user;

@@ -47,7 +47,3 @@ export class clientDto {
   })
   tipoPessoa!: 'FISICA' | 'JURIDICA';
 }
-
-export type createClientDto = Omit<clientDto, 'id'>;
-
-export type updateClientDto = Omit<clientDto, 'id'>;

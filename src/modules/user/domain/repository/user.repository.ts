@@ -3,7 +3,7 @@ import { Usuario } from '../entity/User';
 
 export const USER_REPOSITORY = 'USER_REPOSITORY';
 export interface UserRepository {
-  getAllUser(): Promise<Usuario[]> 
+  getAllUser(): Promise<{ user: Usuario[]; count: number }> 
 
    getUserById(id: string): Promise<Usuario | null> 
 

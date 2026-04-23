@@ -56,9 +56,10 @@ export class PrismaClientRepository implements ClientRepository {
     return this.ToEntity(response);
   }
 
-  async getByCpfCnpj(cpfCnpj: string): Promise<Cliente | null> {
-    const response = await this.prisma.cliente.findUnique({
-      where: { cpfCnpj },
+  async getByCpfCnpj(cpfCnpj: string, excludeId?: string): Promise<Cliente | null> {
+    const where = excludeId ? { cpfCnpj, id: { not: excludeId } } : { cpfCnpj };
+    const response = await this.prisma.cliente.findFirst({
+      where
     });
 
     if (!response) {
@@ -68,9 +69,9 @@ export class PrismaClientRepository implements ClientRepository {
     return this.ToEntity(response);
   }
 
-  async updateClient(client: any): Promise<Cliente> {
+  async updateClient(id: string, client: Cliente): Promise<Cliente> {
     const response = await this.prisma.cliente.update({
-      where: { id: client.id },
+      where: { id: id },
       data: {
         nome: client.nome,
         telefone: client.telefone,

@@ -11,9 +11,9 @@ import { UserRepository } from '../../../../modules/user/domain/repository/user.
 export class PrismaUserRepository implements UserRepository {
   constructor(private prisma: PrismaService) {}
 
-  async getAllUser(): Promise<Usuario[]> {
+  async getAllUser(): Promise<{ user: Usuario[]; count: number }> {
     const user = await this.prisma.usuario.findMany();
-    return user;
+    return { user, count: user.length };
   }
 
   async getUserById(id: string): Promise<Usuario | null> {

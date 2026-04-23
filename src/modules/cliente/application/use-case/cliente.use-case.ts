@@ -1,7 +1,8 @@
-import { ConflictException, Inject, NotFoundException } from '@nestjs/common';
+import { Inject, NotFoundException } from '@nestjs/common';
 import { ClientRepository } from '../../cliente.repository';
-import { createClientDto, updateClientDto } from '../dto/client.dto';
+import { clientDto } from '../dto/client.dto';
 import { Cliente } from '../../domain/entity/Client';
+import { ClientPolicyService } from '../../domain/service/ClientPolicy.service';
 
 export class clientServices {
   constructor(
@@ -24,7 +25,7 @@ export class clientServices {
     return response;
   }
 
-  async createClient(data: createClientDto) {
+  async createClient(data: clientDto) {
     const client = new Cliente(
       data.nome,
       data.telefone,
@@ -33,22 +34,14 @@ export class clientServices {
       data.tipoPessoa,
     );
 
-    if (client.email) {
-      if (!client.IsValidEmail()) {
-        throw new NotFoundException('Client not found');
-      }
-    }
-
-    const duplicate = await this.clientRepository.getByCpfCnpj(client.cpfCnpj);
-    if (duplicate) {
-      throw new ConflictException('Client already exists');
-    }
+    const clientPolicy = new ClientPolicyService(this.clientRepository, client);
+    await clientPolicy.validateClient();
 
     const response = await this.clientRepository.createClient(client);
     return response;
   }
 
-  async updateClient(id: string, data: updateClientDto) {
+  async updateClient(id: string, data: clientDto) {
     const client = new Cliente(
       data.nome,
       data.telefone,
@@ -58,7 +51,10 @@ export class clientServices {
       id,
     );
 
-    const response = await this.clientRepository.updateClient(client.id, client);
+    const clientPolicy = new ClientPolicyService(this.clientRepository, client);
+    await clientPolicy.validateClient(id);
+
+    const response = await this.clientRepository.updateClient(id, client);
     return response;
   }
 
