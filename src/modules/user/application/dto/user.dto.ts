@@ -1,16 +1,42 @@
-import { Usuario } from '../../../../generated/prisma/client';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
 
-export type GenericResponse = {
-  message: string;
-  error: boolean;
-};
+export class UsuarioDto {
+  @IsString()
+  @IsNotEmpty()
+  @ApiProperty({
+    description: 'Nome do usuário',
+    example: 'John Doe',
+    required: true,
+  })
+  nome!: string;
 
-export interface UserResponse extends GenericResponse {
-  message: string;
-  user: Usuario[];
-  error: boolean;
+  @IsEmail()
+  @IsNotEmpty()
+  email!: string;
 }
 
-export interface OneUserResponse extends GenericResponse {
-  user: Usuario;
+export class UsuarioCreateDto {
+  @IsString()
+  @IsNotEmpty()
+  @ApiProperty({
+    description: 'Nome do usuário',
+    example: 'John Doe',
+    required: true,
+  })
+  nome!: string;
+
+  @IsEmail()
+  @IsNotEmpty()
+  email!: string;
+}
+
+export class UserUpdateDto {
+  @IsString()
+  @IsNotEmpty()
+  email!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  nome!: string;
 }

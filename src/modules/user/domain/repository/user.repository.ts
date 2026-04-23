@@ -1,4 +1,4 @@
-import { UserUpdateDto, UsuarioCreateDto } from '../../application/dto3/user.dto';
+import { UserUpdateDto, UsuarioCreateDto } from '../../application/dto/user.dto';
 import { Usuario } from '../entity/User';
 
 export const USER_REPOSITORY = 'USER_REPOSITORY';
@@ -7,7 +7,7 @@ export interface UserRepository {
 
    getUserById(id: string): Promise<Usuario | null> 
 
-   getUserByEmail(email: string): Promise<Usuario | null> 
+   getUserByEmail(email: string, excludeId?: string): Promise<Usuario | null> 
 
    createUser(data: UsuarioCreateDto): Promise<Usuario> 
 
