@@ -15,7 +15,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../../../../common/guards';
-import { AuthenticatedUser } from '../../../auth/types';
+import { AuthenticatedUser } from '../../../auth/domain/types';
 import {
   CreateOrdemServicoDto,
   UpdateOrdemServicoDto,

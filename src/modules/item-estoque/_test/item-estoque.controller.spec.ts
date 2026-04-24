@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { ItemEstoqueController } from './item-estoque.controller';
-import { ItemEstoqueService } from './item-estoque.service';
+import { ItemEstoqueController } from '../interface/controller/item-estoque.controller';
+import { ItemEstoqueService } from '../application/use-case/item-estoque.service';
 
 const mockItem = {
   id: 'item-uuid-1',

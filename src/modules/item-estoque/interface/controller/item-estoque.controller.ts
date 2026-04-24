@@ -12,9 +12,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiQuery, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../common/guards';
-import { CreateItemEstoqueDto, UpdateItemEstoqueDto } from './dto';
-import { ItemEstoqueService } from './item-estoque.service';
+import { JwtAuthGuard } from '../../../../common/guards';
+import { CreateItemEstoqueDto, UpdateItemEstoqueDto } from '../../application/dto';
+import { ItemEstoqueService } from '../../application/use-case/item-estoque.service';
 
 @ApiTags('Itens de Estoque')
 @UseGuards(JwtAuthGuard)

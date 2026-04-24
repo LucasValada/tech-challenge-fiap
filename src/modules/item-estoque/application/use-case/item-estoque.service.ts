@@ -1,14 +1,21 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CreateItemEstoqueDto, UpdateItemEstoqueDto } from './dto';
-import { ItemEstoqueRepository } from './item-estoque.repository';
+import { CreateItemEstoqueDto, UpdateItemEstoqueDto } from '../dto';
+import {
+  ITEM_ESTOQUE_REPOSITORY,
+  ItemEstoqueRepository,
+} from '../../domain/repository/item-estoque.repository';
 
 @Injectable()
 export class ItemEstoqueService {
-  constructor(private readonly itemEstoqueRepository: ItemEstoqueRepository) {}
+  constructor(
+    @Inject(ITEM_ESTOQUE_REPOSITORY)
+    private readonly itemEstoqueRepository: ItemEstoqueRepository,
+  ) {}
 
   async create(dto: CreateItemEstoqueDto) {
     const existente = await this.itemEstoqueRepository.findBySku(dto.sku);

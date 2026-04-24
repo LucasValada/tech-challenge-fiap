@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { ItemEstoqueService } from './item-estoque.service';
-import { ItemEstoqueRepository } from './item-estoque.repository';
+import { ItemEstoqueService } from '../application/use-case/item-estoque.service';
+import { ITEM_ESTOQUE_REPOSITORY } from '../domain/repository/item-estoque.repository';
 
 const mockItem = {
   id: 'item-uuid-1',
@@ -35,7 +35,7 @@ describe('ItemEstoqueService', () => {
       providers: [
         ItemEstoqueService,
         {
-          provide: ItemEstoqueRepository,
+          provide: ITEM_ESTOQUE_REPOSITORY,
           useValue: mockItemEstoqueRepository,
         },
       ],
