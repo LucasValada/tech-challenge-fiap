@@ -54,6 +54,8 @@ export class UserService {
 
     const newUser = await this.userRepository.createUser(payload);
 
+    newUser.senhaHash = senha
+
     return newUser;
   }
 

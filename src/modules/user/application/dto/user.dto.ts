@@ -28,6 +28,11 @@ export class UsuarioCreateDto {
 
   @IsEmail()
   @IsNotEmpty()
+  @ApiProperty({
+    description: 'Email do usuário',
+    example: 'example@gmail.com',
+    required: true,
+  })
   email!: string;
 }
 
