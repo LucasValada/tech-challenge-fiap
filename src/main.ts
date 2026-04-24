@@ -21,8 +21,11 @@ async function bootstrap() {
 
   const config = new DocumentBuilder()
     .setTitle('Tech Challenge Fiap - SOAT Oficina')
-    // .setDescription('description')
+    .setDescription(
+      'API de gerenciamento de oficina mecânica. Gerencie clientes, veículos, serviços, peças/insumos e ordens de serviço.',
+    )
     .setVersion('1.0')
+    .addBearerAuth()
     .build();
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, documentFactory);
