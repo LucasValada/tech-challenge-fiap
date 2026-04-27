@@ -45,6 +45,27 @@ export interface PublicOrdemServicoView {
   historicoStatus: PublicHistoricoStatusView[];
 }
 
+export interface RelatorioTempoMedioFiltros {
+  dataInicio?: Date;
+  dataFim?: Date;
+  servicoId?: string;
+}
+
+export interface TempoMedioServicoView {
+  servicoId: string;
+  nome: string;
+  tempoEstimadoMin: number;
+  quantidadeOS: number;
+  tempoMedioMinutos: number;
+  tempoMinimoMinutos: number;
+  tempoMaximoMinutos: number;
+}
+
+export interface RelatorioTempoMedioView {
+  totalOrdensConsideradas: number;
+  servicos: TempoMedioServicoView[];
+}
+
 export interface OrdemServicoRepository {
   findAll(): Promise<{ ordens: OrdemServico[]; count: number }>;
 
@@ -62,4 +83,8 @@ export interface OrdemServicoRepository {
   update(id: string, data: UpdateOrdemServicoData): Promise<OrdemServico>;
 
   delete(id: string): Promise<void>;
+
+  getRelatorioTempoMedioPorServico(
+    filtros: RelatorioTempoMedioFiltros,
+  ): Promise<RelatorioTempoMedioView>;
 }
