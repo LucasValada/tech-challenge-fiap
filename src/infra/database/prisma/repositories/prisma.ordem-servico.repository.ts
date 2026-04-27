@@ -5,6 +5,9 @@ import {
   CreateOrdemServicoData,
   OrdemServicoRepository,
   PublicOrdemServicoView,
+  RelatorioTempoMedioFiltros,
+  RelatorioTempoMedioView,
+  TempoMedioServicoView,
   UpdateOrdemServicoData,
 } from '../../../../modules/ordem-servico/domain/repository/ordem-servico.repository';
 import { OrdemServicoModel } from '../../../../generated/prisma/models';
@@ -141,6 +144,89 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
 
   async delete(id: string): Promise<void> {
     await this.prisma.ordemServico.delete({ where: { id } });
+  }
+
+  async getRelatorioTempoMedioPorServico(
+    filtros: RelatorioTempoMedioFiltros,
+  ): Promise<RelatorioTempoMedioView> {
+    const { dataInicio, dataFim, servicoId } = filtros;
+
+    const finalizadaAtFilter: { gte?: Date; lte?: Date; not: null } = {
+      not: null,
+    };
+    if (dataInicio) finalizadaAtFilter.gte = dataInicio;
+    if (dataFim) finalizadaAtFilter.lte = dataFim;
+
+    const linhas = await this.prisma.oSServicos.findMany({
+      where: {
+        ...(servicoId ? { servicoId } : {}),
+        ordemServico: { is: { finalizadaAt: finalizadaAtFilter } },
+      },
+      select: {
+        ordemServicoId: true,
+        servicoId: true,
+        servico: {
+          select: { id: true, nome: true, tempoEstimadoMin: true },
+        },
+        ordemServico: {
+          select: { id: true, createdAt: true, finalizadaAt: true },
+        },
+      },
+    });
+
+    type Acc = {
+      servicoId: string;
+      nome: string;
+      tempoEstimadoMin: number;
+      tempos: number[];
+    };
+    const porServico = new Map<string, Acc>();
+    const paresVistos = new Set<string>();
+    const ordensDistintas = new Set<string>();
+
+    for (const linha of linhas) {
+      const par = `${linha.servicoId}|${linha.ordemServicoId}`;
+      if (paresVistos.has(par)) continue;
+      paresVistos.add(par);
+
+      if (!linha.ordemServico.finalizadaAt) continue;
+
+      const minutos =
+        (linha.ordemServico.finalizadaAt.getTime() -
+          linha.ordemServico.createdAt.getTime()) /
+        60000;
+
+      ordensDistintas.add(linha.ordemServicoId);
+
+      const acc = porServico.get(linha.servicoId) ?? {
+        servicoId: linha.servico.id,
+        nome: linha.servico.nome,
+        tempoEstimadoMin: linha.servico.tempoEstimadoMin,
+        tempos: [],
+      };
+      acc.tempos.push(minutos);
+      porServico.set(linha.servicoId, acc);
+    }
+
+    const servicos: TempoMedioServicoView[] = Array.from(porServico.values())
+      .map((acc) => {
+        const soma = acc.tempos.reduce((s, t) => s + t, 0);
+        return {
+          servicoId: acc.servicoId,
+          nome: acc.nome,
+          tempoEstimadoMin: acc.tempoEstimadoMin,
+          quantidadeOS: acc.tempos.length,
+          tempoMedioMinutos: Number((soma / acc.tempos.length).toFixed(2)),
+          tempoMinimoMinutos: Number(Math.min(...acc.tempos).toFixed(2)),
+          tempoMaximoMinutos: Number(Math.max(...acc.tempos).toFixed(2)),
+        };
+      })
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    return {
+      totalOrdensConsideradas: ordensDistintas.size,
+      servicos,
+    };
   }
 
   private toEntity(raw: OrdemServicoModel): OrdemServico {
