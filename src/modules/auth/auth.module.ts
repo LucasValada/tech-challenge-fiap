@@ -2,9 +2,9 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
-import { JwtStrategy } from './strategies/jwt.strategy';
+import { AuthController } from './interface/controller/auth.controller';
+import { AuthService } from './application/use-case/auth.service';
+import { JwtStrategy } from './domain/strategies/jwt.strategy';
 import { UserService } from '../user/application/use-case/user.service';
 import { PrismaUserRepository } from '../../infra/database/prisma/repositories/prisma.user.repository';
 

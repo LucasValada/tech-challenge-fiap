@@ -13,6 +13,11 @@ export class UsuarioDto {
 
   @IsEmail()
   @IsNotEmpty()
+  @ApiProperty({
+    description: 'Email do usuário',
+    example: 'example@gmail.com',
+    required: true,
+  })
   email!: string;
 }
 
@@ -37,11 +42,21 @@ export class UsuarioCreateDto {
 }
 
 export class UserUpdateDto {
-  @IsString()
+  @IsEmail()
   @IsNotEmpty()
+  @ApiProperty({
+    description: 'Email do usuário',
+    example: 'example@gmail.com',
+    required: true,
+  })
   email!: string;
 
   @IsString()
   @IsNotEmpty()
+  @ApiProperty({
+    description: 'Nome do usuário',
+    example: 'John Doe',
+    required: true,
+  })
   nome!: string;
 }
