@@ -82,10 +82,13 @@ export class OrdemServicoService {
     usuarioCriadorId: string,
     dto: CreateOrdemServicoDto,
   ): Promise<OrdemServico> {
-    const cpfCnpj = normalizarCpfCnpj(dto.cpfCnpj);
+    const cpfCnpjNormalizado = normalizarCpfCnpj(dto.cpfCnpj);
     const placa = normalizarPlaca(dto.placa);
 
-    const cliente = await this.clientRepository.getByCpfCnpj(cpfCnpj);
+    let cliente = await this.clientRepository.getByCpfCnpj(cpfCnpjNormalizado);
+    if (!cliente && cpfCnpjNormalizado !== dto.cpfCnpj) {
+      cliente = await this.clientRepository.getByCpfCnpj(dto.cpfCnpj);
+    }
     if (!cliente) {
       throw new NotFoundException(
         new ClienteNaoEncontradoError(dto.cpfCnpj).message,
