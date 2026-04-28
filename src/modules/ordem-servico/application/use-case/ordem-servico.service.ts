@@ -136,8 +136,8 @@ export class OrdemServicoService {
     dto: AdicionarServicoOSDto,
   ): Promise<OSServicoLinha> {
     const ordem = await this.findById(ordemId);
-    garantirOSMutavel(ordem.status);
     try {
+      garantirOSMutavel(ordem.status);
       return await this.ordemServicoRepository.adicionarServico(ordemId, dto);
     } catch (e) {
       throw this.traduzirErroDominio(e);
@@ -146,8 +146,8 @@ export class OrdemServicoService {
 
   async removerServico(ordemId: string, linhaId: string): Promise<void> {
     const ordem = await this.findById(ordemId);
-    garantirOSMutavel(ordem.status);
     try {
+      garantirOSMutavel(ordem.status);
       await this.ordemServicoRepository.removerServico(ordemId, linhaId);
     } catch (e) {
       throw this.traduzirErroDominio(e);
@@ -160,8 +160,8 @@ export class OrdemServicoService {
     quantidade: number,
   ): Promise<OSServicoLinha> {
     const ordem = await this.findById(ordemId);
-    garantirOSMutavel(ordem.status);
     try {
+      garantirOSMutavel(ordem.status);
       return await this.ordemServicoRepository.atualizarQuantidadeServico(
         ordemId,
         linhaId,
@@ -177,8 +177,8 @@ export class OrdemServicoService {
     dto: AdicionarItemEstoqueOSDto,
   ): Promise<OSItemEstoqueLinha> {
     const ordem = await this.findById(ordemId);
-    garantirOSMutavel(ordem.status);
     try {
+      garantirOSMutavel(ordem.status);
       return await this.ordemServicoRepository.adicionarItemEstoque(
         ordemId,
         dto,
@@ -190,8 +190,8 @@ export class OrdemServicoService {
 
   async removerItemEstoque(ordemId: string, linhaId: string): Promise<void> {
     const ordem = await this.findById(ordemId);
-    garantirOSMutavel(ordem.status);
     try {
+      garantirOSMutavel(ordem.status);
       await this.ordemServicoRepository.removerItemEstoque(ordemId, linhaId);
     } catch (e) {
       throw this.traduzirErroDominio(e);
@@ -204,8 +204,8 @@ export class OrdemServicoService {
     quantidade: number,
   ): Promise<OSItemEstoqueLinha> {
     const ordem = await this.findById(ordemId);
-    garantirOSMutavel(ordem.status);
     try {
+      garantirOSMutavel(ordem.status);
       return await this.ordemServicoRepository.atualizarQuantidadeItemEstoque(
         ordemId,
         linhaId,
