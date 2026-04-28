@@ -186,6 +186,13 @@ export interface OrdemServicoRepository {
     observacao: string | null,
   ): Promise<OrdemServico>;
 
+  contarLinhas(ordemId: string): Promise<{ servicos: number; itens: number }>;
+
+  findByCodigoEPlaca(
+    codigo: string,
+    placa: string,
+  ): Promise<OrdemServico | null>;
+
   getRelatorioTempoMedioPorServico(
     filtros: RelatorioTempoMedioFiltros,
   ): Promise<RelatorioTempoMedioView>;

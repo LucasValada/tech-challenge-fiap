@@ -9,6 +9,7 @@ import { ORDEM_SERVICO_REPOSITORY } from '../../domain/repository/ordem-servico.
 import { VeiculoRepository } from '../../../veiculo/veiculo.repository';
 import { ServicoRepository } from '../../../servico/servico.repository';
 import { ITEM_ESTOQUE_REPOSITORY } from '../../../item-estoque/domain/repository/item-estoque.repository';
+import { MailService } from '../../../mail/mail.service';
 import { OrdemServico } from '../../domain/entity/OrdemServico';
 import {
   EstoqueInsuficienteError,
@@ -36,6 +37,8 @@ const mockOrdemRepo = {
   removerItemEstoque: jest.fn(),
   atualizarQuantidadeItemEstoque: jest.fn(),
   transicionarStatus: jest.fn(),
+  contarLinhas: jest.fn(),
+  findByCodigoEPlaca: jest.fn(),
   getRelatorioTempoMedioPorServico: jest.fn(),
 };
 
@@ -75,6 +78,10 @@ const mockItemRepo = {
   delete: jest.fn(),
 };
 
+const mockMailService = {
+  enviarOrcamento: jest.fn(),
+};
+
 const ordemRecebida = (): OrdemServico =>
   new OrdemServico(
     'cliente-1',
@@ -111,6 +118,7 @@ describe('OrdemServicoService', () => {
         { provide: VeiculoRepository, useValue: mockVeiculoRepo },
         { provide: ServicoRepository, useValue: mockServicoRepo },
         { provide: ITEM_ESTOQUE_REPOSITORY, useValue: mockItemRepo },
+        { provide: MailService, useValue: mockMailService },
       ],
     }).compile();
 

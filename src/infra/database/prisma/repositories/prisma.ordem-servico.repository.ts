@@ -732,6 +732,33 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
     };
   }
 
+  async contarLinhas(
+    ordemId: string,
+  ): Promise<{ servicos: number; itens: number }> {
+    const [servicos, itens] = await Promise.all([
+      this.prisma.oSServicos.count({
+        where: { ordemServicoId: ordemId },
+      }),
+      this.prisma.oSItemEstoque.count({
+        where: { ordemServicoId: ordemId },
+      }),
+    ]);
+    return { servicos, itens };
+  }
+
+  async findByCodigoEPlaca(
+    codigo: string,
+    placa: string,
+  ): Promise<OrdemServico | null> {
+    const ordem = await this.prisma.ordemServico.findFirst({
+      where: {
+        codigo,
+        veiculo: { placa },
+      },
+    });
+    return ordem ? this.toEntity(ordem) : null;
+  }
+
   private toEntity(raw: OrdemServicoModel): OrdemServico {
     return new OrdemServico(
       raw.clienteId,

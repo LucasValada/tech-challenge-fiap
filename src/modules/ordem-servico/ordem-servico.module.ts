@@ -4,6 +4,7 @@ import { ClientModule } from '../cliente/client.module';
 import { VeiculoModule } from '../veiculo/veiculo.module';
 import { ServicoModule } from '../servico/servico.module';
 import { ItemEstoqueModule } from '../item-estoque/item-estoque.module';
+import { MailModule } from '../mail/mail.module';
 import { OrdemServicoService } from './application/use-case/ordem-servico.service';
 import { PublicOrdemServicoService } from './application/use-case/public-ordem-servico.service';
 import { RelatorioTempoMedioService } from './application/use-case/relatorio-tempo-medio.service';
@@ -20,6 +21,7 @@ import { PrismaOrdemServicoRepository } from '../../infra/database/prisma/reposi
     VeiculoModule,
     ServicoModule,
     ItemEstoqueModule,
+    MailModule,
   ],
   controllers: [
     OrdemServicoController,
