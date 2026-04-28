@@ -41,6 +41,7 @@ model Usuario {
   updatedAt DateTime @updatedAt
 
   ordensServicoCriadas OrdemServico[]
+  historicoStatusOS    HistoricoStatusOS[]
 }
 
 model Cliente {
@@ -156,10 +157,12 @@ model HistoricoStatusOS {
   id             String             @id @default(uuid())
   ordemServicoId String
   status         StatusOrdemServico
+  usuarioId      String
   observacao     String?
   createdAt      DateTime           @default(now())
 
   ordemServico OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  usuario      Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
 }
 
 model OSCodigoCounter {
