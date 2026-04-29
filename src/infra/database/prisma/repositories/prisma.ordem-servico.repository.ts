@@ -26,9 +26,7 @@ import {
   LinhaNaoEncontradaError,
   ServicoIndisponivelError,
 } from '../../../../modules/ordem-servico/domain/errors';
-import {
-  calcularSubtotal,
-} from '../../../../modules/ordem-servico/domain/services/calcularTotaisOS';
+import { calcularSubtotal } from '../../../../modules/ordem-servico/domain/services/calcularTotaisOS';
 import { gerarCodigoOSSequencial } from '../../../../modules/ordem-servico/domain/services/gerarCodigoOSSequencial';
 
 type Tx = Prisma.TransactionClient;
@@ -375,10 +373,7 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
       });
       if (!svc) throw new ServicoIndisponivelError(data.servicoId);
 
-      const subtotal = calcularSubtotal(
-        Number(svc.precoBase),
-        data.quantidade,
-      );
+      const subtotal = calcularSubtotal(Number(svc.precoBase), data.quantidade);
       const linha = await tx.oSServicos.create({
         data: {
           ordemServicoId: ordemId,

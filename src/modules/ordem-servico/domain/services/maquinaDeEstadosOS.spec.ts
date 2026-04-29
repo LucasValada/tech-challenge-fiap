@@ -1,7 +1,4 @@
-import {
-  classificarTransicao,
-  ehStatusTerminal,
-} from './maquinaDeEstadosOS';
+import { classificarTransicao, ehStatusTerminal } from './maquinaDeEstadosOS';
 import { StatusOrdemServico } from '../entity/OrdemServico';
 
 describe('maquinaDeEstadosOS', () => {
@@ -14,14 +11,11 @@ describe('maquinaDeEstadosOS', () => {
       ['FINALIZADA', 'ENTREGUE'],
     ];
 
-    it.each(avancosValidos)(
-      'aceita avanço %s → %s',
-      (de, para) => {
-        const result = classificarTransicao(de, para);
-        expect(result.valida).toBe(true);
-        expect(result.tipo).toBe('AVANCO');
-      },
-    );
+    it.each(avancosValidos)('aceita avanço %s → %s', (de, para) => {
+      const result = classificarTransicao(de, para);
+      expect(result.valida).toBe(true);
+      expect(result.tipo).toBe('AVANCO');
+    });
 
     const rollbacksValidos: [StatusOrdemServico, StatusOrdemServico][] = [
       ['EM_DIAGNOSTICO', 'RECEBIDA'],
@@ -30,14 +24,11 @@ describe('maquinaDeEstadosOS', () => {
       ['FINALIZADA', 'EM_EXECUCAO'],
     ];
 
-    it.each(rollbacksValidos)(
-      'aceita rollback %s → %s',
-      (de, para) => {
-        const result = classificarTransicao(de, para);
-        expect(result.valida).toBe(true);
-        expect(result.tipo).toBe('ROLLBACK');
-      },
-    );
+    it.each(rollbacksValidos)('aceita rollback %s → %s', (de, para) => {
+      const result = classificarTransicao(de, para);
+      expect(result.valida).toBe(true);
+      expect(result.tipo).toBe('ROLLBACK');
+    });
 
     it('rejeita transição para o mesmo status', () => {
       const result = classificarTransicao('RECEBIDA', 'RECEBIDA');

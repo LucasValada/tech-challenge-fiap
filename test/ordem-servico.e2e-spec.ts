@@ -21,7 +21,9 @@ describe('Ordem de Serviço — fluxo completo (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, transform: true }),
+    );
     await app.init();
 
     // Login
@@ -42,7 +44,9 @@ describe('Ordem de Serviço — fluxo completo (e2e)', () => {
         tipoPessoa: 'FISICA',
       });
     if (clienteRes.status !== 201) {
-      throw new Error(`Setup cliente falhou: ${clienteRes.status} ${JSON.stringify(clienteRes.body)}`);
+      throw new Error(
+        `Setup cliente falhou: ${clienteRes.status} ${JSON.stringify(clienteRes.body)}`,
+      );
     }
     clienteId = clienteRes.body.id;
 
@@ -124,8 +128,7 @@ describe('Ordem de Serviço — fluxo completo (e2e)', () => {
         cpfCnpj: '999.888.777-66',
         placa: 'TST1A99',
         observacoes: 'Teste e2e',
-      })
-
+      });
 
     expect(res.status).toBe(201);
 

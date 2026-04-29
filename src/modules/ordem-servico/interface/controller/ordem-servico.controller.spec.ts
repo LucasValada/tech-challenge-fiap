@@ -168,7 +168,11 @@ describe('OrdemServicoController', () => {
       id: 'ordem-1',
       status: 'EM_DIAGNOSTICO',
     });
-    await controller.transicionarStatus(fakeRequest('usuario-y'), 'ordem-1', dto);
+    await controller.transicionarStatus(
+      fakeRequest('usuario-y'),
+      'ordem-1',
+      dto,
+    );
     expect(mockOrdemServicoService.transicionarStatus).toHaveBeenCalledWith(
       'ordem-1',
       'usuario-y',

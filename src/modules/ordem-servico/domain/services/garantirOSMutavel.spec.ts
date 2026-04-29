@@ -3,9 +3,12 @@ import { OSImutavelError } from '../errors';
 import { StatusOrdemServico } from '../entity/OrdemServico';
 
 describe('garantirOSMutavel', () => {
-  it.each(STATUS_MUTAVEIS)('não lança erro para status mutável %s', (status) => {
-    expect(() => garantirOSMutavel(status)).not.toThrow();
-  });
+  it.each(STATUS_MUTAVEIS)(
+    'não lança erro para status mutável %s',
+    (status) => {
+      expect(() => garantirOSMutavel(status)).not.toThrow();
+    },
+  );
 
   const statusImutaveis: StatusOrdemServico[] = [
     'EM_EXECUCAO',

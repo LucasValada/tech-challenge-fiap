@@ -114,7 +114,7 @@ export class OrdemServicoService {
 
     try {
       return await this.ordemServicoRepository.createComItens({
-        clienteId: cliente.id!,
+        clienteId: cliente.id,
         veiculoId: veiculo.id,
         usuarioCriadorId,
         observacoes: dto.observacoes ?? null,

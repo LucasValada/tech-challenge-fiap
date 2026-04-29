@@ -14,7 +14,9 @@ describe('Relatório Tempo Médio (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, transform: true }),
+    );
     await app.init();
 
     const loginRes = await request(app.getHttpServer())
@@ -43,7 +45,9 @@ describe('Relatório Tempo Médio (e2e)', () => {
 
   it('GET /ordens-servico/relatorios/tempo-medio-servicos — filtra por período', async () => {
     const res = await request(app.getHttpServer())
-      .get('/ordens-servico/relatorios/tempo-medio-servicos?dataInicio=2026-01-01&dataFim=2026-12-31')
+      .get(
+        '/ordens-servico/relatorios/tempo-medio-servicos?dataInicio=2026-01-01&dataFim=2026-12-31',
+      )
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
 
@@ -53,7 +57,9 @@ describe('Relatório Tempo Médio (e2e)', () => {
 
   it('GET /ordens-servico/relatorios/tempo-medio-servicos — 400 quando dataInicio > dataFim', async () => {
     await request(app.getHttpServer())
-      .get('/ordens-servico/relatorios/tempo-medio-servicos?dataInicio=2026-12-31&dataFim=2026-01-01')
+      .get(
+        '/ordens-servico/relatorios/tempo-medio-servicos?dataInicio=2026-12-31&dataFim=2026-01-01',
+      )
       .set('Authorization', `Bearer ${token}`)
       .expect(400);
   });

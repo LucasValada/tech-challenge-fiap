@@ -10,7 +10,12 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards';
 import { clientDto } from './application/dto/client.dto';
 import { clientServices } from './application/use-case/cliente.use-case';
@@ -20,12 +25,15 @@ import { clientServices } from './application/use-case/cliente.use-case';
 @UseGuards(JwtAuthGuard)
 @Controller('cliente')
 export class ClienteController {
-  constructor(private clientServices: clientServices) {}
+  constructor(private readonly clientServices: clientServices) {}
 
   @Get('/')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Listar todos os clientes' })
-  @ApiResponse({ status: 200, description: 'Lista de clientes retornada com sucesso' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de clientes retornada com sucesso',
+  })
   async getAllClient() {
     const response = await this.clientServices.getAllClient();
 

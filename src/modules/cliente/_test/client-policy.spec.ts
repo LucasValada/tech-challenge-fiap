@@ -17,7 +17,13 @@ describe('ClientPolicyService', () => {
   });
 
   it('não lança erro para cliente válido e CPF/CNPJ não existente', async () => {
-    const cliente = new Cliente('João', null, 'joao@email.com', '123.456.789-00', 'FISICA');
+    const cliente = new Cliente(
+      'João',
+      null,
+      'joao@email.com',
+      '123.456.789-00',
+      'FISICA',
+    );
     mockRepository.getByCpfCnpj.mockResolvedValue(null);
 
     const policy = new ClientPolicyService(mockRepository, cliente);
@@ -33,7 +39,13 @@ describe('ClientPolicyService', () => {
   });
 
   it('lança BadRequestException para email inválido', async () => {
-    const cliente = new Cliente('João', null, 'email-invalido', '123.456.789-00', 'FISICA');
+    const cliente = new Cliente(
+      'João',
+      null,
+      'email-invalido',
+      '123.456.789-00',
+      'FISICA',
+    );
     const policy = new ClientPolicyService(mockRepository, cliente);
 
     await expect(policy.validateClient()).rejects.toThrow(BadRequestException);
@@ -56,7 +68,14 @@ describe('ClientPolicyService', () => {
   });
 
   it('passa excludeId para getByCpfCnpj no update', async () => {
-    const cliente = new Cliente('João', null, null, '123.456.789-00', 'FISICA', 'uuid-1');
+    const cliente = new Cliente(
+      'João',
+      null,
+      null,
+      '123.456.789-00',
+      'FISICA',
+      'uuid-1',
+    );
     mockRepository.getByCpfCnpj.mockResolvedValue(null);
     const policy = new ClientPolicyService(mockRepository, cliente);
 

@@ -97,7 +97,10 @@ describe('PublicOrdemServicoService', () => {
       const viewAtualizada = { ...publicView, status: 'EM_EXECUCAO' };
       mockOrdemRepo.findPublicByCodigoEPlaca.mockResolvedValue(viewAtualizada);
 
-      const result = await service.aprovarOrcamento('OS-2026-000001', 'ABC1D23');
+      const result = await service.aprovarOrcamento(
+        'OS-2026-000001',
+        'ABC1D23',
+      );
 
       expect(result.status).toBe('EM_EXECUCAO');
       expect(mockOrdemRepo.transicionarStatus).toHaveBeenCalledWith(

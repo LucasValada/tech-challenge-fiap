@@ -16,7 +16,9 @@ describe('Itens de Estoque (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, transform: true }),
+    );
     await app.init();
 
     const loginRes = await request(app.getHttpServer())
@@ -111,9 +113,7 @@ describe('Itens de Estoque (e2e)', () => {
   });
 
   it('GET /itens-estoque — 401 sem token', async () => {
-    await request(app.getHttpServer())
-      .get('/itens-estoque')
-      .expect(401);
+    await request(app.getHttpServer()).get('/itens-estoque').expect(401);
   });
 
   it('DELETE /itens-estoque/:id — deleta item', async () => {

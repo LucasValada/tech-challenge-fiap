@@ -16,7 +16,9 @@ describe('Veículos (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, transform: true }),
+    );
     await app.init();
 
     const loginRes = await request(app.getHttpServer())
@@ -108,9 +110,7 @@ describe('Veículos (e2e)', () => {
   });
 
   it('GET /veiculos — 401 sem token', async () => {
-    await request(app.getHttpServer())
-      .get('/veiculos')
-      .expect(401);
+    await request(app.getHttpServer()).get('/veiculos').expect(401);
   });
 
   it('DELETE /veiculos/:id — deleta veículo', async () => {

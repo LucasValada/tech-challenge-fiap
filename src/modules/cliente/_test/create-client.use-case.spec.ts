@@ -128,9 +128,9 @@ describe('clientServices', () => {
         id: 'outro-uuid',
       });
 
-      await expect(
-        service.updateClient('uuid-1', clienteDto),
-      ).rejects.toThrow(ConflictException);
+      await expect(service.updateClient('uuid-1', clienteDto)).rejects.toThrow(
+        ConflictException,
+      );
     });
   });
 

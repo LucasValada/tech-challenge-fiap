@@ -15,7 +15,9 @@ describe('Serviços (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, transform: true }),
+    );
     await app.init();
 
     const loginRes = await request(app.getHttpServer())
@@ -87,9 +89,7 @@ describe('Serviços (e2e)', () => {
   });
 
   it('GET /servicos — 401 sem token', async () => {
-    await request(app.getHttpServer())
-      .get('/servicos')
-      .expect(401);
+    await request(app.getHttpServer()).get('/servicos').expect(401);
   });
 
   it('DELETE /servicos/:id — deleta serviço', async () => {
