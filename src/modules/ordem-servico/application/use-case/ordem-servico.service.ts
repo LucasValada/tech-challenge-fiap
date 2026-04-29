@@ -26,6 +26,8 @@ import {
   ItemEstoqueIndisponivelError,
   LinhaNaoEncontradaError,
   OSImutavelError,
+  OSSemItensParaOrcamentoError,
+  OSStatusInvalidoParaOrcamentoError,
   ServicoIndisponivelError,
   TransicaoInvalidaError,
   VeiculoNaoEncontradoError,
@@ -44,6 +46,7 @@ import {
 import { AdicionarServicoOSDto } from '../dto/adicionar-servico-os.dto';
 import { AdicionarItemEstoqueOSDto } from '../dto/adicionar-item-estoque-os.dto';
 import { TransicionarStatusDto } from '../dto/transicionar-status.dto';
+import { MailService } from '../../../mail/mail.service';
 
 @Injectable()
 export class OrdemServicoService {
@@ -56,6 +59,7 @@ export class OrdemServicoService {
     private readonly servicoRepository: ServicoRepository,
     @Inject(ITEM_ESTOQUE_REPOSITORY)
     private readonly itemEstoqueRepository: ItemEstoqueRepository,
+    private readonly mailService: MailService,
   ) {}
 
   async findAll(): Promise<{ ordens: OrdemServico[]; count: number }> {
@@ -236,6 +240,62 @@ export class OrdemServicoService {
       usuarioId,
       dto.observacao ?? null,
     );
+  }
+
+  async enviarOrcamento(
+    ordemId: string,
+    usuarioId: string,
+  ): Promise<OrdemServicoDetalhadaView> {
+    const ordem = await this.findById(ordemId);
+
+    if (ordem.status !== 'EM_DIAGNOSTICO') {
+      throw new ConflictException(
+        new OSStatusInvalidoParaOrcamentoError(ordem.status).message,
+      );
+    }
+
+    const { servicos, itens } =
+      await this.ordemServicoRepository.contarLinhas(ordemId);
+    if (servicos === 0 && itens === 0) {
+      throw new UnprocessableEntityException(
+        new OSSemItensParaOrcamentoError().message,
+      );
+    }
+
+    await this.ordemServicoRepository.transicionarStatus(
+      ordemId,
+      'AGUARDANDO_APROVACAO',
+      'AVANCO',
+      usuarioId,
+      'Orçamento enviado para aprovação do cliente',
+    );
+
+    const detalhes = await this.findByIdComDetalhes(ordemId);
+
+    const cliente = await this.clientRepository.getOne(detalhes.cliente.id);
+    if (cliente?.email) {
+      await this.mailService.enviarOrcamento({
+        clienteNome: detalhes.cliente.nome,
+        clienteEmail: cliente.email,
+        codigoOS: detalhes.codigo,
+        placa: detalhes.veiculo.placa,
+        servicos: detalhes.servicos.map((s) => ({
+          nome: s.nomeSnapshot,
+          quantidade: s.quantidade,
+          subtotal: s.precoUnitario * s.quantidade,
+        })),
+        itens: detalhes.itens.map((i) => ({
+          nome: i.nomeSnapshot,
+          quantidade: i.quantidade,
+          subtotal: i.precoUnitario * i.quantidade,
+        })),
+        valorServicos: detalhes.valorServicos,
+        valorPecas: detalhes.valorPecas,
+        valorTotal: detalhes.valorTotal,
+      });
+    }
+
+    return detalhes;
   }
 
   private traduzirErroDominio(e: unknown): Error {

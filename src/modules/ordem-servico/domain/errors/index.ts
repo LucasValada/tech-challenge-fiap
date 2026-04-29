@@ -72,3 +72,30 @@ export class TransicaoInvalidaError extends Error {
     super(`Transição ${de} → ${para} não permitida`);
   }
 }
+
+export class OSSemItensParaOrcamentoError extends Error {
+  name = 'OSSemItensParaOrcamentoError';
+  constructor() {
+    super(
+      'A OS precisa ter pelo menos um serviço ou peça/insumo para enviar o orçamento',
+    );
+  }
+}
+
+export class OSStatusInvalidoParaOrcamentoError extends Error {
+  name = 'OSStatusInvalidoParaOrcamentoError';
+  constructor(public statusAtual: string) {
+    super(
+      `O orçamento só pode ser enviado quando a OS está em EM_DIAGNOSTICO (status atual: ${statusAtual})`,
+    );
+  }
+}
+
+export class OSStatusInvalidoParaAprovacaoError extends Error {
+  name = 'OSStatusInvalidoParaAprovacaoError';
+  constructor(public statusAtual: string) {
+    super(
+      `O orçamento só pode ser aprovado quando a OS está em AGUARDANDO_APROVACAO (status atual: ${statusAtual})`,
+    );
+  }
+}

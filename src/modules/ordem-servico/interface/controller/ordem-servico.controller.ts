@@ -207,6 +207,35 @@ export class OrdemServicoController {
     await this.ordemServicoService.removerItemEstoque(id, linhaId);
   }
 
+  @Post(':id/enviar-orcamento')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Enviar orçamento da OS para aprovação do cliente (transiciona EM_DIAGNOSTICO → AGUARDANDO_APROVACAO)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Orçamento enviado, OS detalhada retornada',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'OS não encontrada',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'OS não está em EM_DIAGNOSTICO',
+  })
+  @ApiResponse({
+    status: 422,
+    description: 'OS não possui serviços ou peças cadastrados',
+  })
+  async enviarOrcamento(
+    @Req() req: Request & { user: AuthenticatedUser },
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.ordemServicoService.enviarOrcamento(id, req.user.id);
+  }
+
   @Post(':id/transicao-status')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
