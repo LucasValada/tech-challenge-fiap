@@ -1,112 +1,146 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
-import { AuthService } from './auth.service';
-import { AuthRepository } from './auth.repository';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+import { clientServices } from '../application/use-case/cliente.use-case';
 
-jest.mock('bcrypt');
-
-const mockAuthRepository = {
-  findClientByCpfCnpj: jest.fn(),
+const mockClientRepository = {
+  getOne: jest.fn(),
+  getAllClient: jest.fn(),
+  createClient: jest.fn(),
+  getByCpfCnpj: jest.fn(),
+  updateClient: jest.fn(),
+  deleteClient: jest.fn(),
 };
 
-const mockJwtService = {
-  createAsync: jest.fn(),
-};
-
-const clientMock = {
-  nome: 'John Doe',
-  telefone: '(11)937379050',
-  email: 'example@email.com',
+const clienteDto = {
+  nome: 'João da Silva',
+  telefone: '(11)999999999',
+  email: 'joao@email.com',
   cpfCnpj: '123.456.789-00',
-  tipoPessoa: 'FISICA',
-  id: '69740fb2-8631-4aad-9bce-07d2a42018f1',
-  createdAt: '2026-04-21T21:32:45.524Z',
-  updatedAt: '2026-04-21T21:32:45.524Z',
+  tipoPessoa: 'FISICA' as const,
 };
 
-describe('AuthService', () => {
-  let service: AuthService;
+const clienteCriado = {
+  ...clienteDto,
+  id: 'uuid-1',
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+describe('clientServices', () => {
+  let service: clientServices;
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
-        AuthService,
-        { provide: AuthRepository, useValue: mockAuthRepository },
-        { provide: JwtService, useValue: mockJwtService },
+        clientServices,
+        { provide: 'CLIENT_REPOSITORY', useValue: mockClientRepository },
       ],
     }).compile();
 
-    service = module.get<AuthService>(AuthService);
+    service = moduleRef.get(clientServices);
     jest.clearAllMocks();
   });
 
-  it('deve lançar UnauthorizedException quando o email não existe', async () => {
-    mockAuthRepository.findClientByCpfCnpj.mockResolvedValue(null);
+  describe('getAllClient', () => {
+    it('retorna lista de clientes', async () => {
+      const resultado = { client: [clienteCriado], count: 1 };
+      mockClientRepository.getAllClient.mockResolvedValue(resultado);
 
-    await expect(
-      service.login('naoexiste@email.com', 'senha123'),
-    ).rejects.toThrow(UnauthorizedException);
-    expect(mockAuthRepository.findClientByCpfCnpj).toHaveBeenCalledWith(
-      '999.999.999-00',
-    );
-    expect(bcrypt.compare).not.toHaveBeenCalled();
-  });
+      const result = await service.getAllClient();
 
-  it('deve lançar UnauthorizedException quando a senha está errada', async () => {
-    mockAuthRepository.findUsuarioByEmail.mockResolvedValue(usuarioMock);
-    (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-
-    await expect(
-      service.login('admin@oficina.com', 'senhaerrada'),
-    ).rejects.toThrow(UnauthorizedException);
-    expect(bcrypt.compare).toHaveBeenCalledWith(
-      'senhaerrada',
-      usuarioMock.senhaHash,
-    );
-    expect(mockJwtService.signAsync).not.toHaveBeenCalled();
-  });
-
-  it('deve retornar accessToken quando email e senha são válidos', async () => {
-    mockAuthRepository.findUsuarioByEmail.mockResolvedValue(usuarioMock);
-    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-    mockJwtService.signAsync.mockResolvedValue('token-jwt-fake');
-
-    const result = await service.login('admin@oficina.com', 'senha123');
-
-    expect(result).toEqual({ accessToken: 'token-jwt-fake' });
-    expect(mockAuthRepository.findUsuarioByEmail).toHaveBeenCalledWith(
-      'admin@oficina.com',
-    );
-    expect(bcrypt.compare).toHaveBeenCalledWith(
-      'senha123',
-      usuarioMock.senhaHash,
-    );
-    expect(mockJwtService.signAsync).toHaveBeenCalledWith({
-      sub: usuarioMock.id,
-      email: usuarioMock.email,
+      expect(result).toBe(resultado);
     });
   });
 
-  it('deve usar a mesma mensagem de erro para usuário inexistente e senha errada', async () => {
-    mockAuthRepository.findUsuarioByEmail.mockResolvedValue(null);
-    let erroUsuarioInexistente: UnauthorizedException | undefined;
-    try {
-      await service.login('naoexiste@email.com', 'senha123');
-    } catch (e) {
-      erroUsuarioInexistente = e as UnauthorizedException;
-    }
+  describe('getOneClient', () => {
+    it('retorna cliente quando encontrado', async () => {
+      mockClientRepository.getOne.mockResolvedValue(clienteCriado);
 
-    mockAuthRepository.findUsuarioByEmail.mockResolvedValue(usuarioMock);
-    (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-    let erroSenhaErrada: UnauthorizedException | undefined;
-    try {
-      await service.login('admin@oficina.com', 'senhaerrada');
-    } catch (e) {
-      erroSenhaErrada = e as UnauthorizedException;
-    }
+      const result = await service.getOneClient('uuid-1');
 
-    expect(erroUsuarioInexistente?.message).toBe(erroSenhaErrada?.message);
+      expect(result).toBe(clienteCriado);
+    });
+
+    it('lança NotFoundException quando não encontrado', async () => {
+      mockClientRepository.getOne.mockResolvedValue(null);
+
+      await expect(service.getOneClient('uuid-inexistente')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('createClient', () => {
+    it('cria cliente com dados válidos', async () => {
+      mockClientRepository.getByCpfCnpj.mockResolvedValue(null);
+      mockClientRepository.createClient.mockResolvedValue(clienteCriado);
+
+      const result = await service.createClient(clienteDto);
+
+      expect(result).toBe(clienteCriado);
+      expect(mockClientRepository.createClient).toHaveBeenCalled();
+    });
+
+    it('lança BadRequestException para CPF inválido', async () => {
+      const dtoInvalido = { ...clienteDto, cpfCnpj: '000' };
+
+      await expect(service.createClient(dtoInvalido)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(mockClientRepository.createClient).not.toHaveBeenCalled();
+    });
+
+    it('lança ConflictException quando CPF/CNPJ já existe', async () => {
+      mockClientRepository.getByCpfCnpj.mockResolvedValue(clienteCriado);
+
+      await expect(service.createClient(clienteDto)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(mockClientRepository.createClient).not.toHaveBeenCalled();
+    });
+
+    it('lança BadRequestException para email inválido', async () => {
+      const dtoInvalido = { ...clienteDto, email: 'email-invalido' };
+
+      await expect(service.createClient(dtoInvalido)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+  });
+
+  describe('updateClient', () => {
+    it('atualiza cliente com dados válidos', async () => {
+      mockClientRepository.getByCpfCnpj.mockResolvedValue(null);
+      mockClientRepository.updateClient.mockResolvedValue(clienteCriado);
+
+      const result = await service.updateClient('uuid-1', clienteDto);
+
+      expect(result).toBe(clienteCriado);
+    });
+
+    it('lança ConflictException quando CPF/CNPJ já pertence a outro', async () => {
+      mockClientRepository.getByCpfCnpj.mockResolvedValue({
+        ...clienteCriado,
+        id: 'outro-uuid',
+      });
+
+      await expect(
+        service.updateClient('uuid-1', clienteDto),
+      ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('deleteClient', () => {
+    it('deleta cliente', async () => {
+      mockClientRepository.deleteClient.mockResolvedValue(undefined);
+
+      await service.deleteClient('uuid-1');
+
+      expect(mockClientRepository.deleteClient).toHaveBeenCalledWith('uuid-1');
+    });
   });
 });
