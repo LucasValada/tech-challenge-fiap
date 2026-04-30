@@ -71,10 +71,14 @@ export class OrdemServicoController {
     status: 201,
     description: 'Ordem de serviço criada com sucesso',
   })
-  @ApiResponse({ status: 404, description: 'Cliente ou veículo não encontrado' })
+  @ApiResponse({
+    status: 404,
+    description: 'Cliente ou veículo não encontrado',
+  })
   @ApiResponse({
     status: 422,
-    description: 'Veículo não pertence ao cliente, item indisponível ou estoque insuficiente',
+    description:
+      'Veículo não pertence ao cliente, item indisponível ou estoque insuficiente',
   })
   async create(
     @Req() req: Request & { user: AuthenticatedUser },
@@ -174,12 +178,16 @@ export class OrdemServicoController {
 
   @Put(':id/itens-estoque/:linhaId')
   @ApiOperation({
-    summary: 'Atualizar quantidade de uma linha de item (ajusta estoque por delta)',
+    summary:
+      'Atualizar quantidade de uma linha de item (ajusta estoque por delta)',
   })
   @ApiResponse({ status: 200, description: 'Linha atualizada' })
   @ApiResponse({ status: 404, description: 'OS ou linha não encontrada' })
   @ApiResponse({ status: 409, description: 'OS imutável no status atual' })
-  @ApiResponse({ status: 422, description: 'Estoque insuficiente para o delta' })
+  @ApiResponse({
+    status: 422,
+    description: 'Estoque insuficiente para o delta',
+  })
   async atualizarQuantidadeItemEstoque(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('linhaId', ParseUUIDPipe) linhaId: string,
@@ -239,8 +247,7 @@ export class OrdemServicoController {
   @Post(':id/transicao-status')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      'Transicionar status da OS (avanço linear ou rollback de 1 passo)',
+    summary: 'Transicionar status da OS (avanço linear ou rollback de 1 passo)',
   })
   @ApiResponse({ status: 200, description: 'Status transicionado' })
   @ApiResponse({ status: 404, description: 'OS não encontrada' })

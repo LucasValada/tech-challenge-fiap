@@ -7,7 +7,7 @@ import { ClientPolicyService } from '../../domain/service/ClientPolicy.service';
 export class clientServices {
   constructor(
     @Inject('CLIENT_REPOSITORY')
-    private clientRepository: ClientRepository,
+    private readonly clientRepository: ClientRepository,
   ) {}
 
   async getAllClient() {

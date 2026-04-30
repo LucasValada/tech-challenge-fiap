@@ -1,4 +1,3 @@
-import { count } from 'console';
 import { Cliente } from './domain/entity/Client';
 import { clientDto } from './application/dto/client.dto';
 

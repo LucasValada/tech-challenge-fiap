@@ -22,15 +22,13 @@ export class MailService {
   async enviarOrcamento(data: OrcamentoEmailData): Promise<void> {
     const linhasServicos = data.servicos
       .map(
-        (s) =>
-          `  - ${s.nome} (x${s.quantidade}): R$ ${s.subtotal.toFixed(2)}`,
+        (s) => `  - ${s.nome} (x${s.quantidade}): R$ ${s.subtotal.toFixed(2)}`,
       )
       .join('\n');
 
     const linhasItens = data.itens
       .map(
-        (i) =>
-          `  - ${i.nome} (x${i.quantidade}): R$ ${i.subtotal.toFixed(2)}`,
+        (i) => `  - ${i.nome} (x${i.quantidade}): R$ ${i.subtotal.toFixed(2)}`,
       )
       .join('\n');
 
