@@ -10,6 +10,6 @@ import { PrismaItemEstoqueRepository } from '../../infra/database/prisma/reposit
     ItemEstoqueService,
     { provide: ITEM_ESTOQUE_REPOSITORY, useClass: PrismaItemEstoqueRepository },
   ],
-  exports: [ItemEstoqueService],
+  exports: [ItemEstoqueService, ITEM_ESTOQUE_REPOSITORY],
 })
 export class ItemEstoqueModule {}

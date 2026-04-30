@@ -10,7 +10,12 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards';
 import { CreateVeiculoDto, UpdateVeiculoDto } from './dto';
 import { VeiculoService } from './veiculo.service';
@@ -32,7 +37,10 @@ export class VeiculoController {
 
   @Get()
   @ApiOperation({ summary: 'Listar todos os veículos' })
-  @ApiResponse({ status: 200, description: 'Lista de veículos retornada com sucesso' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de veículos retornada com sucesso',
+  })
   async findAll() {
     return this.veiculoService.findAll();
   }

@@ -1,14 +1,17 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Get,
   HttpCode,
   HttpStatus,
   Param,
+  Post,
   Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PublicOrdemServicoResponseDto } from '../../application/dto/public-ordem-servico.dto';
+import { AprovarOrcamentoDto } from '../../application/dto/aprovar-orcamento.dto';
 import { PublicOrdemServicoService } from '../../application/use-case/public-ordem-servico.service';
 
 @ApiTags('Acompanhamento Público de OS')
@@ -44,5 +47,28 @@ export class PublicOrdemServicoController {
       throw new BadRequestException('placa é obrigatória');
     }
     return this.publicOrdemServicoService.consultar(codigo, placa);
+  }
+
+  @Post(':codigo/aprovar')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Cliente aprova o orçamento da OS (transiciona AGUARDANDO_APROVACAO → EM_EXECUCAO)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Orçamento aprovado, OS atualizada retornada',
+    type: PublicOrdemServicoResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Ordem de serviço não encontrada' })
+  @ApiResponse({
+    status: 409,
+    description: 'OS não está em AGUARDANDO_APROVACAO',
+  })
+  async aprovarOrcamento(
+    @Param('codigo') codigo: string,
+    @Body() dto: AprovarOrcamentoDto,
+  ): Promise<PublicOrdemServicoResponseDto> {
+    return this.publicOrdemServicoService.aprovarOrcamento(codigo, dto.placa);
   }
 }

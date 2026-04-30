@@ -10,7 +10,12 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../common/guards';
 import { UserService } from '../../application/use-case/user.service.js';
 import {
@@ -23,12 +28,15 @@ import {
 @UseGuards(JwtAuthGuard)
 @Controller('user')
 export class UserController {
-  constructor(private userService: UserService) {}
+  constructor(private readonly userService: UserService) {}
 
   @Get()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Listar todos os usuários' })
-  @ApiResponse({ status: 200, description: 'Lista de usuários retornada com sucesso' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de usuários retornada com sucesso',
+  })
   async getUser() {
     return await this.userService.getAllUser();
   }
@@ -45,7 +53,10 @@ export class UserController {
   @Post('/')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Criar novo usuário' })
-  @ApiResponse({ status: 201, description: 'Usuário criado com sucesso (senha gerada automaticamente)' })
+  @ApiResponse({
+    status: 201,
+    description: 'Usuário criado com sucesso (senha gerada automaticamente)',
+  })
   @ApiResponse({ status: 409, description: 'Email já cadastrado' })
   async createUser(@Body() dto: UsuarioCreateDto) {
     const user = await this.userService.createUser(dto);

@@ -8,8 +8,8 @@ import { Cliente } from '../entity/Client';
 
 export class ClientPolicyService {
   constructor(
-    private clientRepository: ClientRepository,
-    private client: Cliente,
+    private readonly clientRepository: ClientRepository,
+    private readonly client: Cliente,
   ) {}
   async validateClient(excludeId?: string): Promise<void> {
     if (!this.client.IsValidCpfCnpj()) {

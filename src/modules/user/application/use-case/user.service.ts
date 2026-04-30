@@ -17,7 +17,7 @@ import { EmailPolicyService } from '../../domain/services/EmailPolicy.js';
 export class UserService {
   constructor(
     @Inject(USER_REPOSITORY)
-    private userRepository: UserRepository,
+    private readonly userRepository: UserRepository,
   ) {}
 
   async getAllUser(): Promise<{ user: Usuario[]; count: number }> {
@@ -54,7 +54,7 @@ export class UserService {
 
     const newUser = await this.userRepository.createUser(payload);
 
-    newUser.senhaHash = senha
+    newUser.senhaHash = senha;
 
     return newUser;
   }

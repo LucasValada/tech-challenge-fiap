@@ -10,7 +10,12 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards';
 import { CreateServicoDto, UpdateServicoDto } from './dto';
 import { ServicoService } from './servico.service';
@@ -32,7 +37,10 @@ export class ServicoController {
 
   @Get()
   @ApiOperation({ summary: 'Listar todos os serviços' })
-  @ApiResponse({ status: 200, description: 'Lista de serviços retornada com sucesso' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de serviços retornada com sucesso',
+  })
   async findAll() {
     return this.servicoService.findAll();
   }
