@@ -1,96 +1,46 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
 import {
-  ArrayMinSize,
-  IsArray,
-  IsInt,
+  IsEnum,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
-  Matches,
-  Min,
-  ValidateNested,
 } from 'class-validator';
-import { CPF_CNPJ_REGEX, PLACA_REGEX } from './ordem-servico.constants';
+import { StatusOrdemServico } from '../../domain/entity/OrdemServico';
 
-export class CreateOrdemServicoServicoLinhaDto {
-  @ApiProperty({
-    description: 'ID do serviço cadastrado',
-    example: '3f2b8b7e-6f4e-4e2b-9a41-ddc5d8a1b2c3',
-  })
-  @IsUUID()
-  servicoId!: string;
-
-  @ApiProperty({ description: 'Quantidade do serviço', example: 1, minimum: 1 })
-  @IsInt()
-  @Min(1)
-  quantidade!: number;
-}
-
-export class CreateOrdemServicoItemEstoqueLinhaDto {
-  @ApiProperty({
-    description: 'ID do item de estoque',
-    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-  })
-  @IsUUID()
-  itemEstoqueId!: string;
-
-  @ApiProperty({ description: 'Quantidade do item', example: 2, minimum: 1 })
-  @IsInt()
-  @Min(1)
-  quantidade!: number;
-}
+const STATUS_VALUES: StatusOrdemServico[] = [
+  'RECEBIDA',
+  'EM_DIAGNOSTICO',
+  'AGUARDANDO_APROVACAO',
+  'EM_EXECUCAO',
+  'FINALIZADA',
+  'ENTREGUE',
+];
 
 export class CreateOrdemServicoDto {
   @ApiProperty({
-    description: 'CPF ou CNPJ do cliente (com ou sem pontuação)',
-    example: '123.456.789-00',
+    description: 'ID do cliente',
+    example: '3f2b8b7e-6f4e-4e2b-9a41-ddc5d8a1b2c3',
   })
-  @IsString()
-  @Matches(CPF_CNPJ_REGEX, {
-    message: 'cpfCnpj deve estar em formato de CPF ou CNPJ válido',
-  })
-  cpfCnpj!: string;
+  @IsUUID()
+  @IsNotEmpty()
+  clienteId!: string;
 
   @ApiProperty({
-    description: 'Placa do veículo (Mercosul ou tradicional)',
-    example: 'ABC1D23',
+    description: 'ID do veículo',
+    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
   })
-  @IsString()
-  @Matches(PLACA_REGEX, {
-    message: 'placa deve estar em formato Mercosul ou tradicional',
-  })
-  placa!: string;
+  @IsUUID()
+  @IsNotEmpty()
+  veiculoId!: string;
 
   @ApiPropertyOptional({
     description: 'Observações iniciais da OS',
     example: 'Veículo chegou com barulho na suspensão',
   })
-  @IsOptional()
   @IsString()
+  @IsOptional()
   observacoes?: string;
-
-  @ApiPropertyOptional({
-    description: 'Lista de serviços a incluir na criação',
-    type: [CreateOrdemServicoServicoLinhaDto],
-  })
-  @IsOptional()
-  @IsArray()
-  @ArrayMinSize(0)
-  @ValidateNested({ each: true })
-  @Type(() => CreateOrdemServicoServicoLinhaDto)
-  servicos?: CreateOrdemServicoServicoLinhaDto[];
-
-  @ApiPropertyOptional({
-    description: 'Lista de itens de estoque a incluir na criação',
-    type: [CreateOrdemServicoItemEstoqueLinhaDto],
-  })
-  @IsOptional()
-  @IsArray()
-  @ArrayMinSize(0)
-  @ValidateNested({ each: true })
-  @Type(() => CreateOrdemServicoItemEstoqueLinhaDto)
-  itens?: CreateOrdemServicoItemEstoqueLinhaDto[];
 }
 
 export class UpdateOrdemServicoDto {
@@ -98,7 +48,16 @@ export class UpdateOrdemServicoDto {
     description: 'Observações da OS',
     example: 'Cliente autorizou troca de pastilhas',
   })
-  @IsOptional()
   @IsString()
+  @IsOptional()
   observacoes?: string;
+
+  @ApiPropertyOptional({
+    description: 'Status da OS',
+    enum: STATUS_VALUES,
+    example: 'EM_DIAGNOSTICO',
+  })
+  @IsEnum(STATUS_VALUES)
+  @IsOptional()
+  status?: StatusOrdemServico;
 }

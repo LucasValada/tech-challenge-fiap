@@ -3,7 +3,7 @@ import { UserRepository } from '../repository/user.repository';
 
 export class EmailPolicyService {
   constructor(
-    private readonly userRepository: UserRepository,
+    private userRepository: UserRepository,
     public email: string,
   ) {}
 

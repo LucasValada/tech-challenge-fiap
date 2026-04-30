@@ -6,6 +6,6 @@ import { ServicoService } from './servico.service';
 @Module({
   controllers: [ServicoController],
   providers: [ServicoService, ServicoRepository],
-  exports: [ServicoService, ServicoRepository],
+  exports: [ServicoService],
 })
 export class ServicoModule {}

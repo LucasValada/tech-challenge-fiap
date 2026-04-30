@@ -5,7 +5,7 @@ import { Cliente } from '../../../../modules/cliente/domain/entity/Client';
 
 @Injectable()
 export class PrismaClientRepository implements ClientRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) {}
 
   async getOne(id: string): Promise<Cliente | null> {
     const cliente = await this.prisma.cliente.findUnique({

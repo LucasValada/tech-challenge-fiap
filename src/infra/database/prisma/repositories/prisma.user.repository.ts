@@ -9,7 +9,7 @@ import { UserRepository } from '../../../../modules/user/domain/repository/user.
 
 @Injectable()
 export class PrismaUserRepository implements UserRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) {}
 
   async getAllUser(): Promise<{ user: Usuario[]; count: number }> {
     const user = await this.prisma.usuario.findMany();

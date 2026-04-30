@@ -1,16 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../modules/prisma/prisma.service';
+import { OrdemServico } from '../../../../modules/ordem-servico/domain/entity/OrdemServico';
 import {
-  OrdemServico,
-  StatusOrdemServico,
-} from '../../../../modules/ordem-servico/domain/entity/OrdemServico';
-import { OSServicoLinha } from '../../../../modules/ordem-servico/domain/entity/OSServicoLinha';
-import { OSItemEstoqueLinha } from '../../../../modules/ordem-servico/domain/entity/OSItemEstoqueLinha';
-import {
-  AdicionarItemEstoqueData,
-  AdicionarServicoData,
-  CreateOrdemServicoComItensData,
-  OrdemServicoDetalhadaView,
+  CreateOrdemServicoData,
   OrdemServicoRepository,
   PublicOrdemServicoView,
   RelatorioTempoMedioFiltros,
@@ -19,17 +11,6 @@ import {
   UpdateOrdemServicoData,
 } from '../../../../modules/ordem-servico/domain/repository/ordem-servico.repository';
 import { OrdemServicoModel } from '../../../../generated/prisma/models';
-import { Prisma } from '../../../../generated/prisma/client';
-import {
-  EstoqueInsuficienteError,
-  ItemEstoqueIndisponivelError,
-  LinhaNaoEncontradaError,
-  ServicoIndisponivelError,
-} from '../../../../modules/ordem-servico/domain/errors';
-import { calcularSubtotal } from '../../../../modules/ordem-servico/domain/services/calcularTotaisOS';
-import { gerarCodigoOSSequencial } from '../../../../modules/ordem-servico/domain/services/gerarCodigoOSSequencial';
-
-type Tx = Prisma.TransactionClient;
 
 @Injectable()
 export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
@@ -55,118 +36,6 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
       where: { codigo },
     });
     return ordem ? this.toEntity(ordem) : null;
-  }
-
-  async findByIdComDetalhes(
-    id: string,
-  ): Promise<OrdemServicoDetalhadaView | null> {
-    const ordem = await this.prisma.ordemServico.findUnique({
-      where: { id },
-      include: {
-        cliente: { select: { id: true, nome: true, cpfCnpj: true } },
-        veiculo: {
-          select: {
-            id: true,
-            placa: true,
-            marca: true,
-            modelo: true,
-            ano: true,
-          },
-        },
-        usuarioCriador: { select: { id: true, nome: true } },
-        osServicos: {
-          select: {
-            id: true,
-            servicoId: true,
-            nomeSnapshot: true,
-            precoUnitario: true,
-            quantidade: true,
-            subtotal: true,
-            createdAt: true,
-          },
-          orderBy: { createdAt: 'asc' },
-        },
-        osItensEstoque: {
-          select: {
-            id: true,
-            itemEstoqueId: true,
-            nomeSnapshot: true,
-            precoUnitario: true,
-            quantidade: true,
-            subtotal: true,
-            createdAt: true,
-          },
-          orderBy: { createdAt: 'asc' },
-        },
-        historicoStatus: {
-          select: {
-            status: true,
-            observacao: true,
-            createdAt: true,
-            usuarioId: true,
-            usuario: { select: { nome: true } },
-          },
-          orderBy: { createdAt: 'asc' },
-        },
-      },
-    });
-
-    if (!ordem) return null;
-
-    return {
-      id: ordem.id,
-      codigo: ordem.codigo,
-      status: ordem.status,
-      observacoes: ordem.observacoes ?? null,
-      valorServicos: Number(ordem.valorServicos),
-      valorPecas: Number(ordem.valorPecas),
-      valorTotal: Number(ordem.valorTotal),
-      createdAt: ordem.createdAt,
-      updatedAt: ordem.updatedAt,
-      finalizadaAt: ordem.finalizadaAt ?? null,
-      entregueAt: ordem.entregueAt ?? null,
-      cliente: {
-        id: ordem.cliente.id,
-        nome: ordem.cliente.nome,
-        cpfCnpj: ordem.cliente.cpfCnpj,
-      },
-      veiculo: {
-        id: ordem.veiculo.id,
-        placa: ordem.veiculo.placa,
-        marca: ordem.veiculo.marca,
-        modelo: ordem.veiculo.modelo,
-        ano: ordem.veiculo.ano,
-      },
-      usuarioCriador: {
-        id: ordem.usuarioCriador.id,
-        nome: ordem.usuarioCriador.nome,
-      },
-      servicos: ordem.osServicos.map((s) => ({
-        id: s.id,
-        servicoId: s.servicoId,
-        nomeSnapshot: s.nomeSnapshot,
-        precoUnitario: Number(s.precoUnitario),
-        quantidade: s.quantidade,
-        subtotal: Number(s.subtotal),
-        createdAt: s.createdAt,
-      })),
-      itens: ordem.osItensEstoque.map((i) => ({
-        id: i.id,
-        itemEstoqueId: i.itemEstoqueId,
-        nomeSnapshot: i.nomeSnapshot,
-        precoUnitario: Number(i.precoUnitario),
-        quantidade: i.quantidade,
-        subtotal: Number(i.subtotal),
-        createdAt: i.createdAt,
-      })),
-      historicoStatus: ordem.historicoStatus.map((h) => ({
-        status: h.status,
-        observacao: h.observacao ?? null,
-        createdAt: h.createdAt,
-        usuarioId: h.usuarioId,
-        usuario: h.usuario ? { nome: h.usuario.nome } : null,
-      })),
-    };
   }
 
   async findPublicByCodigoEPlaca(
@@ -246,104 +115,17 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
     };
   }
 
-  async createComItens(
-    data: CreateOrdemServicoComItensData,
-  ): Promise<OrdemServico> {
-    return this.prisma.$transaction(async (tx) => {
-      const ano = new Date().getFullYear();
-      const counterRows = await tx.$queryRaw<{ contador: number }[]>`
-        INSERT INTO "OSCodigoCounter" ("ano", "contador", "updatedAt")
-        VALUES (${ano}, 1, NOW())
-        ON CONFLICT ("ano") DO UPDATE SET
-          "contador" = "OSCodigoCounter"."contador" + 1,
-          "updatedAt" = NOW()
-        RETURNING "contador"
-      `;
-      const codigo = gerarCodigoOSSequencial(ano, counterRows[0].contador);
-
-      const ordem = await tx.ordemServico.create({
-        data: {
-          codigo,
-          clienteId: data.clienteId,
-          veiculoId: data.veiculoId,
-          usuarioCriadorId: data.usuarioCriadorId,
-          observacoes: data.observacoes,
-        },
-      });
-
-      for (const s of data.servicos) {
-        const svc = await tx.servicos.findFirst({
-          where: { id: s.servicoId, ativo: true },
-        });
-        if (!svc) throw new ServicoIndisponivelError(s.servicoId);
-        const subtotal = calcularSubtotal(Number(svc.precoBase), s.quantidade);
-        await tx.oSServicos.create({
-          data: {
-            ordemServicoId: ordem.id,
-            servicoId: svc.id,
-            nomeSnapshot: svc.nome,
-            precoUnitario: svc.precoBase,
-            quantidade: s.quantidade,
-            subtotal,
-          },
-        });
-      }
-
-      for (const i of data.itens) {
-        const item = await tx.itemEstoque.findFirst({
-          where: { id: i.itemEstoqueId, ativo: true },
-        });
-        if (!item) throw new ItemEstoqueIndisponivelError(i.itemEstoqueId);
-        if (item.quantidadeEstoque < i.quantidade) {
-          throw new EstoqueInsuficienteError(
-            item.nome,
-            item.quantidadeEstoque,
-            i.quantidade,
-          );
-        }
-        const apos = await tx.itemEstoque.update({
-          where: { id: item.id },
-          data: { quantidadeEstoque: { decrement: i.quantidade } },
-        });
-        if (apos.quantidadeEstoque < 0) {
-          throw new EstoqueInsuficienteError(
-            item.nome,
-            apos.quantidadeEstoque + i.quantidade,
-            i.quantidade,
-          );
-        }
-        const subtotal = calcularSubtotal(
-          Number(item.precoUnitario),
-          i.quantidade,
-        );
-        await tx.oSItemEstoque.create({
-          data: {
-            ordemServicoId: ordem.id,
-            itemEstoqueId: item.id,
-            nomeSnapshot: item.nome,
-            precoUnitario: item.precoUnitario,
-            quantidade: i.quantidade,
-            subtotal,
-          },
-        });
-      }
-
-      await this.recalcularTotais(tx, ordem.id);
-
-      await tx.historicoStatusOS.create({
-        data: {
-          ordemServicoId: ordem.id,
-          status: 'RECEBIDA',
-          usuarioId: data.usuarioCriadorId,
-          observacao: null,
-        },
-      });
-
-      const finalOrdem = await tx.ordemServico.findUniqueOrThrow({
-        where: { id: ordem.id },
-      });
-      return this.toEntity(finalOrdem);
+  async create(data: CreateOrdemServicoData): Promise<OrdemServico> {
+    const ordem = await this.prisma.ordemServico.create({
+      data: {
+        codigo: data.codigo,
+        clienteId: data.clienteId,
+        veiculoId: data.veiculoId,
+        usuarioCriadorId: data.usuarioCriadorId,
+        observacoes: data.observacoes,
+      },
     });
+    return this.toEntity(ordem);
   }
 
   async update(
@@ -354,6 +136,7 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
       where: { id },
       data: {
         observacoes: data.observacoes,
+        status: data.status,
       },
     });
     return this.toEntity(ordem);
@@ -361,287 +144,6 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
 
   async delete(id: string): Promise<void> {
     await this.prisma.ordemServico.delete({ where: { id } });
-  }
-
-  async adicionarServico(
-    ordemId: string,
-    data: AdicionarServicoData,
-  ): Promise<OSServicoLinha> {
-    return this.prisma.$transaction(async (tx) => {
-      const svc = await tx.servicos.findFirst({
-        where: { id: data.servicoId, ativo: true },
-      });
-      if (!svc) throw new ServicoIndisponivelError(data.servicoId);
-
-      const subtotal = calcularSubtotal(Number(svc.precoBase), data.quantidade);
-      const linha = await tx.oSServicos.create({
-        data: {
-          ordemServicoId: ordemId,
-          servicoId: svc.id,
-          nomeSnapshot: svc.nome,
-          precoUnitario: svc.precoBase,
-          quantidade: data.quantidade,
-          subtotal,
-        },
-      });
-      await this.recalcularTotais(tx, ordemId);
-      return new OSServicoLinha(
-        linha.ordemServicoId,
-        linha.servicoId,
-        linha.nomeSnapshot,
-        Number(linha.precoUnitario),
-        linha.quantidade,
-        Number(linha.subtotal),
-        linha.id,
-        linha.createdAt,
-      );
-    });
-  }
-
-  async removerServico(ordemId: string, linhaId: string): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      const linha = await tx.oSServicos.findUnique({ where: { id: linhaId } });
-      if (!linha || linha.ordemServicoId !== ordemId) {
-        throw new LinhaNaoEncontradaError(linhaId);
-      }
-      await tx.oSServicos.delete({ where: { id: linhaId } });
-      await this.recalcularTotais(tx, ordemId);
-    });
-  }
-
-  async atualizarQuantidadeServico(
-    ordemId: string,
-    linhaId: string,
-    quantidade: number,
-  ): Promise<OSServicoLinha> {
-    return this.prisma.$transaction(async (tx) => {
-      const linha = await tx.oSServicos.findUnique({ where: { id: linhaId } });
-      if (!linha || linha.ordemServicoId !== ordemId) {
-        throw new LinhaNaoEncontradaError(linhaId);
-      }
-      const subtotal = calcularSubtotal(
-        Number(linha.precoUnitario),
-        quantidade,
-      );
-      const atualizada = await tx.oSServicos.update({
-        where: { id: linhaId },
-        data: { quantidade, subtotal },
-      });
-      await this.recalcularTotais(tx, ordemId);
-      return new OSServicoLinha(
-        atualizada.ordemServicoId,
-        atualizada.servicoId,
-        atualizada.nomeSnapshot,
-        Number(atualizada.precoUnitario),
-        atualizada.quantidade,
-        Number(atualizada.subtotal),
-        atualizada.id,
-        atualizada.createdAt,
-      );
-    });
-  }
-
-  async adicionarItemEstoque(
-    ordemId: string,
-    data: AdicionarItemEstoqueData,
-  ): Promise<OSItemEstoqueLinha> {
-    return this.prisma.$transaction(async (tx) => {
-      const item = await tx.itemEstoque.findFirst({
-        where: { id: data.itemEstoqueId, ativo: true },
-      });
-      if (!item) throw new ItemEstoqueIndisponivelError(data.itemEstoqueId);
-      if (item.quantidadeEstoque < data.quantidade) {
-        throw new EstoqueInsuficienteError(
-          item.nome,
-          item.quantidadeEstoque,
-          data.quantidade,
-        );
-      }
-      const apos = await tx.itemEstoque.update({
-        where: { id: item.id },
-        data: { quantidadeEstoque: { decrement: data.quantidade } },
-      });
-      if (apos.quantidadeEstoque < 0) {
-        throw new EstoqueInsuficienteError(
-          item.nome,
-          apos.quantidadeEstoque + data.quantidade,
-          data.quantidade,
-        );
-      }
-
-      const subtotal = calcularSubtotal(
-        Number(item.precoUnitario),
-        data.quantidade,
-      );
-      const linha = await tx.oSItemEstoque.create({
-        data: {
-          ordemServicoId: ordemId,
-          itemEstoqueId: item.id,
-          nomeSnapshot: item.nome,
-          precoUnitario: item.precoUnitario,
-          quantidade: data.quantidade,
-          subtotal,
-        },
-      });
-      await this.recalcularTotais(tx, ordemId);
-      return new OSItemEstoqueLinha(
-        linha.ordemServicoId,
-        linha.itemEstoqueId,
-        linha.nomeSnapshot,
-        Number(linha.precoUnitario),
-        linha.quantidade,
-        Number(linha.subtotal),
-        linha.id,
-        linha.createdAt,
-      );
-    });
-  }
-
-  async removerItemEstoque(ordemId: string, linhaId: string): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      const linha = await tx.oSItemEstoque.findUnique({
-        where: { id: linhaId },
-      });
-      if (!linha || linha.ordemServicoId !== ordemId) {
-        throw new LinhaNaoEncontradaError(linhaId);
-      }
-      await tx.itemEstoque.update({
-        where: { id: linha.itemEstoqueId },
-        data: { quantidadeEstoque: { increment: linha.quantidade } },
-      });
-      await tx.oSItemEstoque.delete({ where: { id: linhaId } });
-      await this.recalcularTotais(tx, ordemId);
-    });
-  }
-
-  async atualizarQuantidadeItemEstoque(
-    ordemId: string,
-    linhaId: string,
-    quantidade: number,
-  ): Promise<OSItemEstoqueLinha> {
-    return this.prisma.$transaction(async (tx) => {
-      const linha = await tx.oSItemEstoque.findUnique({
-        where: { id: linhaId },
-      });
-      if (!linha || linha.ordemServicoId !== ordemId) {
-        throw new LinhaNaoEncontradaError(linhaId);
-      }
-      const delta = quantidade - linha.quantidade;
-      if (delta > 0) {
-        const item = await tx.itemEstoque.findUnique({
-          where: { id: linha.itemEstoqueId },
-        });
-        if (!item) {
-          throw new ItemEstoqueIndisponivelError(linha.itemEstoqueId);
-        }
-        if (item.quantidadeEstoque < delta) {
-          throw new EstoqueInsuficienteError(
-            item.nome,
-            item.quantidadeEstoque,
-            delta,
-          );
-        }
-        const apos = await tx.itemEstoque.update({
-          where: { id: item.id },
-          data: { quantidadeEstoque: { decrement: delta } },
-        });
-        if (apos.quantidadeEstoque < 0) {
-          throw new EstoqueInsuficienteError(
-            item.nome,
-            apos.quantidadeEstoque + delta,
-            delta,
-          );
-        }
-      } else if (delta < 0) {
-        await tx.itemEstoque.update({
-          where: { id: linha.itemEstoqueId },
-          data: { quantidadeEstoque: { increment: -delta } },
-        });
-      }
-
-      const novoSubtotal = calcularSubtotal(
-        Number(linha.precoUnitario),
-        quantidade,
-      );
-      const atualizada = await tx.oSItemEstoque.update({
-        where: { id: linhaId },
-        data: { quantidade, subtotal: novoSubtotal },
-      });
-      await this.recalcularTotais(tx, ordemId);
-      return new OSItemEstoqueLinha(
-        atualizada.ordemServicoId,
-        atualizada.itemEstoqueId,
-        atualizada.nomeSnapshot,
-        Number(atualizada.precoUnitario),
-        atualizada.quantidade,
-        Number(atualizada.subtotal),
-        atualizada.id,
-        atualizada.createdAt,
-      );
-    });
-  }
-
-  async transicionarStatus(
-    ordemId: string,
-    novoStatus: StatusOrdemServico,
-    tipoTransicao: 'AVANCO' | 'ROLLBACK',
-    usuarioId: string,
-    observacao: string | null,
-  ): Promise<OrdemServico> {
-    return this.prisma.$transaction(async (tx) => {
-      const updateData: {
-        status: StatusOrdemServico;
-        finalizadaAt?: Date | null;
-        entregueAt?: Date | null;
-      } = { status: novoStatus };
-
-      if (tipoTransicao === 'AVANCO') {
-        if (novoStatus === 'FINALIZADA') updateData.finalizadaAt = new Date();
-        if (novoStatus === 'ENTREGUE') updateData.entregueAt = new Date();
-      } else {
-        if (novoStatus === 'EM_EXECUCAO') updateData.finalizadaAt = null;
-        if (novoStatus === 'FINALIZADA') updateData.entregueAt = null;
-      }
-
-      const ordem = await tx.ordemServico.update({
-        where: { id: ordemId },
-        data: updateData,
-      });
-
-      await tx.historicoStatusOS.create({
-        data: {
-          ordemServicoId: ordemId,
-          status: novoStatus,
-          usuarioId,
-          observacao,
-        },
-      });
-
-      return this.toEntity(ordem);
-    });
-  }
-
-  private async recalcularTotais(tx: Tx, ordemId: string): Promise<void> {
-    const [aggServico, aggItem] = await Promise.all([
-      tx.oSServicos.aggregate({
-        where: { ordemServicoId: ordemId },
-        _sum: { subtotal: true },
-      }),
-      tx.oSItemEstoque.aggregate({
-        where: { ordemServicoId: ordemId },
-        _sum: { subtotal: true },
-      }),
-    ]);
-    const valorServicos = Number(aggServico._sum.subtotal ?? 0);
-    const valorPecas = Number(aggItem._sum.subtotal ?? 0);
-    await tx.ordemServico.update({
-      where: { id: ordemId },
-      data: {
-        valorServicos,
-        valorPecas,
-        valorTotal: valorServicos + valorPecas,
-      },
-    });
   }
 
   async getRelatorioTempoMedioPorServico(
@@ -725,33 +227,6 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
       totalOrdensConsideradas: ordensDistintas.size,
       servicos,
     };
-  }
-
-  async contarLinhas(
-    ordemId: string,
-  ): Promise<{ servicos: number; itens: number }> {
-    const [servicos, itens] = await Promise.all([
-      this.prisma.oSServicos.count({
-        where: { ordemServicoId: ordemId },
-      }),
-      this.prisma.oSItemEstoque.count({
-        where: { ordemServicoId: ordemId },
-      }),
-    ]);
-    return { servicos, itens };
-  }
-
-  async findByCodigoEPlaca(
-    codigo: string,
-    placa: string,
-  ): Promise<OrdemServico | null> {
-    const ordem = await this.prisma.ordemServico.findFirst({
-      where: {
-        codigo,
-        veiculo: { placa },
-      },
-    });
-    return ordem ? this.toEntity(ordem) : null;
   }
 
   private toEntity(raw: OrdemServicoModel): OrdemServico {
