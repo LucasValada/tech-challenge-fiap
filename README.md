@@ -53,17 +53,18 @@ cp .env.example .env
 # Edite o .env com suas credenciais (ver seção abaixo)
 
 # 4. Subir o banco PostgreSQL
-docker compose up -d
+docker compose up postgres -d
 
 # 5. Aplicar migrations e gerar o Prisma Client
 npx prisma migrate deploy
 npx prisma generate
 
+
 # 6. Popular o banco com o usuário admin padrão
 npx prisma db seed
 
-# 7. Iniciar a aplicação
-npm run start:dev
+# 4. Subir a API
+docker compose up api -d
 ```
 
 A API estará disponível em `http://localhost:3000`.
