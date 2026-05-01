@@ -1,39 +1,24 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
-import request from 'supertest';
-import { App } from 'supertest/types';
-import { AppModule } from '../src/app.module';
+import {
+  E2eContext,
+  setupE2e,
+  authRequest,
+  expectUnauthorized,
+} from './setup-e2e';
 
 describe('Relatório Tempo Médio (e2e)', () => {
-  let app: INestApplication<App>;
-  let token: string;
+  let ctx: E2eContext;
+  const baseUrl = '/ordens-servico/relatorios/tempo-medio-servicos';
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, transform: true }),
-    );
-    await app.init();
-
-    const loginRes = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email: 'admin@oficina.com', senha: 'senha123' });
-    token = loginRes.body.accessToken;
+    ctx = await setupE2e();
   });
 
   afterAll(async () => {
-    await app.close();
+    await ctx.app.close();
   });
 
-  it('GET /ordens-servico/relatorios/tempo-medio-servicos — retorna relatório sem filtros', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/ordens-servico/relatorios/tempo-medio-servicos')
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+  it('GET tempo-medio-servicos — retorna relatório sem filtros', async () => {
+    const res = await authRequest(ctx, 'get', baseUrl).expect(200);
 
     expect(res.body).toHaveProperty('periodo');
     expect(res.body).toHaveProperty('totalOrdensConsideradas');
@@ -43,30 +28,26 @@ describe('Relatório Tempo Médio (e2e)', () => {
     expect(res.body.servicos).toBeInstanceOf(Array);
   });
 
-  it('GET /ordens-servico/relatorios/tempo-medio-servicos — filtra por período', async () => {
-    const res = await request(app.getHttpServer())
-      .get(
-        '/ordens-servico/relatorios/tempo-medio-servicos?dataInicio=2026-01-01&dataFim=2026-12-31',
-      )
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+  it('GET tempo-medio-servicos — filtra por período', async () => {
+    const res = await authRequest(
+      ctx,
+      'get',
+      `${baseUrl}?dataInicio=2026-01-01&dataFim=2026-12-31`,
+    ).expect(200);
 
     expect(res.body.periodo.dataInicio).toBe('2026-01-01');
     expect(res.body.periodo.dataFim).toBe('2026-12-31');
   });
 
-  it('GET /ordens-servico/relatorios/tempo-medio-servicos — 400 quando dataInicio > dataFim', async () => {
-    await request(app.getHttpServer())
-      .get(
-        '/ordens-servico/relatorios/tempo-medio-servicos?dataInicio=2026-12-31&dataFim=2026-01-01',
-      )
-      .set('Authorization', `Bearer ${token}`)
-      .expect(400);
+  it('GET tempo-medio-servicos — 400 quando dataInicio > dataFim', async () => {
+    await authRequest(
+      ctx,
+      'get',
+      `${baseUrl}?dataInicio=2026-12-31&dataFim=2026-01-01`,
+    ).expect(400);
   });
 
-  it('GET /ordens-servico/relatorios/tempo-medio-servicos — 401 sem token', async () => {
-    await request(app.getHttpServer())
-      .get('/ordens-servico/relatorios/tempo-medio-servicos')
-      .expect(401);
+  it('GET tempo-medio-servicos — 401 sem token', async () => {
+    await expectUnauthorized(ctx, baseUrl);
   });
 });

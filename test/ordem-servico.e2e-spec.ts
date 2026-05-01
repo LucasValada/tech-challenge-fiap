@@ -1,12 +1,12 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
-import request from 'supertest';
-import { App } from 'supertest/types';
-import { AppModule } from '../src/app.module';
+import {
+  E2eContext,
+  setupE2e,
+  authRequest,
+  publicRequest,
+} from './setup-e2e';
 
 describe('Ordem de Serviço — fluxo completo (e2e)', () => {
-  let app: INestApplication<App>;
-  let token: string;
+  let ctx: E2eContext;
   let clienteId: string;
   let veiculoId: string;
   let servicoId: string;
@@ -16,33 +16,15 @@ describe('Ordem de Serviço — fluxo completo (e2e)', () => {
   const skuUnico = `E2E-OS-${Date.now()}`;
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+    ctx = await setupE2e();
 
-    app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, transform: true }),
-    );
-    await app.init();
-
-    // Login
-    const loginRes = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email: 'admin@oficina.com', senha: 'senha123' });
-    token = loginRes.body.accessToken;
-
-    // Criar cliente de teste
-    const clienteRes = await request(app.getHttpServer())
-      .post('/cliente')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        nome: 'E2E OS Cliente',
-        telefone: '(11)999999999',
-        email: 'e2e-os@teste.com',
-        cpfCnpj: '999.888.777-66',
-        tipoPessoa: 'FISICA',
-      });
+    const clienteRes = await authRequest(ctx, 'post', '/cliente').send({
+      nome: 'E2E OS Cliente',
+      telefone: '(11)999999999',
+      email: 'e2e-os@teste.com',
+      cpfCnpj: '999.888.777-66',
+      tipoPessoa: 'FISICA',
+    });
     if (clienteRes.status !== 201) {
       throw new Error(
         `Setup cliente falhou: ${clienteRes.status} ${JSON.stringify(clienteRes.body)}`,
@@ -50,87 +32,60 @@ describe('Ordem de Serviço — fluxo completo (e2e)', () => {
     }
     clienteId = clienteRes.body.id;
 
-    // Criar veículo vinculado ao cliente
-    const veiculoRes = await request(app.getHttpServer())
-      .post('/veiculos')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        placa: 'TST1A99',
-        marca: 'Fiat',
-        modelo: 'Uno',
-        ano: 2020,
-        clienteId,
-      });
+    const veiculoRes = await authRequest(ctx, 'post', '/veiculos').send({
+      placa: 'TST1A99',
+      marca: 'Fiat',
+      modelo: 'Uno',
+      ano: 2020,
+      clienteId,
+    });
     veiculoId = veiculoRes.body.id;
 
-    // Criar serviço
-    const servicoRes = await request(app.getHttpServer())
-      .post('/servicos')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        nome: 'E2E Troca de óleo',
-        precoBase: 150.0,
-        tempoEstimadoMin: 30,
-      });
+    const servicoRes = await authRequest(ctx, 'post', '/servicos').send({
+      nome: 'E2E Troca de óleo',
+      precoBase: 150.0,
+      tempoEstimadoMin: 30,
+    });
     servicoId = servicoRes.body.id;
 
-    // Criar item de estoque
-    const itemRes = await request(app.getHttpServer())
-      .post('/itens-estoque')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        nome: 'E2E Pastilha de freio',
-        tipo: 'PECA',
-        sku: skuUnico,
-        precoUnitario: 80.0,
-        quantidadeEstoque: 20,
-        estoqueMinimo: 5,
-      });
+    const itemRes = await authRequest(ctx, 'post', '/itens-estoque').send({
+      nome: 'E2E Pastilha de freio',
+      tipo: 'PECA',
+      sku: skuUnico,
+      precoUnitario: 80.0,
+      quantidadeEstoque: 20,
+      estoqueMinimo: 5,
+    });
     itemEstoqueId = itemRes.body.id;
   });
 
   afterAll(async () => {
-    const auth = { Authorization: `Bearer ${token}` };
-    // Limpar dados de teste (OS primeiro por FK)
     if (osId) {
-      await request(app.getHttpServer())
-        .delete(`/ordens-servico/${osId}`)
-        .set(auth);
+      await authRequest(ctx, 'delete', `/ordens-servico/${osId}`);
     }
     if (itemEstoqueId) {
-      await request(app.getHttpServer())
-        .delete(`/itens-estoque/${itemEstoqueId}`)
-        .set(auth);
+      await authRequest(ctx, 'delete', `/itens-estoque/${itemEstoqueId}`);
     }
     if (servicoId) {
-      await request(app.getHttpServer())
-        .delete(`/servicos/${servicoId}`)
-        .set(auth);
+      await authRequest(ctx, 'delete', `/servicos/${servicoId}`);
     }
     if (veiculoId) {
-      await request(app.getHttpServer())
-        .delete(`/veiculos/${veiculoId}`)
-        .set(auth);
+      await authRequest(ctx, 'delete', `/veiculos/${veiculoId}`);
     }
     if (clienteId) {
-      await request(app.getHttpServer())
-        .delete(`/cliente/delete/${clienteId}`)
-        .set(auth);
+      await authRequest(ctx, 'delete', `/cliente/delete/${clienteId}`);
     }
-    await app.close();
+    await ctx.app.close();
   });
 
   it('POST /ordens-servico — cria OS por CPF + placa', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/ordens-servico')
-      .set('Authorization', `Bearer ${token}`)
+    const res = await authRequest(ctx, 'post', '/ordens-servico')
       .send({
         cpfCnpj: '999.888.777-66',
         placa: 'TST1A99',
         observacoes: 'Teste e2e',
-      });
-
-    expect(res.status).toBe(201);
+      })
+      .expect(201);
 
     osId = res.body.id;
     osCodigo = res.body.codigo;
@@ -139,19 +94,17 @@ describe('Ordem de Serviço — fluxo completo (e2e)', () => {
   });
 
   it('GET /ordens-servico — lista OS', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/ordens-servico')
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+    const res = await authRequest(ctx, 'get', '/ordens-servico').expect(200);
 
     expect(res.body.ordens).toBeInstanceOf(Array);
   });
 
   it('GET /ordens-servico/:id — detalhes da OS', async () => {
-    const res = await request(app.getHttpServer())
-      .get(`/ordens-servico/${osId}`)
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+    const res = await authRequest(
+      ctx,
+      'get',
+      `/ordens-servico/${osId}`,
+    ).expect(200);
 
     expect(res.body.id).toBe(osId);
     expect(res.body.cliente).toBeDefined();
@@ -159,9 +112,11 @@ describe('Ordem de Serviço — fluxo completo (e2e)', () => {
   });
 
   it('POST /ordens-servico/:id/servicos — adiciona serviço à OS', async () => {
-    const res = await request(app.getHttpServer())
-      .post(`/ordens-servico/${osId}/servicos`)
-      .set('Authorization', `Bearer ${token}`)
+    const res = await authRequest(
+      ctx,
+      'post',
+      `/ordens-servico/${osId}/servicos`,
+    )
       .send({ servicoId, quantidade: 1 })
       .expect(201);
 
@@ -169,79 +124,90 @@ describe('Ordem de Serviço — fluxo completo (e2e)', () => {
   });
 
   it('POST /ordens-servico/:id/itens-estoque — adiciona item e baixa estoque', async () => {
-    const res = await request(app.getHttpServer())
-      .post(`/ordens-servico/${osId}/itens-estoque`)
-      .set('Authorization', `Bearer ${token}`)
+    const res = await authRequest(
+      ctx,
+      'post',
+      `/ordens-servico/${osId}/itens-estoque`,
+    )
       .send({ itemEstoqueId, quantidade: 3 })
       .expect(201);
 
     expect(res.body.itemEstoqueId).toBe(itemEstoqueId);
     expect(res.body.quantidade).toBe(3);
 
-    // Verificar que estoque foi reduzido de 20 para 17
-    const itemRes = await request(app.getHttpServer())
-      .get(`/itens-estoque/${itemEstoqueId}`)
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+    const itemRes = await authRequest(
+      ctx,
+      'get',
+      `/itens-estoque/${itemEstoqueId}`,
+    ).expect(200);
 
     expect(itemRes.body.quantidadeEstoque).toBe(17);
   });
 
   it('DELETE /ordens-servico/:id/itens-estoque/:linhaId — remove item e restitui estoque', async () => {
-    // Buscar detalhes da OS para pegar o linhaId do item
-    const detalhes = await request(app.getHttpServer())
-      .get(`/ordens-servico/${osId}`)
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+    const detalhes = await authRequest(
+      ctx,
+      'get',
+      `/ordens-servico/${osId}`,
+    ).expect(200);
 
     const linhaItemId = detalhes.body.itens[0].id;
 
-    await request(app.getHttpServer())
-      .delete(`/ordens-servico/${osId}/itens-estoque/${linhaItemId}`)
-      .set('Authorization', `Bearer ${token}`)
-      .expect(204);
+    await authRequest(
+      ctx,
+      'delete',
+      `/ordens-servico/${osId}/itens-estoque/${linhaItemId}`,
+    ).expect(204);
 
-    // Verificar que estoque foi restituído de 17 para 20
-    const itemRes = await request(app.getHttpServer())
-      .get(`/itens-estoque/${itemEstoqueId}`)
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+    const itemRes = await authRequest(
+      ctx,
+      'get',
+      `/itens-estoque/${itemEstoqueId}`,
+    ).expect(200);
 
     expect(itemRes.body.quantidadeEstoque).toBe(20);
   });
 
-  it('POST /ordens-servico/:id/transicao-status — RECEBIDA → EM_DIAGNOSTICO', async () => {
-    const res = await request(app.getHttpServer())
-      .post(`/ordens-servico/${osId}/transicao-status`)
-      .set('Authorization', `Bearer ${token}`)
+  it('POST transicao-status — RECEBIDA → EM_DIAGNOSTICO', async () => {
+    const res = await authRequest(
+      ctx,
+      'post',
+      `/ordens-servico/${osId}/transicao-status`,
+    )
       .send({ status: 'EM_DIAGNOSTICO', observacao: 'Iniciando diagnóstico' })
       .expect(200);
 
     expect(res.body.status).toBe('EM_DIAGNOSTICO');
   });
 
-  it('POST /ordens-servico/:id/enviar-orcamento — EM_DIAGNOSTICO → AGUARDANDO_APROVACAO', async () => {
-    const res = await request(app.getHttpServer())
-      .post(`/ordens-servico/${osId}/enviar-orcamento`)
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+  it('POST enviar-orcamento — EM_DIAGNOSTICO → AGUARDANDO_APROVACAO', async () => {
+    const res = await authRequest(
+      ctx,
+      'post',
+      `/ordens-servico/${osId}/enviar-orcamento`,
+    ).expect(200);
 
     expect(res.body.status).toBe('AGUARDANDO_APROVACAO');
     expect(res.body.valorTotal).toBeGreaterThan(0);
   });
 
   it('GET /public/ordens-servico/:codigo — consulta pública da OS', async () => {
-    const res = await request(app.getHttpServer())
-      .get(`/public/ordens-servico/${osCodigo}?placa=TST1A99`)
-      .expect(200);
+    const res = await publicRequest(
+      ctx,
+      'get',
+      `/public/ordens-servico/${osCodigo}?placa=TST1A99`,
+    ).expect(200);
 
     expect(res.body.status).toBe('AGUARDANDO_APROVACAO');
     expect(res.body.codigo).toBe(osCodigo);
   });
 
   it('POST /public/ordens-servico/:codigo/aprovar — cliente aprova orçamento', async () => {
-    const res = await request(app.getHttpServer())
-      .post(`/public/ordens-servico/${osCodigo}/aprovar`)
+    const res = await publicRequest(
+      ctx,
+      'post',
+      `/public/ordens-servico/${osCodigo}/aprovar`,
+    )
       .send({ placa: 'TST1A99' })
       .expect(200);
 
@@ -249,9 +215,11 @@ describe('Ordem de Serviço — fluxo completo (e2e)', () => {
   });
 
   it('POST transicao-status — EM_EXECUCAO → FINALIZADA', async () => {
-    const res = await request(app.getHttpServer())
-      .post(`/ordens-servico/${osId}/transicao-status`)
-      .set('Authorization', `Bearer ${token}`)
+    const res = await authRequest(
+      ctx,
+      'post',
+      `/ordens-servico/${osId}/transicao-status`,
+    )
       .send({ status: 'FINALIZADA' })
       .expect(200);
 
@@ -259,9 +227,11 @@ describe('Ordem de Serviço — fluxo completo (e2e)', () => {
   });
 
   it('POST transicao-status — FINALIZADA → ENTREGUE', async () => {
-    const res = await request(app.getHttpServer())
-      .post(`/ordens-servico/${osId}/transicao-status`)
-      .set('Authorization', `Bearer ${token}`)
+    const res = await authRequest(
+      ctx,
+      'post',
+      `/ordens-servico/${osId}/transicao-status`,
+    )
       .send({ status: 'ENTREGUE' })
       .expect(200);
 
@@ -269,9 +239,11 @@ describe('Ordem de Serviço — fluxo completo (e2e)', () => {
   });
 
   it('POST transicao-status — rejeita transição inválida em status terminal', async () => {
-    await request(app.getHttpServer())
-      .post(`/ordens-servico/${osId}/transicao-status`)
-      .set('Authorization', `Bearer ${token}`)
+    await authRequest(
+      ctx,
+      'post',
+      `/ordens-servico/${osId}/transicao-status`,
+    )
       .send({ status: 'RECEBIDA' })
       .expect(409);
   });

@@ -1,45 +1,28 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
-import request from 'supertest';
-import { App } from 'supertest/types';
-import { AppModule } from '../src/app.module';
+import {
+  E2eContext,
+  setupE2e,
+  authRequest,
+  expectNotFound,
+  expectUnauthorized,
+} from './setup-e2e';
 
 describe('Clientes (e2e)', () => {
-  let app: INestApplication<App>;
-  let token: string;
+  let ctx: E2eContext;
   let clienteId: string;
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, transform: true }),
-    );
-    await app.init();
-
-    const loginRes = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email: 'admin@oficina.com', senha: 'senha123' });
-
-    token = loginRes.body.accessToken;
+    ctx = await setupE2e();
   });
 
   afterAll(async () => {
     if (clienteId) {
-      await request(app.getHttpServer())
-        .delete(`/cliente/delete/${clienteId}`)
-        .set('Authorization', `Bearer ${token}`);
+      await authRequest(ctx, 'delete', `/cliente/delete/${clienteId}`);
     }
-    await app.close();
+    await ctx.app.close();
   });
 
   it('POST /cliente — cria cliente', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/cliente')
-      .set('Authorization', `Bearer ${token}`)
+    const res = await authRequest(ctx, 'post', '/cliente')
       .send({
         nome: 'E2E Cliente Teste',
         telefone: '(11)999999999',
@@ -55,28 +38,26 @@ describe('Clientes (e2e)', () => {
   });
 
   it('GET /cliente — lista clientes', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/cliente')
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+    const res = await authRequest(ctx, 'get', '/cliente').expect(200);
 
     expect(res.body.client).toBeInstanceOf(Array);
     expect(res.body.count).toBeGreaterThanOrEqual(1);
   });
 
   it('GET /cliente/:id — busca por ID', async () => {
-    const res = await request(app.getHttpServer())
-      .get(`/cliente/${clienteId}`)
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+    const res = await authRequest(ctx, 'get', `/cliente/${clienteId}`).expect(
+      200,
+    );
 
     expect(res.body.id).toBe(clienteId);
   });
 
   it('PUT /cliente/update/:id — atualiza cliente', async () => {
-    const res = await request(app.getHttpServer())
-      .put(`/cliente/update/${clienteId}`)
-      .set('Authorization', `Bearer ${token}`)
+    const res = await authRequest(
+      ctx,
+      'put',
+      `/cliente/update/${clienteId}`,
+    )
       .send({
         nome: 'E2E Cliente Atualizado',
         telefone: '(11)888888888',
@@ -90,36 +71,29 @@ describe('Clientes (e2e)', () => {
   });
 
   it('POST /cliente — rejeita CPF duplicado', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/cliente')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        nome: 'Outro',
-        telefone: '(11)999999999',
-        email: 'outro-e2e@teste.com',
-        cpfCnpj: '111.222.333-44',
-        tipoPessoa: 'FISICA',
-      });
+    const res = await authRequest(ctx, 'post', '/cliente').send({
+      nome: 'Outro',
+      telefone: '(11)999999999',
+      email: 'outro-e2e@teste.com',
+      cpfCnpj: '111.222.333-44',
+      tipoPessoa: 'FISICA',
+    });
 
     expect([400, 409]).toContain(res.status);
   });
 
   it('GET /cliente/:id — 404 para ID inexistente', async () => {
-    await request(app.getHttpServer())
-      .get('/cliente/00000000-0000-0000-0000-000000000000')
-      .set('Authorization', `Bearer ${token}`)
-      .expect(404);
+    await expectNotFound(ctx, '/cliente');
   });
 
   it('GET /cliente — 401 sem token', async () => {
-    await request(app.getHttpServer()).get('/cliente').expect(401);
+    await expectUnauthorized(ctx, '/cliente');
   });
 
   it('DELETE /cliente/delete/:id — deleta cliente', async () => {
-    await request(app.getHttpServer())
-      .delete(`/cliente/delete/${clienteId}`)
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+    await authRequest(ctx, 'delete', `/cliente/delete/${clienteId}`).expect(
+      200,
+    );
 
     clienteId = undefined;
   });
