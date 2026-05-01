@@ -7,7 +7,7 @@ const mockServico = {
   id: 'servico-uuid-1',
   nome: 'Troca de óleo',
   descricao: 'Troca completa de óleo e filtro',
-  precoBase: 150.0,
+  precoBase: 150,
   tempoEstimadoMin: 30,
   ativo: true,
   createdAt: new Date(),
@@ -39,7 +39,7 @@ describe('ServicoController', () => {
     const dto = {
       nome: 'Troca de óleo',
       descricao: 'Troca completa de óleo e filtro',
-      precoBase: 150.0,
+      precoBase: 150,
       tempoEstimadoMin: 30,
     };
     mockServicoService.create.mockResolvedValue(mockServico);
@@ -69,8 +69,8 @@ describe('ServicoController', () => {
   });
 
   it('should call service.update with id and DTO and return the result', async () => {
-    const dto = { precoBase: 180.0 };
-    const updatedServico = { ...mockServico, precoBase: 180.0 };
+    const dto = { precoBase: 180 };
+    const updatedServico = { ...mockServico, precoBase: 180 };
     mockServicoService.update.mockResolvedValue(updatedServico);
 
     const result = await controller.update('servico-uuid-1', dto);

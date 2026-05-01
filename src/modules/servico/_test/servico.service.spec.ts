@@ -7,7 +7,7 @@ const mockServico = {
   id: 'servico-uuid-1',
   nome: 'Troca de óleo',
   descricao: 'Troca completa de óleo e filtro',
-  precoBase: 150.0,
+  precoBase: 150,
   tempoEstimadoMin: 30,
   ativo: true,
   createdAt: new Date(),
@@ -42,7 +42,7 @@ describe('ServicoService', () => {
       const dto = {
         nome: 'Troca de óleo',
         descricao: 'Troca completa de óleo e filtro',
-        precoBase: 150.0,
+        precoBase: 150,
         tempoEstimadoMin: 30,
       };
       mockServicoRepository.create.mockResolvedValue(mockServico);
@@ -88,8 +88,8 @@ describe('ServicoService', () => {
 
   describe('update', () => {
     it('should update and return the service when it exists', async () => {
-      const dto = { precoBase: 180.0 };
-      const updatedServico = { ...mockServico, precoBase: 180.0 };
+      const dto = { precoBase: 180 };
+      const updatedServico = { ...mockServico, precoBase: 180 };
       mockServicoRepository.findById.mockResolvedValue(mockServico);
       mockServicoRepository.update.mockResolvedValue(updatedServico);
 
@@ -106,7 +106,7 @@ describe('ServicoService', () => {
       mockServicoRepository.findById.mockResolvedValue(null);
 
       await expect(
-        service.update('nonexistent-id', { precoBase: 180.0 }),
+        service.update('nonexistent-id', { precoBase: 180 }),
       ).rejects.toThrow(NotFoundException);
       expect(mockServicoRepository.update).not.toHaveBeenCalled();
     });

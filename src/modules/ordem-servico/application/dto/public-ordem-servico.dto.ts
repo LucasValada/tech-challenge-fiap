@@ -36,13 +36,13 @@ export class PublicOrdemServicoItemDto {
   })
   nomeSnapshot!: string;
 
-  @ApiProperty({ description: 'Preço unitário', example: 150.0 })
+  @ApiProperty({ description: 'Preço unitário', example: 150 })
   precoUnitario!: number;
 
   @ApiProperty({ description: 'Quantidade', example: 1 })
   quantidade!: number;
 
-  @ApiProperty({ description: 'Subtotal', example: 150.0 })
+  @ApiProperty({ description: 'Subtotal', example: 150 })
   subtotal!: number;
 }
 
@@ -86,7 +86,7 @@ export class PublicOrdemServicoResponseDto {
   })
   observacoes!: string | null;
 
-  @ApiProperty({ description: 'Valor total dos serviços', example: 450.0 })
+  @ApiProperty({ description: 'Valor total dos serviços', example: 450 })
   valorServicos!: number;
 
   @ApiProperty({ description: 'Valor total das peças', example: 320.5 })
