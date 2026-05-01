@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import { VeiculoController } from './veiculo.controller';
-import { VeiculoService } from './veiculo.service';
+import { VeiculoController } from '../interface/controller/veiculo.controller';
+import { VeiculoService } from '../application/use-case/veiculo.service';
 
 const mockVeiculo = {
   id: 'veiculo-uuid-1',

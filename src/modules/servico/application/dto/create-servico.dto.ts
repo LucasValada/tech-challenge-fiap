@@ -22,7 +22,7 @@ export class CreateServicoDto {
   @IsOptional()
   descricao?: string;
 
-  @ApiProperty({ example: 150.0 })
+  @ApiProperty({ example: 150 })
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   precoBase!: number;

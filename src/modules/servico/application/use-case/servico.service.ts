@@ -1,10 +1,16 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { CreateServicoDto, UpdateServicoDto } from './dto';
-import { ServicoRepository } from './servico.repository';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { CreateServicoDto, UpdateServicoDto } from '../dto';
+import {
+  SERVICO_REPOSITORY,
+  ServicoRepository,
+} from '../../domain/repository/servico.repository';
 
 @Injectable()
 export class ServicoService {
-  constructor(private readonly servicoRepository: ServicoRepository) {}
+  constructor(
+    @Inject(SERVICO_REPOSITORY)
+    private readonly servicoRepository: ServicoRepository,
+  ) {}
 
   async create(dto: CreateServicoDto) {
     return this.servicoRepository.create(dto);

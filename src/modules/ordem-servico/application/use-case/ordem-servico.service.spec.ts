@@ -6,8 +6,8 @@ import {
 } from '@nestjs/common';
 import { OrdemServicoService } from './ordem-servico.service';
 import { ORDEM_SERVICO_REPOSITORY } from '../../domain/repository/ordem-servico.repository';
-import { VeiculoRepository } from '../../../veiculo/veiculo.repository';
-import { ServicoRepository } from '../../../servico/servico.repository';
+import { VEICULO_REPOSITORY } from '../../../veiculo/domain/repository/veiculo.repository';
+import { SERVICO_REPOSITORY } from '../../../servico/domain/repository/servico.repository';
 import { ITEM_ESTOQUE_REPOSITORY } from '../../../item-estoque/domain/repository/item-estoque.repository';
 import { MailService } from '../../../mail/mail.service';
 import { OrdemServico } from '../../domain/entity/OrdemServico';
@@ -117,8 +117,8 @@ describe('OrdemServicoService', () => {
         OrdemServicoService,
         { provide: ORDEM_SERVICO_REPOSITORY, useValue: mockOrdemRepo },
         { provide: 'CLIENT_REPOSITORY', useValue: mockClientRepo },
-        { provide: VeiculoRepository, useValue: mockVeiculoRepo },
-        { provide: ServicoRepository, useValue: mockServicoRepo },
+        { provide: VEICULO_REPOSITORY, useValue: mockVeiculoRepo },
+        { provide: SERVICO_REPOSITORY, useValue: mockServicoRepo },
         { provide: ITEM_ESTOQUE_REPOSITORY, useValue: mockItemRepo },
         { provide: MailService, useValue: mockMailService },
       ],

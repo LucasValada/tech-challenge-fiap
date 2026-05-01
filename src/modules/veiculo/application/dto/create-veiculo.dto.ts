@@ -16,11 +16,11 @@ export class CreateVeiculoDto {
     description: 'Brazilian license plate (Mercosul ABC1D23 or legacy ABC1234)',
   })
   @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.replace(/-/g, '').toUpperCase() : value,
+    typeof value === 'string' ? value.replaceAll('-', '').toUpperCase() : value,
   )
   @IsString()
   @IsNotEmpty()
-  @Matches(/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/, {
+  @Matches(/^[A-Z]{3}\d[A-Z0-9]\d{2}$/, {
     message:
       'placa must be a valid Brazilian license plate (e.g., ABC1D23 or ABC1234)',
   })

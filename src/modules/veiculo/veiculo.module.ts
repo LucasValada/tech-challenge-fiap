@@ -1,11 +1,15 @@
 import { Module } from '@nestjs/common';
-import { VeiculoController } from './veiculo.controller';
-import { VeiculoRepository } from './veiculo.repository';
-import { VeiculoService } from './veiculo.service';
+import { VeiculoController } from './interface/controller/veiculo.controller';
+import { VeiculoService } from './application/use-case/veiculo.service';
+import { VEICULO_REPOSITORY } from './domain/repository/veiculo.repository';
+import { PrismaVeiculoRepository } from '../../infra/database/prisma/repositories/prisma.veiculo.repository';
 
 @Module({
   controllers: [VeiculoController],
-  providers: [VeiculoService, VeiculoRepository],
-  exports: [VeiculoService, VeiculoRepository],
+  providers: [
+    VeiculoService,
+    { provide: VEICULO_REPOSITORY, useClass: PrismaVeiculoRepository },
+  ],
+  exports: [VeiculoService, VEICULO_REPOSITORY],
 })
 export class VeiculoModule {}
