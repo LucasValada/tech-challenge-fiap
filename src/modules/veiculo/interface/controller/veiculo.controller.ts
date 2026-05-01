@@ -16,9 +16,9 @@ import {
   ApiOperation,
   ApiResponse,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../common/guards';
-import { CreateVeiculoDto, UpdateVeiculoDto } from './dto';
-import { VeiculoService } from './veiculo.service';
+import { JwtAuthGuard } from '../../../../common/guards';
+import { CreateVeiculoDto, UpdateVeiculoDto } from '../../application/dto';
+import { VeiculoService } from '../../application/use-case/veiculo.service';
 
 @ApiTags('Veiculos')
 @ApiBearerAuth()

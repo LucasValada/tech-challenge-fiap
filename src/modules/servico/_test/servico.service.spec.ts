@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import { ServicoService } from './servico.service';
-import { ServicoRepository } from './servico.repository';
+import { ServicoService } from '../application/use-case/servico.service';
+import { SERVICO_REPOSITORY } from '../domain/repository/servico.repository';
 
 const mockServico = {
   id: 'servico-uuid-1',
@@ -29,7 +29,7 @@ describe('ServicoService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ServicoService,
-        { provide: ServicoRepository, useValue: mockServicoRepository },
+        { provide: SERVICO_REPOSITORY, useValue: mockServicoRepository },
       ],
     }).compile();
 

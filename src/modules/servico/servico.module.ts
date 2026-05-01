@@ -1,11 +1,15 @@
 import { Module } from '@nestjs/common';
-import { ServicoController } from './servico.controller';
-import { ServicoRepository } from './servico.repository';
-import { ServicoService } from './servico.service';
+import { ServicoController } from './interface/controller/servico.controller';
+import { ServicoService } from './application/use-case/servico.service';
+import { SERVICO_REPOSITORY } from './domain/repository/servico.repository';
+import { PrismaServicoRepository } from '../../infra/database/prisma/repositories/prisma.servico.repository';
 
 @Module({
   controllers: [ServicoController],
-  providers: [ServicoService, ServicoRepository],
-  exports: [ServicoService, ServicoRepository],
+  providers: [
+    ServicoService,
+    { provide: SERVICO_REPOSITORY, useClass: PrismaServicoRepository },
+  ],
+  exports: [ServicoService, SERVICO_REPOSITORY],
 })
 export class ServicoModule {}

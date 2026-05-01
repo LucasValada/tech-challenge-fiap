@@ -16,9 +16,9 @@ import {
   ApiOperation,
   ApiResponse,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../common/guards';
-import { CreateServicoDto, UpdateServicoDto } from './dto';
-import { ServicoService } from './servico.service';
+import { JwtAuthGuard } from '../../../../common/guards';
+import { CreateServicoDto, UpdateServicoDto } from '../../application/dto';
+import { ServicoService } from '../../application/use-case/servico.service';
 
 @ApiTags('Servicos')
 @ApiBearerAuth()

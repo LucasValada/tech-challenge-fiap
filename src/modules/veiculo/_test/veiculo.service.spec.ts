@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import { VeiculoService } from './veiculo.service';
-import { VeiculoRepository } from './veiculo.repository';
+import { VeiculoService } from '../application/use-case/veiculo.service';
+import { VEICULO_REPOSITORY } from '../domain/repository/veiculo.repository';
 
 const mockVeiculo = {
   id: 'veiculo-uuid-1',
@@ -12,7 +12,6 @@ const mockVeiculo = {
   ano: 2023,
   createdAt: new Date(),
   updatedAt: new Date(),
-  cliente: { id: 'cliente-uuid-1', nome: 'John Doe' },
 };
 
 const mockVeiculoRepository = {
@@ -31,7 +30,7 @@ describe('VeiculoService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         VeiculoService,
-        { provide: VeiculoRepository, useValue: mockVeiculoRepository },
+        { provide: VEICULO_REPOSITORY, useValue: mockVeiculoRepository },
       ],
     }).compile();
 

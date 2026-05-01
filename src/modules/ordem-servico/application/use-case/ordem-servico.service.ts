@@ -14,8 +14,14 @@ import { OrdemServico } from '../../domain/entity/OrdemServico';
 import { OSServicoLinha } from '../../domain/entity/OSServicoLinha';
 import { OSItemEstoqueLinha } from '../../domain/entity/OSItemEstoqueLinha';
 import { ClientRepository } from '../../../cliente/cliente.repository';
-import { VeiculoRepository } from '../../../veiculo/veiculo.repository';
-import { ServicoRepository } from '../../../servico/servico.repository';
+import {
+  VEICULO_REPOSITORY,
+  VeiculoRepository,
+} from '../../../veiculo/domain/repository/veiculo.repository';
+import {
+  SERVICO_REPOSITORY,
+  ServicoRepository,
+} from '../../../servico/domain/repository/servico.repository';
 import {
   ITEM_ESTOQUE_REPOSITORY,
   ItemEstoqueRepository,
@@ -55,7 +61,9 @@ export class OrdemServicoService {
     private readonly ordemServicoRepository: OrdemServicoRepository,
     @Inject('CLIENT_REPOSITORY')
     private readonly clientRepository: ClientRepository,
+    @Inject(VEICULO_REPOSITORY)
     private readonly veiculoRepository: VeiculoRepository,
+    @Inject(SERVICO_REPOSITORY)
     private readonly servicoRepository: ServicoRepository,
     @Inject(ITEM_ESTOQUE_REPOSITORY)
     private readonly itemEstoqueRepository: ItemEstoqueRepository,

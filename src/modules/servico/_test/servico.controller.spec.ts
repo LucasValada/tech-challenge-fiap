@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import { ServicoController } from './servico.controller';
-import { ServicoService } from './servico.service';
+import { ServicoController } from '../interface/controller/servico.controller';
+import { ServicoService } from '../application/use-case/servico.service';
 
 const mockServico = {
   id: 'servico-uuid-1',
