@@ -1,45 +1,29 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
-import request from 'supertest';
-import { App } from 'supertest/types';
-import { AppModule } from '../src/app.module';
+import {
+  E2eContext,
+  setupE2e,
+  authRequest,
+  expectNotFound,
+  expectUnauthorized,
+} from './setup-e2e';
 
 describe('Itens de Estoque (e2e)', () => {
-  let app: INestApplication<App>;
-  let token: string;
+  let ctx: E2eContext;
   let itemId: string;
   const skuUnico = `E2E-FLT-${Date.now()}`;
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, transform: true }),
-    );
-    await app.init();
-
-    const loginRes = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email: 'admin@oficina.com', senha: 'senha123' });
-    token = loginRes.body.accessToken;
+    ctx = await setupE2e();
   });
 
   afterAll(async () => {
     if (itemId) {
-      await request(app.getHttpServer())
-        .delete(`/itens-estoque/${itemId}`)
-        .set('Authorization', `Bearer ${token}`);
+      await authRequest(ctx, 'delete', `/itens-estoque/${itemId}`);
     }
-    await app.close();
+    await ctx.app.close();
   });
 
   it('POST /itens-estoque — cria item de estoque', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/itens-estoque')
-      .set('Authorization', `Bearer ${token}`)
+    const res = await authRequest(ctx, 'post', '/itens-estoque')
       .send({
         nome: 'E2E Filtro de ar',
         tipo: 'PECA',
@@ -58,20 +42,18 @@ describe('Itens de Estoque (e2e)', () => {
   });
 
   it('GET /itens-estoque — lista itens', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/itens-estoque')
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+    const res = await authRequest(ctx, 'get', '/itens-estoque').expect(200);
 
     expect(res.body).toBeInstanceOf(Array);
     expect(res.body.length).toBeGreaterThanOrEqual(1);
   });
 
   it('GET /itens-estoque?tipo=PECA — filtra por tipo', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/itens-estoque?tipo=PECA')
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+    const res = await authRequest(
+      ctx,
+      'get',
+      '/itens-estoque?tipo=PECA',
+    ).expect(200);
 
     expect(res.body).toBeInstanceOf(Array);
     for (const item of res.body) {
@@ -80,25 +62,21 @@ describe('Itens de Estoque (e2e)', () => {
   });
 
   it('GET /itens-estoque/baixo-estoque — lista baixo estoque', async () => {
-    await request(app.getHttpServer())
-      .get('/itens-estoque/baixo-estoque')
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+    await authRequest(ctx, 'get', '/itens-estoque/baixo-estoque').expect(200);
   });
 
   it('GET /itens-estoque/:id — busca por ID', async () => {
-    const res = await request(app.getHttpServer())
-      .get(`/itens-estoque/${itemId}`)
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+    const res = await authRequest(
+      ctx,
+      'get',
+      `/itens-estoque/${itemId}`,
+    ).expect(200);
 
     expect(res.body.id).toBe(itemId);
   });
 
   it('PUT /itens-estoque/:id — atualiza item', async () => {
-    const res = await request(app.getHttpServer())
-      .put(`/itens-estoque/${itemId}`)
-      .set('Authorization', `Bearer ${token}`)
+    const res = await authRequest(ctx, 'put', `/itens-estoque/${itemId}`)
       .send({ nome: 'E2E Filtro de ar Atualizado', precoUnitario: 40.0 })
       .expect(200);
 
@@ -106,21 +84,15 @@ describe('Itens de Estoque (e2e)', () => {
   });
 
   it('GET /itens-estoque/:id — 404 para ID inexistente', async () => {
-    await request(app.getHttpServer())
-      .get('/itens-estoque/00000000-0000-0000-0000-000000000000')
-      .set('Authorization', `Bearer ${token}`)
-      .expect(404);
+    await expectNotFound(ctx, '/itens-estoque');
   });
 
   it('GET /itens-estoque — 401 sem token', async () => {
-    await request(app.getHttpServer()).get('/itens-estoque').expect(401);
+    await expectUnauthorized(ctx, '/itens-estoque');
   });
 
   it('DELETE /itens-estoque/:id — deleta item', async () => {
-    await request(app.getHttpServer())
-      .delete(`/itens-estoque/${itemId}`)
-      .set('Authorization', `Bearer ${token}`)
-      .expect(204);
+    await authRequest(ctx, 'delete', `/itens-estoque/${itemId}`).expect(204);
 
     itemId = undefined;
   });

@@ -1,64 +1,41 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
-import request from 'supertest';
-import { App } from 'supertest/types';
-import { AppModule } from '../src/app.module';
+import {
+  E2eContext,
+  setupE2e,
+  authRequest,
+  expectNotFound,
+  expectUnauthorized,
+} from './setup-e2e';
 
 describe('Veículos (e2e)', () => {
-  let app: INestApplication<App>;
-  let token: string;
+  let ctx: E2eContext;
   let clienteId: string;
   let veiculoId: string;
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+    ctx = await setupE2e();
 
-    app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, transform: true }),
-    );
-    await app.init();
-
-    const loginRes = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email: 'admin@oficina.com', senha: 'senha123' });
-    token = loginRes.body.accessToken;
-
-    // Cliente necessário para vincular veículo
-    const clienteRes = await request(app.getHttpServer())
-      .post('/cliente')
-      .set('Authorization', `Bearer ${token}`)
-      .send({
-        nome: 'E2E Veiculo Cliente',
-        telefone: '(11)999999999',
-        email: 'e2e-veiculo@teste.com',
-        cpfCnpj: '444.555.666-77',
-        tipoPessoa: 'FISICA',
-      });
+    const clienteRes = await authRequest(ctx, 'post', '/cliente').send({
+      nome: 'E2E Veiculo Cliente',
+      telefone: '(11)999999999',
+      email: 'e2e-veiculo@teste.com',
+      cpfCnpj: '444.555.666-77',
+      tipoPessoa: 'FISICA',
+    });
     clienteId = clienteRes.body.id;
   });
 
   afterAll(async () => {
-    const auth = { Authorization: `Bearer ${token}` };
     if (veiculoId) {
-      await request(app.getHttpServer())
-        .delete(`/veiculos/${veiculoId}`)
-        .set(auth);
+      await authRequest(ctx, 'delete', `/veiculos/${veiculoId}`);
     }
     if (clienteId) {
-      await request(app.getHttpServer())
-        .delete(`/cliente/delete/${clienteId}`)
-        .set(auth);
+      await authRequest(ctx, 'delete', `/cliente/delete/${clienteId}`);
     }
-    await app.close();
+    await ctx.app.close();
   });
 
   it('POST /veiculos — cria veículo', async () => {
-    const res = await request(app.getHttpServer())
-      .post('/veiculos')
-      .set('Authorization', `Bearer ${token}`)
+    const res = await authRequest(ctx, 'post', '/veiculos')
       .send({
         placa: 'VEI1C23',
         marca: 'Honda',
@@ -74,28 +51,24 @@ describe('Veículos (e2e)', () => {
   });
 
   it('GET /veiculos — lista veículos', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/veiculos')
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+    const res = await authRequest(ctx, 'get', '/veiculos').expect(200);
 
     expect(res.body).toBeInstanceOf(Array);
     expect(res.body.length).toBeGreaterThanOrEqual(1);
   });
 
   it('GET /veiculos/:id — busca por ID', async () => {
-    const res = await request(app.getHttpServer())
-      .get(`/veiculos/${veiculoId}`)
-      .set('Authorization', `Bearer ${token}`)
-      .expect(200);
+    const res = await authRequest(
+      ctx,
+      'get',
+      `/veiculos/${veiculoId}`,
+    ).expect(200);
 
     expect(res.body.id).toBe(veiculoId);
   });
 
   it('PUT /veiculos/:id — atualiza veículo', async () => {
-    const res = await request(app.getHttpServer())
-      .put(`/veiculos/${veiculoId}`)
-      .set('Authorization', `Bearer ${token}`)
+    const res = await authRequest(ctx, 'put', `/veiculos/${veiculoId}`)
       .send({ marca: 'Honda', modelo: 'Civic Touring', ano: 2023 })
       .expect(200);
 
@@ -103,21 +76,15 @@ describe('Veículos (e2e)', () => {
   });
 
   it('GET /veiculos/:id — 404 para ID inexistente', async () => {
-    await request(app.getHttpServer())
-      .get('/veiculos/00000000-0000-0000-0000-000000000000')
-      .set('Authorization', `Bearer ${token}`)
-      .expect(404);
+    await expectNotFound(ctx, '/veiculos');
   });
 
   it('GET /veiculos — 401 sem token', async () => {
-    await request(app.getHttpServer()).get('/veiculos').expect(401);
+    await expectUnauthorized(ctx, '/veiculos');
   });
 
   it('DELETE /veiculos/:id — deleta veículo', async () => {
-    await request(app.getHttpServer())
-      .delete(`/veiculos/${veiculoId}`)
-      .set('Authorization', `Bearer ${token}`)
-      .expect(204);
+    await authRequest(ctx, 'delete', `/veiculos/${veiculoId}`).expect(204);
 
     veiculoId = undefined;
   });
