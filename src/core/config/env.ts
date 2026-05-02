@@ -10,6 +10,17 @@ function must(name: string): void {
 }
 
 export function validateEnv(): void {
+  must('NODE_ENV');
+  must('APPLICATION_PORT');
+
   must('DATABASE_URL');
   must('JWT_SECRET');
+  must('JWT_EXPIRES_IN');
+
+  must('MAIL_FROM');
+  must('MAIL_HOST');
+  must('MAIL_USER');
+  must('MAIL_PASS');
+  must('MAIL_PORT');
+
 }
