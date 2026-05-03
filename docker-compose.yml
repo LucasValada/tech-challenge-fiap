@@ -19,8 +19,8 @@ services:
       start_period: 30s
 
   api:
-    image: node:18
     container_name: oficina-api
+    restart: on-failure
     build:
       context: ./
       dockerfile: ./Dockerfile
@@ -30,17 +30,15 @@ services:
       DATABASE_URL: postgresql://${OFICINA_USER}:${OFICINA_PASSWORD}@postgres:5432/${OFICINA_DB}?schema=public
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
-
       MAIL_FROM: ${MAIL_FROM}
       MAIL_HOST: ${MAIL_HOST}
       MAIL_USER: ${MAIL_USER}
       MAIL_PASS: ${MAIL_PASS}
       MAIL_PORT: ${MAIL_PORT}
-    command: sh -c "npm run start:prod"
     ports:
       - ${APPLICATION_PORT}:3000
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

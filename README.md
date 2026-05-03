@@ -38,36 +38,47 @@ Sistema de gerenciamento de oficina mecânica desenvolvido como MVP (Fase 1) do 
 - npm 11+
 - Docker e Docker Compose
 
-## Instalação e execução local
+## Execução com Docker (recomendado)
 
 ```bash
 # 1. Clonar o repositório
 git clone https://github.com/LucasValada/tech-challenge-fiap.git
 cd tech-challenge-fiap
 
-# 2. Instalar dependências
-npm install
-
-# 3. Configurar variáveis de ambiente
+# 2. Configurar variáveis de ambiente
 cp .env.example .env
 # Edite o .env com suas credenciais (ver seção abaixo)
 
-# 4. Subir o banco PostgreSQL
-# Nota: Se já tiver uma instancia rodando na máquina, altere as portas conforme necessário no env e dockerfile
-docker compose up postgres -d
-
-# 5. Aplicar migrations
-npx prisma migrate deploy
-
-# 6. Popular o banco com o usuário admin padrão
-npx prisma db seed
-
-# 4. Subir a API
-docker compose up api -d
+# 3. Subir todos os serviços (Postgres + API)
+docker compose up -d
 ```
+
+O compose cuida de tudo: sobe o Postgres, aguarda o healthcheck, aplica as migrations automaticamente e inicia a API. O usuário admin padrão (`admin@oficina.com` / `senha123`) é criado por uma migration, sem necessidade de seed manual.
 
 A API estará disponível em `http://localhost:3000`.
 A documentação Swagger estará em `http://localhost:3000/api`.
+
+## Execução local (desenvolvimento)
+
+```bash
+# 1. Instalar dependências
+npm install
+
+# 2. Configurar variáveis de ambiente
+cp .env.example .env
+
+# 3. Subir apenas o banco PostgreSQL
+docker compose up postgres -d
+
+# 4. Gerar o Prisma Client e aplicar migrations
+npx prisma generate
+npx prisma migrate dev
+
+# 5. Iniciar a API em modo de desenvolvimento
+npm run start:dev
+```
+
+> **Nota:** O docker-compose mapeia a porta do Postgres para `5433` no host. O `.env.example` já reflete isso. Se a porta `5433` estiver ocupada, ajuste no `docker-compose.yml` e no `.env`.
 
 ## Variáveis de ambiente
 
@@ -75,7 +86,12 @@ Copie `.env.example` para `.env` e preencha:
 
 | Variável | Obrigatória | Descrição |
 |---|---|---|
-| `DATABASE_URL` | sim | String de conexão PostgreSQL (`postgresql://user:pass@host:5432/db?schema=public`) |
+| `NODE_ENV` | não | Ambiente (`development` ou `production`) |
+| `APPLICATION_PORT` | não | Porta exposta no host (default: `3000`) |
+| `DATABASE_URL` | sim | String de conexão PostgreSQL (`postgresql://user:pass@host:5433/db?schema=public`) |
+| `OFICINA_USER` | sim | Usuário do Postgres (usado pelo docker-compose) |
+| `OFICINA_PASSWORD` | sim | Senha do Postgres (usado pelo docker-compose) |
+| `OFICINA_DB` | sim | Nome do banco (usado pelo docker-compose) |
 | `JWT_SECRET` | sim | Segredo para assinar tokens JWT |
 | `JWT_EXPIRES_IN` | não | Expiração do token (default: `1h`) |
 | `MAIL_HOST` | não | Host SMTP (default: `smtp.ethereal.email`) |
@@ -101,7 +117,7 @@ POST /auth/login
 
 Use o token retornado no header `Authorization: Bearer <token>` nas demais requisições.
 
-O usuário admin padrão é criado pelo seed (`npx prisma db seed`).
+O usuário admin padrão é criado automaticamente pela migration `seed_admin_user` ao aplicar as migrations.
 
 ## Endpoints da API
 
