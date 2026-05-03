@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ${OFICINA_PASSWORD}
       POSTGRES_DB: ${OFICINA_DB}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -27,7 +27,7 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV}
       APPLICATION_PORT: 3000
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: postgresql://${OFICINA_USER}:${OFICINA_PASSWORD}@postgres:5432/${OFICINA_DB}?schema=public
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
 
@@ -36,6 +36,7 @@ services:
       MAIL_USER: ${MAIL_USER}
       MAIL_PASS: ${MAIL_PASS}
       MAIL_PORT: ${MAIL_PORT}
+    command: sh -c "npm run start:prod"
     ports:
       - ${APPLICATION_PORT}:3000
     healthcheck:

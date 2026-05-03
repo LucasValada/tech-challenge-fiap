@@ -56,10 +56,8 @@ cp .env.example .env
 # Nota: Se já tiver uma instancia rodando na máquina, altere as portas conforme necessário no env e dockerfile
 docker compose up postgres -d
 
-# 5. Aplicar migrations e gerar o Prisma Client
+# 5. Aplicar migrations
 npx prisma migrate deploy
-npx prisma generate
-
 
 # 6. Popular o banco com o usuário admin padrão
 npx prisma db seed
