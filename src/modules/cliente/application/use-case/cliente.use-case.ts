@@ -1,6 +1,6 @@
 import { Inject, NotFoundException } from '@nestjs/common';
 import { ClientRepository } from '../../cliente.repository';
-import { clientDto } from '../dto/client.dto';
+import { ClientDto } from '../dto/client.dto';
 import { Cliente } from '../../domain/entity/Client';
 import { ClientPolicyService } from '../../domain/service/ClientPolicy.service';
 
@@ -25,7 +25,7 @@ export class clientServices {
     return response;
   }
 
-  async createClient(data: clientDto) {
+  async createClient(data: ClientDto) {
     const client = new Cliente(
       data.nome,
       data.telefone,
@@ -41,7 +41,7 @@ export class clientServices {
     return response;
   }
 
-  async updateClient(id: string, data: clientDto) {
+  async updateClient(id: string, data: ClientDto) {
     const client = new Cliente(
       data.nome,
       data.telefone,

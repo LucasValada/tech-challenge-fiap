@@ -17,7 +17,7 @@ import {
   ApiResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards';
-import { clientDto } from './application/dto/client.dto';
+import { ClientDto } from './application/dto/client.dto';
 import { clientServices } from './application/use-case/cliente.use-case';
 
 @ApiTags('Clientes')
@@ -56,7 +56,7 @@ export class ClienteController {
   @ApiOperation({ summary: 'Criar novo cliente' })
   @ApiResponse({ status: 201, description: 'Cliente criado com sucesso' })
   @ApiResponse({ status: 409, description: 'CPF/CNPJ já cadastrado' })
-  async postHello(@Body() dto: clientDto) {
+  async postHello(@Body() dto: ClientDto) {
     return this.clientServices.createClient(dto);
   }
 
@@ -65,7 +65,7 @@ export class ClienteController {
   @ApiOperation({ summary: 'Atualizar cliente' })
   @ApiResponse({ status: 200, description: 'Cliente atualizado com sucesso' })
   @ApiResponse({ status: 404, description: 'Cliente não encontrado' })
-  async updateClient(@Param('id') id: string, @Body() dto: clientDto) {
+  async updateClient(@Param('id') id: string, @Body() dto: ClientDto) {
     return this.clientServices.updateClient(id, dto);
   }
 
