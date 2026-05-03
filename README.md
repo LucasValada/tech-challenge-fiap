@@ -53,6 +53,7 @@ cp .env.example .env
 # Edite o .env com suas credenciais (ver seção abaixo)
 
 # 4. Subir o banco PostgreSQL
+# Nota: Se já tiver uma instancia rodando na máquina, altere as portas conforme necessário no env e dockerfile
 docker compose up postgres -d
 
 # 5. Aplicar migrations e gerar o Prisma Client
