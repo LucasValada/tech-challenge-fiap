@@ -33,6 +33,10 @@ COPY --from=builder /app/src/generated ./src/generated
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
+# Roda como usuário não-root (node UID 1000 já existe na imagem oficial)
+RUN chown -R node:node /app
+USER node
+
 # Expõe porta
 EXPOSE 3000
 

@@ -198,7 +198,7 @@ describe('OrdemServicoService', () => {
 
   describe('create', () => {
     const baseDto = {
-      cpfCnpj: '123.456.789-00',
+      cpfCnpj: '529.982.247-25',
       placa: 'ABC1D23',
       observacoes: 'OS criada via balcão',
     };
@@ -209,14 +209,14 @@ describe('OrdemServicoService', () => {
       await expect(service.create('usuario-1', baseDto)).rejects.toThrow(
         NotFoundException,
       );
-      expect(mockClientRepo.getByCpfCnpj).toHaveBeenCalledWith('12345678900');
+      expect(mockClientRepo.getByCpfCnpj).toHaveBeenCalledWith('52998224725');
       expect(mockOrdemRepo.createComItens).not.toHaveBeenCalled();
     });
 
     it('lança UnprocessableEntityException quando veículo é de outro cliente', async () => {
       mockClientRepo.getByCpfCnpj.mockResolvedValue({
         id: 'cliente-1',
-        cpfCnpj: '12345678900',
+        cpfCnpj: '52998224725',
       });
       mockVeiculoRepo.findByPlaca.mockResolvedValue({
         id: 'veiculo-1',
@@ -232,7 +232,7 @@ describe('OrdemServicoService', () => {
     it('lança NotFoundException quando veículo não encontrado', async () => {
       mockClientRepo.getByCpfCnpj.mockResolvedValue({
         id: 'cliente-1',
-        cpfCnpj: '12345678900',
+        cpfCnpj: '52998224725',
       });
       mockVeiculoRepo.findByPlaca.mockResolvedValue(null);
 
@@ -245,7 +245,7 @@ describe('OrdemServicoService', () => {
     it('traduz erro de domínio quando createComItens lança', async () => {
       mockClientRepo.getByCpfCnpj.mockResolvedValue({
         id: 'cliente-1',
-        cpfCnpj: '12345678900',
+        cpfCnpj: '52998224725',
       });
       mockVeiculoRepo.findByPlaca.mockResolvedValue({
         id: 'veiculo-1',
@@ -263,7 +263,7 @@ describe('OrdemServicoService', () => {
     it('cria OS no fluxo feliz com 1 servico e 1 item', async () => {
       mockClientRepo.getByCpfCnpj.mockResolvedValue({
         id: 'cliente-1',
-        cpfCnpj: '12345678900',
+        cpfCnpj: '52998224725',
       });
       mockVeiculoRepo.findByPlaca.mockResolvedValue({
         id: 'veiculo-1',
@@ -492,7 +492,7 @@ describe('OrdemServicoService', () => {
       updatedAt: new Date(),
       finalizadaAt: null,
       entregueAt: null,
-      cliente: { id: 'cliente-1', nome: 'João', cpfCnpj: '12345678900' },
+      cliente: { id: 'cliente-1', nome: 'João', cpfCnpj: '52998224725' },
       veiculo: {
         id: 'veiculo-1',
         placa: 'ABC1D23',
@@ -589,7 +589,7 @@ describe('OrdemServicoService', () => {
     }> = [
       {
         nome: 'ClienteNaoEncontradoError → 404',
-        erro: new ClienteNaoEncontradoError('12345678900'),
+        erro: new ClienteNaoEncontradoError('52998224725'),
         esperado: NotFoundException,
       },
       {
@@ -629,7 +629,7 @@ describe('OrdemServicoService', () => {
       },
       {
         nome: 'VeiculoNaoPertenceAoClienteError → 422',
-        erro: new VeiculoNaoPertenceAoClienteError('ABC1D23', '12345678900'),
+        erro: new VeiculoNaoPertenceAoClienteError('ABC1D23', '52998224725'),
         esperado: UnprocessableEntityException,
       },
     ];

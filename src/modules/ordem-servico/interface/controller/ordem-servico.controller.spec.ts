@@ -64,7 +64,7 @@ describe('OrdemServicoController', () => {
 
   it('POST /ordens-servico → create com user.id do JWT', async () => {
     const dto = {
-      cpfCnpj: '123.456.789-00',
+      cpfCnpj: '529.982.247-25',
       placa: 'ABC1D23',
     };
     const ordemCriada = { id: 'ordem-1', codigo: 'OS-2026-000001' };

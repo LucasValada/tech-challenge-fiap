@@ -27,7 +27,7 @@ describe('Clientes (e2e)', () => {
         nome: 'E2E Cliente Teste',
         telefone: '(11)999999999',
         email: 'e2e-cliente@teste.com',
-        cpfCnpj: '111.222.333-44',
+        cpfCnpj: '529.982.247-25',
         tipoPessoa: 'FISICA',
       })
       .expect(201);
@@ -53,16 +53,12 @@ describe('Clientes (e2e)', () => {
   });
 
   it('PUT /cliente/update/:id — atualiza cliente', async () => {
-    const res = await authRequest(
-      ctx,
-      'put',
-      `/cliente/update/${clienteId}`,
-    )
+    const res = await authRequest(ctx, 'put', `/cliente/update/${clienteId}`)
       .send({
         nome: 'E2E Cliente Atualizado',
         telefone: '(11)888888888',
         email: 'e2e-cliente@teste.com',
-        cpfCnpj: '111.222.333-44',
+        cpfCnpj: '529.982.247-25',
         tipoPessoa: 'FISICA',
       })
       .expect(200);
@@ -75,7 +71,7 @@ describe('Clientes (e2e)', () => {
       nome: 'Outro',
       telefone: '(11)999999999',
       email: 'outro-e2e@teste.com',
-      cpfCnpj: '111.222.333-44',
+      cpfCnpj: '529.982.247-25',
       tipoPessoa: 'FISICA',
     });
 

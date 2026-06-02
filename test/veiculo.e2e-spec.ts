@@ -18,7 +18,7 @@ describe('Veículos (e2e)', () => {
       nome: 'E2E Veiculo Cliente',
       telefone: '(11)999999999',
       email: 'e2e-veiculo@teste.com',
-      cpfCnpj: '444.555.666-77',
+      cpfCnpj: '611.718.412-30',
       tipoPessoa: 'FISICA',
     });
     clienteId = clienteRes.body.id;
@@ -58,11 +58,9 @@ describe('Veículos (e2e)', () => {
   });
 
   it('GET /veiculos/:id — busca por ID', async () => {
-    const res = await authRequest(
-      ctx,
-      'get',
-      `/veiculos/${veiculoId}`,
-    ).expect(200);
+    const res = await authRequest(ctx, 'get', `/veiculos/${veiculoId}`).expect(
+      200,
+    );
 
     expect(res.body.id).toBe(veiculoId);
   });

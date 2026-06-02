@@ -19,7 +19,7 @@ const clienteDto = {
   nome: 'João da Silva',
   telefone: '(11)999999999',
   email: 'joao@email.com',
-  cpfCnpj: '123.456.789-00',
+  cpfCnpj: '529.982.247-25',
   tipoPessoa: 'FISICA' as const,
 };
 
@@ -83,15 +83,6 @@ describe('clientServices', () => {
 
       expect(result).toBe(clienteCriado);
       expect(mockClientRepository.createClient).toHaveBeenCalled();
-    });
-
-    it('lança BadRequestException para CPF inválido', async () => {
-      const dtoInvalido = { ...clienteDto, cpfCnpj: '000' };
-
-      await expect(service.createClient(dtoInvalido)).rejects.toThrow(
-        BadRequestException,
-      );
-      expect(mockClientRepository.createClient).not.toHaveBeenCalled();
     });
 
     it('lança ConflictException quando CPF/CNPJ já existe', async () => {

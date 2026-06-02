@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString } from 'class-validator';
+import { IsCpfCnpj } from '../../../../common/validators';
 
 export class ClientDto {
   @IsString()
@@ -31,9 +32,10 @@ export class ClientDto {
 
   @IsString()
   @IsNotEmpty()
+  @IsCpfCnpj()
   @ApiProperty({
-    description: 'Cpf ou cnpj do usuário',
-    example: '123.456.789-00',
+    description: 'CPF ou CNPJ do cliente (com ou sem pontuação)',
+    example: '529.982.247-25',
     required: true,
   })
   cpfCnpj!: string;
