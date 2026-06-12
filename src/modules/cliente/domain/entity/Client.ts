@@ -22,16 +22,4 @@ export class Cliente {
 
     return emailRegex.test(this.email);
   }
-
-  IsValidCpfCnpj() {
-    const cpfRegex = /^\d{3}\.\d{3}\.\d{3}-\d{2}$/;
-    const cnpjRegex = /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/;
-
-    switch (this.tipoPessoa) {
-      case 'FISICA':
-        return cpfRegex.test(this.cpfCnpj);
-      case 'JURIDICA':
-        return cnpjRegex.test(this.cpfCnpj);
-    }
-  }
 }

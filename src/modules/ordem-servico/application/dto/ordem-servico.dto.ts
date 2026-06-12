@@ -11,7 +11,8 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { CPF_CNPJ_REGEX, PLACA_REGEX } from './ordem-servico.constants';
+import { IsCpfCnpj } from '../../../../common/validators';
+import { PLACA_REGEX } from './ordem-servico.constants';
 
 export class CreateOrdemServicoServicoLinhaDto {
   @ApiProperty({
@@ -44,12 +45,10 @@ export class CreateOrdemServicoItemEstoqueLinhaDto {
 export class CreateOrdemServicoDto {
   @ApiProperty({
     description: 'CPF ou CNPJ do cliente (com ou sem pontuação)',
-    example: '123.456.789-00',
+    example: '529.982.247-25',
   })
   @IsString()
-  @Matches(CPF_CNPJ_REGEX, {
-    message: 'cpfCnpj deve estar em formato de CPF ou CNPJ válido',
-  })
+  @IsCpfCnpj()
   cpfCnpj!: string;
 
   @ApiProperty({

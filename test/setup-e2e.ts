@@ -17,9 +17,7 @@ export async function setupE2e(): Promise<E2eContext> {
   }).compile();
 
   const app = moduleFixture.createNestApplication();
-  app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, transform: true }),
-  );
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   await app.init();
 
   const loginRes = await request(app.getHttpServer())

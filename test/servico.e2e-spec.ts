@@ -44,11 +44,9 @@ describe('Serviços (e2e)', () => {
   });
 
   it('GET /servicos/:id — busca por ID', async () => {
-    const res = await authRequest(
-      ctx,
-      'get',
-      `/servicos/${servicoId}`,
-    ).expect(200);
+    const res = await authRequest(ctx, 'get', `/servicos/${servicoId}`).expect(
+      200,
+    );
 
     expect(res.body.id).toBe(servicoId);
   });
