@@ -13,6 +13,13 @@ export interface OrcamentoEmailData {
   valorTotal: number;
 }
 
+export interface NotificacaoStatusEmailData {
+  clienteNome: string;
+  clienteEmail: string;
+  codigoOS: string;
+  placa: string;
+}
+
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
@@ -81,6 +88,65 @@ export class MailService {
       this.logger.error(
         `Falha ao enviar email de orçamento para ${data.clienteEmail}: ${error}`,
       );
+    }
+  }
+
+  async enviarNotificacaoFinalizacao(
+    data: NotificacaoStatusEmailData,
+  ): Promise<void> {
+    const texto = [
+      `Olá ${data.clienteNome},`,
+      '',
+      `O serviço da Ordem de Serviço ${data.codigoOS}, referente ao veículo de placa ${data.placa}, foi finalizado.`,
+      'Já pode passar na oficina para retirar o veículo.',
+      '',
+      'Atenciosamente,',
+      'Oficina SOAT',
+    ].join('\n');
+
+    await this.enviarComLog(
+      data.clienteEmail,
+      `OS ${data.codigoOS} finalizada - Oficina SOAT`,
+      texto,
+      `notificação de finalização (OS: ${data.codigoOS})`,
+    );
+  }
+
+  async enviarNotificacaoEntrega(
+    data: NotificacaoStatusEmailData,
+  ): Promise<void> {
+    const texto = [
+      `Olá ${data.clienteNome},`,
+      '',
+      `Confirmamos a entrega do veículo de placa ${data.placa} referente à Ordem de Serviço ${data.codigoOS}.`,
+      'Obrigado pela preferência!',
+      '',
+      'Atenciosamente,',
+      'Oficina SOAT',
+    ].join('\n');
+
+    await this.enviarComLog(
+      data.clienteEmail,
+      `OS ${data.codigoOS} entregue - Oficina SOAT`,
+      texto,
+      `notificação de entrega (OS: ${data.codigoOS})`,
+    );
+  }
+
+  private async enviarComLog(
+    to: string,
+    subject: string,
+    text: string,
+    contexto: string,
+  ): Promise<void> {
+    try {
+      const info = await this.mailerService.sendMail({ to, subject, text });
+      this.logger.log(`Email enviado: ${contexto} para ${to}`);
+      if (info?.messageId) {
+        this.logger.log(`Message ID: ${info.messageId}`);
+      }
+    } catch (error) {
+      this.logger.error(`Falha ao enviar ${contexto} para ${to}: ${error}`);
     }
   }
 }

@@ -39,10 +39,17 @@ export class OrdemServicoController {
   constructor(private readonly ordemServicoService: OrdemServicoService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Listar todas as ordens de serviço' })
+  @ApiOperation({
+    summary: 'Listar ordens de serviço ativas',
+    description:
+      'Retorna apenas OS em andamento (exclui FINALIZADA e ENTREGUE). ' +
+      'Ordenadas por prioridade de status ' +
+      '(EM_EXECUCAO > AGUARDANDO_APROVACAO > EM_DIAGNOSTICO > RECEBIDA) ' +
+      'e, dentro do mesmo status, mais antigas primeiro (createdAt ASC).',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Lista de ordens de serviço retornada com sucesso',
+    description: 'Lista de OS ativas retornada com sucesso',
   })
   async findAll() {
     return this.ordemServicoService.findAll();
@@ -248,6 +255,12 @@ export class OrdemServicoController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Transicionar status da OS (avanço linear ou rollback de 1 passo)',
+    description:
+      'Avanço linear (RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → ' +
+      'EM_EXECUCAO → FINALIZADA → ENTREGUE) ou rollback de 1 passo. ' +
+      'Transições para FINALIZADA e ENTREGUE disparam, em best-effort, ' +
+      'email de notificação ao cliente quando ele possui email cadastrado ' +
+      '(falha no envio não bloqueia a transição).',
   })
   @ApiResponse({ status: 200, description: 'Status transicionado' })
   @ApiResponse({ status: 404, description: 'OS não encontrada' })
