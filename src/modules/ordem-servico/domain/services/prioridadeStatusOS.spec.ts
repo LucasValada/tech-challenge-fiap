@@ -5,20 +5,13 @@ import {
 } from './prioridadeStatusOS';
 
 describe('prioridadeStatusListagem', () => {
-  it('EM_EXECUCAO tem maior prioridade (1)', () => {
-    expect(prioridadeStatusListagem('EM_EXECUCAO')).toBe(1);
-  });
-
-  it('AGUARDANDO_APROVACAO vem depois de EM_EXECUCAO', () => {
-    expect(prioridadeStatusListagem('AGUARDANDO_APROVACAO')).toBe(2);
-  });
-
-  it('EM_DIAGNOSTICO vem depois de AGUARDANDO_APROVACAO', () => {
-    expect(prioridadeStatusListagem('EM_DIAGNOSTICO')).toBe(3);
-  });
-
-  it('RECEBIDA tem menor prioridade entre os ativos', () => {
-    expect(prioridadeStatusListagem('RECEBIDA')).toBe(4);
+  it.each<[StatusOrdemServico, number]>([
+    ['EM_EXECUCAO', 1],
+    ['AGUARDANDO_APROVACAO', 2],
+    ['EM_DIAGNOSTICO', 3],
+    ['RECEBIDA', 4],
+  ])('%s deve ter prioridade %d', (status, prioridadeEsperada) => {
+    expect(prioridadeStatusListagem(status)).toBe(prioridadeEsperada);
   });
 
   it('ordenação completa respeita a regra da Fase 2', () => {
@@ -43,7 +36,7 @@ describe('prioridadeStatusListagem', () => {
 });
 
 describe('STATUS_EXCLUIDOS_DA_LISTAGEM', () => {
-  it('contém FINALIZADA e ENTREGUE', () => {
+  it('contém exatamente FINALIZADA e ENTREGUE', () => {
     expect(STATUS_EXCLUIDOS_DA_LISTAGEM).toEqual(
       expect.arrayContaining(['FINALIZADA', 'ENTREGUE']),
     );

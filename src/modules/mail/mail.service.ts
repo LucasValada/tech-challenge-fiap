@@ -94,15 +94,10 @@ export class MailService {
   async enviarNotificacaoFinalizacao(
     data: NotificacaoStatusEmailData,
   ): Promise<void> {
-    const texto = [
-      `Olá ${data.clienteNome},`,
-      '',
+    const texto = this.montarTextoNotificacao(data.clienteNome, [
       `O serviço da Ordem de Serviço ${data.codigoOS}, referente ao veículo de placa ${data.placa}, foi finalizado.`,
       'Já pode passar na oficina para retirar o veículo.',
-      '',
-      'Atenciosamente,',
-      'Oficina SOAT',
-    ].join('\n');
+    ]);
 
     await this.enviarComLog(
       data.clienteEmail,
@@ -115,15 +110,10 @@ export class MailService {
   async enviarNotificacaoEntrega(
     data: NotificacaoStatusEmailData,
   ): Promise<void> {
-    const texto = [
-      `Olá ${data.clienteNome},`,
-      '',
+    const texto = this.montarTextoNotificacao(data.clienteNome, [
       `Confirmamos a entrega do veículo de placa ${data.placa} referente à Ordem de Serviço ${data.codigoOS}.`,
       'Obrigado pela preferência!',
-      '',
-      'Atenciosamente,',
-      'Oficina SOAT',
-    ].join('\n');
+    ]);
 
     await this.enviarComLog(
       data.clienteEmail,
@@ -131,6 +121,20 @@ export class MailService {
       texto,
       `notificação de entrega (OS: ${data.codigoOS})`,
     );
+  }
+
+  private montarTextoNotificacao(
+    clienteNome: string,
+    linhasCorpo: string[],
+  ): string {
+    return [
+      `Olá ${clienteNome},`,
+      '',
+      ...linhasCorpo,
+      '',
+      'Atenciosamente,',
+      'Oficina SOAT',
+    ].join('\n');
   }
 
   private async enviarComLog(

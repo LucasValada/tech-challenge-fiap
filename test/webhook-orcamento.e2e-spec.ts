@@ -1,10 +1,24 @@
 import { cpf } from 'cpf-cnpj-validator';
-import { WEBHOOK_TOKEN_ENV, WEBHOOK_TOKEN_HEADER } from '../src/common/guards';
-import { E2eContext, setupE2e, authRequest, publicRequest } from './setup-e2e';
 import request from 'supertest';
+import { WEBHOOK_TOKEN_ENV, WEBHOOK_TOKEN_HEADER } from '../src/common/guards';
+import { E2eContext, setupE2e, publicRequest } from './setup-e2e';
+import {
+  adicionarServicoNaOS,
+  criarClienteFixture,
+  criarOS,
+  criarServicoFixture,
+  criarVeiculoFixture,
+  limparRecursos,
+  transicionarStatus,
+} from './helpers/os-fixtures';
 
 const TOKEN = 'test-webhook-token-1234567890';
 const URL = '/webhooks/orcamento';
+
+interface WebhookPayload {
+  codigoOS: string;
+  aprovado: boolean;
+}
 
 describe('POST /webhooks/orcamento (e2e)', () => {
   let ctx: E2eContext;
@@ -15,48 +29,36 @@ describe('POST /webhooks/orcamento (e2e)', () => {
   const cpfCnpj = cpf.generate();
   const placas = ['WHK1A01', 'WHK1A02', 'WHK1A03'];
 
-  const criarOSAguardandoAprovacao = async (
-    placa: string,
-  ): Promise<string> => {
-    const veiculoRes = await authRequest(ctx, 'post', '/veiculos').send({
-      placa,
-      marca: 'Fiat',
-      modelo: 'Uno',
-      ano: 2020,
-      clienteId,
-    });
-    veiculoIds.push(veiculoRes.body.id);
+  const postWebhook = (payload: WebhookPayload, token: string | null = TOKEN) => {
+    const req = request(ctx.app.getHttpServer()).post(URL);
+    if (token !== null) {
+      req.set(WEBHOOK_TOKEN_HEADER, token);
+    }
+    return req.send(payload);
+  };
 
-    const osRes = await authRequest(ctx, 'post', '/ordens-servico')
-      .send({ cpfCnpj, placa })
-      .expect(201);
-    const osId: string = osRes.body.id;
-    const codigo: string = osRes.body.codigo;
+  const criarOSAguardandoAprovacao = async (placa: string): Promise<string> => {
+    veiculoIds.push(await criarVeiculoFixture(ctx, clienteId, placa));
+
+    const { id: osId, codigo } = await criarOS(ctx, cpfCnpj, placa);
     osIds.push(osId);
 
-    const servicoRes = await authRequest(ctx, 'post', '/servicos').send({
-      nome: `WHK Servico ${Date.now()}-${Math.random()}`,
+    const servicoId = await criarServicoFixture(ctx, 'WHK Servico', {
       precoBase: 120,
-      tempoEstimadoMin: 30,
     });
-    servicoIds.push(servicoRes.body.id);
+    servicoIds.push(servicoId);
+    await adicionarServicoNaOS(ctx, osId, servicoId, 1);
 
-    await authRequest(ctx, 'post', `/ordens-servico/${osId}/servicos`)
-      .send({ servicoId: servicoRes.body.id, quantidade: 1 })
-      .expect(201);
-
-    await authRequest(ctx, 'post', `/ordens-servico/${osId}/transicao-status`)
-      .send({ status: 'EM_DIAGNOSTICO' })
-      .expect(200);
-
-    await authRequest(ctx, 'post', `/ordens-servico/${osId}/transicao-status`)
-      .send({ status: 'AGUARDANDO_APROVACAO' })
-      .expect(200);
+    await transicionarStatus(ctx, osId, 'EM_DIAGNOSTICO');
+    await transicionarStatus(ctx, osId, 'AGUARDANDO_APROVACAO');
 
     return codigo;
   };
 
-  const consultarStatus = async (codigo: string, placa: string) => {
+  const consultarStatus = async (
+    codigo: string,
+    placa: string,
+  ): Promise<string> => {
     const res = await publicRequest(
       ctx,
       'get',
@@ -69,55 +71,38 @@ describe('POST /webhooks/orcamento (e2e)', () => {
     process.env[WEBHOOK_TOKEN_ENV] = TOKEN;
     ctx = await setupE2e();
 
-    const clienteRes = await authRequest(ctx, 'post', '/cliente').send({
+    clienteId = await criarClienteFixture(ctx, {
       nome: 'E2E Webhook Cliente',
       telefone: '(11)977776666',
       email: 'e2e-webhook@teste.com',
       cpfCnpj,
       tipoPessoa: 'FISICA',
     });
-    clienteId = clienteRes.body.id;
   });
 
   afterAll(async () => {
-    for (const osId of osIds) {
-      await authRequest(ctx, 'delete', `/ordens-servico/${osId}`);
-    }
-    for (const servicoId of servicoIds) {
-      await authRequest(ctx, 'delete', `/servicos/${servicoId}`);
-    }
-    for (const veiculoId of veiculoIds) {
-      await authRequest(ctx, 'delete', `/veiculos/${veiculoId}`);
-    }
-    if (clienteId) {
-      await authRequest(ctx, 'delete', `/cliente/delete/${clienteId}`);
-    }
+    await limparRecursos(ctx, { osIds, servicoIds, veiculoIds, clienteId });
     await ctx.app.close();
   });
 
   it('401 quando header X-Webhook-Token está ausente', async () => {
-    await request(ctx.app.getHttpServer())
-      .post(URL)
-      .send({ codigoOS: 'OS-2026-000001', aprovado: true })
+    await postWebhook({ codigoOS: 'OS-2026-000001', aprovado: true }, null)
       .expect(401);
   });
 
   it('401 quando token está inválido', async () => {
-    await request(ctx.app.getHttpServer())
-      .post(URL)
-      .set(WEBHOOK_TOKEN_HEADER, 'token-errado-com-mesmo-tamanho-xxx')
-      .send({ codigoOS: 'OS-2026-000001', aprovado: true })
-      .expect(401);
+    await postWebhook(
+      { codigoOS: 'OS-2026-000001', aprovado: true },
+      'token-errado-com-mesmo-tamanho-xxx',
+    ).expect(401);
   });
 
   it('aprovação transiciona AGUARDANDO_APROVACAO → EM_EXECUCAO', async () => {
     const codigo = await criarOSAguardandoAprovacao(placas[0]);
 
-    const res = await request(ctx.app.getHttpServer())
-      .post(URL)
-      .set(WEBHOOK_TOKEN_HEADER, TOKEN)
-      .send({ codigoOS: codigo, aprovado: true })
-      .expect(200);
+    const res = await postWebhook({ codigoOS: codigo, aprovado: true }).expect(
+      200,
+    );
 
     expect(res.body).toEqual({ codigo, status: 'EM_EXECUCAO' });
     expect(await consultarStatus(codigo, placas[0])).toBe('EM_EXECUCAO');
@@ -126,45 +111,30 @@ describe('POST /webhooks/orcamento (e2e)', () => {
   it('recusa faz rollback AGUARDANDO_APROVACAO → EM_DIAGNOSTICO', async () => {
     const codigo = await criarOSAguardandoAprovacao(placas[1]);
 
-    const res = await request(ctx.app.getHttpServer())
-      .post(URL)
-      .set(WEBHOOK_TOKEN_HEADER, TOKEN)
-      .send({ codigoOS: codigo, aprovado: false })
-      .expect(200);
+    const res = await postWebhook({ codigoOS: codigo, aprovado: false }).expect(
+      200,
+    );
 
     expect(res.body).toEqual({ codigo, status: 'EM_DIAGNOSTICO' });
     expect(await consultarStatus(codigo, placas[1])).toBe('EM_DIAGNOSTICO');
   });
 
   it('404 quando código não existe', async () => {
-    await request(ctx.app.getHttpServer())
-      .post(URL)
-      .set(WEBHOOK_TOKEN_HEADER, TOKEN)
-      .send({ codigoOS: 'OS-2026-999999', aprovado: true })
-      .expect(404);
+    await postWebhook({ codigoOS: 'OS-2026-999999', aprovado: true }).expect(
+      404,
+    );
   });
 
   it('409 quando OS não está em AGUARDANDO_APROVACAO', async () => {
     const codigo = await criarOSAguardandoAprovacao(placas[2]);
 
-    await request(ctx.app.getHttpServer())
-      .post(URL)
-      .set(WEBHOOK_TOKEN_HEADER, TOKEN)
-      .send({ codigoOS: codigo, aprovado: true })
-      .expect(200);
-
-    await request(ctx.app.getHttpServer())
-      .post(URL)
-      .set(WEBHOOK_TOKEN_HEADER, TOKEN)
-      .send({ codigoOS: codigo, aprovado: true })
-      .expect(409);
+    await postWebhook({ codigoOS: codigo, aprovado: true }).expect(200);
+    await postWebhook({ codigoOS: codigo, aprovado: true }).expect(409);
   });
 
   it('400 quando codigoOS está em formato inválido', async () => {
-    await request(ctx.app.getHttpServer())
-      .post(URL)
-      .set(WEBHOOK_TOKEN_HEADER, TOKEN)
-      .send({ codigoOS: 'formato-errado', aprovado: true })
-      .expect(400);
+    await postWebhook({ codigoOS: 'formato-errado', aprovado: true }).expect(
+      400,
+    );
   });
 });
