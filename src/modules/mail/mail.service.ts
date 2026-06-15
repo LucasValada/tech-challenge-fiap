@@ -149,6 +149,11 @@ export class MailService {
       if (info?.messageId) {
         this.logger.log(`Message ID: ${info.messageId}`);
       }
+      const previewUrl =
+        (await (await import('nodemailer')).getTestMessageUrl(info)) || null;
+      if (previewUrl) {
+        this.logger.log(`Preview URL (Ethereal): ${previewUrl}`);
+      }
     } catch (error) {
       this.logger.error(`Falha ao enviar ${contexto} para ${to}: ${error}`);
     }
