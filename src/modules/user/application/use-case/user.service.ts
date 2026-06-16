@@ -70,6 +70,14 @@ export class UserService {
     return this.userRepository.deleteUser(id);
   }
 
+  /**
+   * @deprecated Será removido após o merge do PR #94 (refactor de auth).
+   * O AuthService refatorado deixa de consumir este método e passa a
+   * usar AuthUserRepository.findByEmail próprio do bounded context de
+   * auth. Para acesso por email dentro do próprio módulo de user, use
+   * UserRepository.getUserByEmail diretamente (já é o que
+   * garantirEmailUnico faz internamente).
+   */
   async getUserByEmail(email: string): Promise<Usuario | null> {
     return this.userRepository.getUserByEmail(email);
   }
