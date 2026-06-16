@@ -17,11 +17,11 @@ import {
   ApiResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../common/guards';
-import { UserService } from '../../application/use-case/user.service.js';
+import { UserService } from '../../application/use-case/user.service';
 import {
   UserUpdateDto,
   UsuarioCreateDto,
-} from '../../application/dto/user.dto.js';
+} from '../../application/dto/user.dto';
 
 @ApiTags('Usuários')
 @ApiBearerAuth()
