@@ -82,6 +82,8 @@ const mockItemRepo = {
 
 const mockMailService = {
   enviarOrcamento: jest.fn(),
+  enviarNotificacaoFinalizacao: jest.fn(),
+  enviarNotificacaoEntrega: jest.fn(),
 };
 
 const ordemRecebida = (): OrdemServico =>
@@ -321,6 +323,101 @@ describe('OrdemServicoService', () => {
         }),
       ).rejects.toThrow(ConflictException);
       expect(mockOrdemRepo.transicionarStatus).not.toHaveBeenCalled();
+    });
+
+    describe('notificação por email', () => {
+      const detalhesMinimos = {
+        codigo: 'OS-2026-000001',
+        cliente: { id: 'cliente-1', nome: 'João' },
+        veiculo: { placa: 'ABC1D23' },
+      } as unknown as OrdemServicoDetalhadaView;
+
+      const mockTransicaoOk = (statusOrigem: OrdemServico['status']) => {
+        const ordem = ordemRecebida();
+        ordem.status = statusOrigem;
+        mockOrdemRepo.findById.mockResolvedValue(ordem);
+        mockOrdemRepo.transicionarStatus.mockResolvedValue(ordem);
+        mockOrdemRepo.findByIdComDetalhes.mockResolvedValue(detalhesMinimos);
+      };
+
+      it('dispara enviarNotificacaoFinalizacao em transição para FINALIZADA', async () => {
+        mockTransicaoOk('EM_EXECUCAO');
+        mockClientRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
+
+        await service.transicionarStatus('ordem-1', 'usuario-1', {
+          status: 'FINALIZADA',
+        });
+
+        expect(mockMailService.enviarNotificacaoFinalizacao).toHaveBeenCalledWith(
+          {
+            clienteNome: 'João',
+            clienteEmail: 'joao@email.com',
+            codigoOS: 'OS-2026-000001',
+            placa: 'ABC1D23',
+          },
+        );
+        expect(mockMailService.enviarNotificacaoEntrega).not.toHaveBeenCalled();
+      });
+
+      it('dispara enviarNotificacaoEntrega em transição para ENTREGUE', async () => {
+        mockTransicaoOk('FINALIZADA');
+        mockClientRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
+
+        await service.transicionarStatus('ordem-1', 'usuario-1', {
+          status: 'ENTREGUE',
+        });
+
+        expect(mockMailService.enviarNotificacaoEntrega).toHaveBeenCalledWith({
+          clienteNome: 'João',
+          clienteEmail: 'joao@email.com',
+          codigoOS: 'OS-2026-000001',
+          placa: 'ABC1D23',
+        });
+        expect(
+          mockMailService.enviarNotificacaoFinalizacao,
+        ).not.toHaveBeenCalled();
+      });
+
+      it('não dispara email em transições que não são FINALIZADA nem ENTREGUE', async () => {
+        mockTransicaoOk('RECEBIDA');
+
+        await service.transicionarStatus('ordem-1', 'usuario-1', {
+          status: 'EM_DIAGNOSTICO',
+        });
+
+        expect(
+          mockMailService.enviarNotificacaoFinalizacao,
+        ).not.toHaveBeenCalled();
+        expect(mockMailService.enviarNotificacaoEntrega).not.toHaveBeenCalled();
+        expect(mockClientRepo.getOne).not.toHaveBeenCalled();
+      });
+
+      it('não dispara email quando cliente não tem email cadastrado', async () => {
+        mockTransicaoOk('EM_EXECUCAO');
+        mockClientRepo.getOne.mockResolvedValue({ email: null });
+
+        await service.transicionarStatus('ordem-1', 'usuario-1', {
+          status: 'FINALIZADA',
+        });
+
+        expect(
+          mockMailService.enviarNotificacaoFinalizacao,
+        ).not.toHaveBeenCalled();
+      });
+
+      it('falha silenciosamente no email sem bloquear a transição', async () => {
+        mockTransicaoOk('EM_EXECUCAO');
+        mockClientRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
+        mockMailService.enviarNotificacaoFinalizacao.mockRejectedValue(
+          new Error('SMTP down'),
+        );
+
+        await expect(
+          service.transicionarStatus('ordem-1', 'usuario-1', {
+            status: 'FINALIZADA',
+          }),
+        ).resolves.toBeDefined();
+      });
     });
   });
 

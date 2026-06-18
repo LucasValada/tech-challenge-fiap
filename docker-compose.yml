@@ -35,6 +35,7 @@ services:
       MAIL_USER: ${MAIL_USER}
       MAIL_PASS: ${MAIL_PASS}
       MAIL_PORT: ${MAIL_PORT}
+      WEBHOOK_ORCAMENTO_TOKEN: ${WEBHOOK_ORCAMENTO_TOKEN}
     ports:
       - ${APPLICATION_PORT}:3000
     healthcheck:

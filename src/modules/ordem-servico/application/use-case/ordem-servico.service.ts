@@ -2,6 +2,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -10,7 +11,10 @@ import {
   OrdemServicoDetalhadaView,
   OrdemServicoRepository,
 } from '../../domain/repository/ordem-servico.repository';
-import { OrdemServico } from '../../domain/entity/OrdemServico';
+import {
+  OrdemServico,
+  StatusOrdemServico,
+} from '../../domain/entity/OrdemServico';
 import { OSServicoLinha } from '../../domain/entity/OSServicoLinha';
 import { OSItemEstoqueLinha } from '../../domain/entity/OSItemEstoqueLinha';
 import { ClientRepository } from '../../../cliente/cliente.repository';
@@ -56,6 +60,8 @@ import { MailService } from '../../../mail/mail.service';
 
 @Injectable()
 export class OrdemServicoService {
+  private readonly logger = new Logger(OrdemServicoService.name);
+
   constructor(
     @Inject(ORDEM_SERVICO_REPOSITORY)
     private readonly ordemServicoRepository: OrdemServicoRepository,
@@ -241,13 +247,47 @@ export class OrdemServicoService {
     if (!resultado.valida) {
       throw new ConflictException(resultado.motivo);
     }
-    return this.ordemServicoRepository.transicionarStatus(
+    const atualizada = await this.ordemServicoRepository.transicionarStatus(
       ordemId,
       dto.status,
       resultado.tipo!,
       usuarioId,
       dto.observacao ?? null,
     );
+
+    await this.dispararNotificacaoStatus(ordemId, dto.status);
+
+    return atualizada;
+  }
+
+  private async dispararNotificacaoStatus(
+    ordemId: string,
+    novoStatus: StatusOrdemServico,
+  ): Promise<void> {
+    if (novoStatus !== 'FINALIZADA' && novoStatus !== 'ENTREGUE') return;
+
+    try {
+      const detalhes = await this.findByIdComDetalhes(ordemId);
+      const cliente = await this.clientRepository.getOne(detalhes.cliente.id);
+      if (!cliente?.email) return;
+
+      const payload = {
+        clienteNome: detalhes.cliente.nome,
+        clienteEmail: cliente.email,
+        codigoOS: detalhes.codigo,
+        placa: detalhes.veiculo.placa,
+      };
+
+      if (novoStatus === 'FINALIZADA') {
+        await this.mailService.enviarNotificacaoFinalizacao(payload);
+      } else {
+        await this.mailService.enviarNotificacaoEntrega(payload);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Falha ao notificar transição para ${novoStatus} (OS: ${ordemId}): ${String(error)}`,
+      );
+    }
   }
 
   async enviarOrcamento(
