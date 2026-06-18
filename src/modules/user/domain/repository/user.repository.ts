@@ -1,20 +1,23 @@
-import {
-  UserUpdateDto,
-  UsuarioCreateDto,
-} from '../../application/dto/user.dto';
 import { Usuario } from '../entity/User';
 
 export const USER_REPOSITORY = 'USER_REPOSITORY';
+
+export interface CreateUserData {
+  nome: string;
+  email: string;
+  senhaHash: string;
+}
+
+export interface UpdateUserData {
+  nome: string;
+  email: string;
+}
+
 export interface UserRepository {
   getAllUser(): Promise<{ user: Usuario[]; count: number }>;
-
   getUserById(id: string): Promise<Usuario | null>;
-
   getUserByEmail(email: string, excludeId?: string): Promise<Usuario | null>;
-
-  createUser(data: UsuarioCreateDto): Promise<Usuario>;
-
-  updateUser(id: string, data: UserUpdateDto): Promise<Usuario>;
-
+  createUser(data: CreateUserData): Promise<Usuario>;
+  updateUser(id: string, data: UpdateUserData): Promise<Usuario>;
   deleteUser(id: string): Promise<Usuario>;
 }

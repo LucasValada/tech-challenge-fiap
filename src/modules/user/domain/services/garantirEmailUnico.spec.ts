@@ -1,5 +1,5 @@
 import { ConflictException } from '@nestjs/common';
-import { EmailPolicyService } from './EmailPolicy';
+import { garantirEmailUnico } from './garantirEmailUnico';
 
 const mockUserRepo = {
   getAllUser: jest.fn(),
@@ -10,15 +10,15 @@ const mockUserRepo = {
   deleteUser: jest.fn(),
 };
 
-describe('EmailPolicyService', () => {
+describe('garantirEmailUnico', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('não lança erro quando email não existe', async () => {
+  it('não lança quando email não existe', async () => {
     mockUserRepo.getUserByEmail.mockResolvedValue(null);
 
-    const policy = new EmailPolicyService(mockUserRepo, 'novo@email.com');
-
-    await expect(policy.IsDuplicate()).resolves.toBeUndefined();
+    await expect(
+      garantirEmailUnico(mockUserRepo, 'novo@email.com'),
+    ).resolves.toBeUndefined();
     expect(mockUserRepo.getUserByEmail).toHaveBeenCalledWith(
       'novo@email.com',
       undefined,
@@ -28,16 +28,15 @@ describe('EmailPolicyService', () => {
   it('lança ConflictException quando email já existe', async () => {
     mockUserRepo.getUserByEmail.mockResolvedValue({ id: 'outro' });
 
-    const policy = new EmailPolicyService(mockUserRepo, 'existente@email.com');
-
-    await expect(policy.IsDuplicate()).rejects.toThrow(ConflictException);
+    await expect(
+      garantirEmailUnico(mockUserRepo, 'existente@email.com'),
+    ).rejects.toThrow(ConflictException);
   });
 
   it('passa excludeId para o repositório no update', async () => {
     mockUserRepo.getUserByEmail.mockResolvedValue(null);
 
-    const policy = new EmailPolicyService(mockUserRepo, 'user@email.com');
-    await policy.IsDuplicate('uuid-1');
+    await garantirEmailUnico(mockUserRepo, 'user@email.com', 'uuid-1');
 
     expect(mockUserRepo.getUserByEmail).toHaveBeenCalledWith(
       'user@email.com',
