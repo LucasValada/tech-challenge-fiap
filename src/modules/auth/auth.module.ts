@@ -2,14 +2,16 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { PrismaModule } from '../prisma/prisma.module';
 import { AuthController } from './interface/controller/auth.controller';
 import { AuthService } from './application/use-case/auth.service';
-import { JwtStrategy } from './domain/strategies/jwt.strategy';
-import { UserService } from '../user/application/use-case/user.service';
-import { PrismaUserRepository } from '../../infra/database/prisma/repositories/prisma.user.repository';
+import { JwtStrategy } from './interface/strategies/jwt.strategy';
+import { AUTH_USER_REPOSITORY } from './domain/repository/auth-user.repository';
+import { PrismaAuthUserRepository } from '../../infra/database/prisma/repositories/prisma.auth-user.repository';
 
 @Module({
   imports: [
+    PrismaModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -30,8 +32,10 @@ import { PrismaUserRepository } from '../../infra/database/prisma/repositories/p
   providers: [
     AuthService,
     JwtStrategy,
-    UserService,
-    { provide: 'USER_REPOSITORY', useClass: PrismaUserRepository },
+    {
+      provide: AUTH_USER_REPOSITORY,
+      useClass: PrismaAuthUserRepository,
+    },
   ],
   exports: [AuthService],
 })

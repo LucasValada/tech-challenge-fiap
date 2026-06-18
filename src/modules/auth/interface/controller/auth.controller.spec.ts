@@ -1,7 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
-import { AuthController } from '../interface/controller/auth.controller';
-import { AuthService } from '../application/use-case/auth.service';
+import { AuthController } from './auth.controller';
+import {
+  AuthService,
+  CREDENCIAIS_INVALIDAS_MSG,
+} from '../../application/use-case/auth.service';
 
 const mockAuthService = {
   login: jest.fn(),
@@ -37,7 +40,7 @@ describe('AuthController', () => {
 
   it('deve propagar erros lançados pelo AuthService', async () => {
     mockAuthService.login.mockRejectedValue(
-      new UnauthorizedException('Credenciais inválidas'),
+      new UnauthorizedException(CREDENCIAIS_INVALIDAS_MSG),
     );
 
     await expect(
