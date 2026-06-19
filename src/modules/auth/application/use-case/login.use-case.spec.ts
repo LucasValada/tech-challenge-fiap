@@ -5,6 +5,13 @@ import { TOKEN_ISSUER } from '../../domain/service/token-issuer';
 import { PASSWORD_HASHER } from '../../domain/service/password-hasher';
 import { CredenciaisInvalidasError } from '../../domain/error/credenciais-invalidas.error';
 
+const VALID_EMAIL = 'usuario.teste@example.com';
+const UNKNOWN_EMAIL = 'sem-cadastro@example.com';
+const PLAIN_INPUT_OK = 'plain-input-a';
+const PLAIN_INPUT_BAD = 'plain-input-b';
+const FAKE_HASH = 'fake-hash-for-tests';
+const FAKE_TOKEN = 'fake-token-for-tests';
+
 const mockAuthUserRepository = {
   findByEmail: jest.fn(),
 };
@@ -19,8 +26,8 @@ const mockPasswordHasher = {
 
 const usuarioMock = {
   id: 'uuid-123',
-  email: 'admin@oficina.com',
-  senhaHash: '$2b$10$hashedpassword',
+  email: VALID_EMAIL,
+  senhaHash: FAKE_HASH,
 };
 
 describe('LoginUseCase', () => {
@@ -45,64 +52,64 @@ describe('LoginUseCase', () => {
       mockAuthUserRepository.findByEmail.mockResolvedValue(null);
 
       await expect(
-        useCase.execute('naoexiste@email.com', 'senha123'),
+        useCase.execute(UNKNOWN_EMAIL, PLAIN_INPUT_OK),
       ).rejects.toBeInstanceOf(CredenciaisInvalidasError);
       expect(mockAuthUserRepository.findByEmail).toHaveBeenCalledWith(
-        'naoexiste@email.com',
+        UNKNOWN_EMAIL,
       );
       expect(mockPasswordHasher.compare).not.toHaveBeenCalled();
     });
 
-    it('lança CredenciaisInvalidasError quando a senha está errada', async () => {
+    it('lança CredenciaisInvalidasError quando o passwordHasher rejeita', async () => {
       mockAuthUserRepository.findByEmail.mockResolvedValue(usuarioMock);
       mockPasswordHasher.compare.mockResolvedValue(false);
 
       await expect(
-        useCase.execute('admin@oficina.com', 'senhaerrada'),
+        useCase.execute(VALID_EMAIL, PLAIN_INPUT_BAD),
       ).rejects.toBeInstanceOf(CredenciaisInvalidasError);
       expect(mockPasswordHasher.compare).toHaveBeenCalledWith(
-        'senhaerrada',
+        PLAIN_INPUT_BAD,
         usuarioMock.senhaHash,
       );
       expect(mockTokenIssuer.sign).not.toHaveBeenCalled();
     });
 
-    it('usa a mesma mensagem de erro para usuário inexistente e senha errada', async () => {
+    it('usa a mesma mensagem de erro para usuário inexistente e credencial errada', async () => {
       mockAuthUserRepository.findByEmail.mockResolvedValue(null);
       let erroUsuarioInexistente: CredenciaisInvalidasError | undefined;
       try {
-        await useCase.execute('naoexiste@email.com', 'senha123');
+        await useCase.execute(UNKNOWN_EMAIL, PLAIN_INPUT_OK);
       } catch (e) {
         erroUsuarioInexistente = e as CredenciaisInvalidasError;
       }
 
       mockAuthUserRepository.findByEmail.mockResolvedValue(usuarioMock);
       mockPasswordHasher.compare.mockResolvedValue(false);
-      let erroSenhaErrada: CredenciaisInvalidasError | undefined;
+      let erroCredencialErrada: CredenciaisInvalidasError | undefined;
       try {
-        await useCase.execute('admin@oficina.com', 'senhaerrada');
+        await useCase.execute(VALID_EMAIL, PLAIN_INPUT_BAD);
       } catch (e) {
-        erroSenhaErrada = e as CredenciaisInvalidasError;
+        erroCredencialErrada = e as CredenciaisInvalidasError;
       }
 
-      expect(erroUsuarioInexistente?.message).toBe(erroSenhaErrada?.message);
+      expect(erroUsuarioInexistente?.message).toBe(erroCredencialErrada?.message);
     });
   });
 
   describe('cenário feliz', () => {
-    it('retorna accessToken quando email e senha são válidos', async () => {
+    it('retorna accessToken quando credenciais são válidas', async () => {
       mockAuthUserRepository.findByEmail.mockResolvedValue(usuarioMock);
       mockPasswordHasher.compare.mockResolvedValue(true);
-      mockTokenIssuer.sign.mockResolvedValue('token-jwt-fake');
+      mockTokenIssuer.sign.mockResolvedValue(FAKE_TOKEN);
 
-      const result = await useCase.execute('admin@oficina.com', 'senha123');
+      const result = await useCase.execute(VALID_EMAIL, PLAIN_INPUT_OK);
 
-      expect(result).toEqual({ accessToken: 'token-jwt-fake' });
+      expect(result).toEqual({ accessToken: FAKE_TOKEN });
       expect(mockAuthUserRepository.findByEmail).toHaveBeenCalledWith(
-        'admin@oficina.com',
+        VALID_EMAIL,
       );
       expect(mockPasswordHasher.compare).toHaveBeenCalledWith(
-        'senha123',
+        PLAIN_INPUT_OK,
         usuarioMock.senhaHash,
       );
       expect(mockTokenIssuer.sign).toHaveBeenCalledWith({
