@@ -1,30 +1,28 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
 import { AuthController } from './auth.controller';
-import {
-  AuthService,
-  CREDENCIAIS_INVALIDAS_MSG,
-} from '../../application/use-case/auth.service';
+import { LoginUseCase } from '../../application/use-case/login.use-case';
+import { CredenciaisInvalidasError } from '../../domain/error/credenciais-invalidas.error';
 
-const mockAuthService = {
-  login: jest.fn(),
+const mockLoginUseCase = {
+  execute: jest.fn(),
 };
 
 describe('AuthController', () => {
   let controller: AuthController;
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    const moduleRef: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
-      providers: [{ provide: AuthService, useValue: mockAuthService }],
+      providers: [{ provide: LoginUseCase, useValue: mockLoginUseCase }],
     }).compile();
 
-    controller = module.get<AuthController>(AuthController);
+    controller = moduleRef.get<AuthController>(AuthController);
     jest.clearAllMocks();
   });
 
-  it('deve encaminhar email e senha para AuthService.login e retornar o token', async () => {
-    mockAuthService.login.mockResolvedValue({ accessToken: 'token-fake' });
+  it('encaminha email e senha para LoginUseCase.execute e retorna o token', async () => {
+    mockLoginUseCase.execute.mockResolvedValue({ accessToken: 'token-fake' });
 
     const result = await controller.login({
       email: 'admin@oficina.com',
@@ -32,19 +30,29 @@ describe('AuthController', () => {
     });
 
     expect(result).toEqual({ accessToken: 'token-fake' });
-    expect(mockAuthService.login).toHaveBeenCalledWith(
+    expect(mockLoginUseCase.execute).toHaveBeenCalledWith(
       'admin@oficina.com',
       'senha123',
     );
   });
 
-  it('deve propagar erros lançados pelo AuthService', async () => {
-    mockAuthService.login.mockRejectedValue(
-      new UnauthorizedException(CREDENCIAIS_INVALIDAS_MSG),
-    );
+  it('traduz CredenciaisInvalidasError para UnauthorizedException', async () => {
+    mockLoginUseCase.execute.mockRejectedValue(new CredenciaisInvalidasError());
 
     await expect(
       controller.login({ email: 'admin@oficina.com', senha: 'senhaerrada' }),
-    ).rejects.toThrow(UnauthorizedException);
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(
+      controller.login({ email: 'admin@oficina.com', senha: 'senhaerrada' }),
+    ).rejects.toThrow('Credenciais inválidas');
+  });
+
+  it('propaga erros inesperados sem traduzir', async () => {
+    const erroInesperado = new Error('Falha qualquer');
+    mockLoginUseCase.execute.mockRejectedValue(erroInesperado);
+
+    await expect(
+      controller.login({ email: 'admin@oficina.com', senha: 'senha123' }),
+    ).rejects.toBe(erroInesperado);
   });
 });

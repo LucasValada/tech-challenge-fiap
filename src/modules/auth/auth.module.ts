@@ -4,10 +4,14 @@ import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthController } from './interface/controller/auth.controller';
-import { AuthService } from './application/use-case/auth.service';
+import { LoginUseCase } from './application/use-case/login.use-case';
 import { JwtStrategy } from './interface/strategies/jwt.strategy';
 import { AUTH_USER_REPOSITORY } from './domain/repository/auth-user.repository';
+import { TOKEN_ISSUER } from './domain/service/token-issuer';
+import { PASSWORD_HASHER } from './domain/service/password-hasher';
 import { PrismaAuthUserRepository } from '../../infra/database/prisma/repositories/prisma.auth-user.repository';
+import { JwtTokenIssuer } from './infra/jwt-token-issuer';
+import { BcryptPasswordHasher } from './infra/bcrypt-password-hasher';
 
 @Module({
   imports: [
@@ -30,13 +34,12 @@ import { PrismaAuthUserRepository } from '../../infra/database/prisma/repositori
   ],
   controllers: [AuthController],
   providers: [
-    AuthService,
+    LoginUseCase,
     JwtStrategy,
-    {
-      provide: AUTH_USER_REPOSITORY,
-      useClass: PrismaAuthUserRepository,
-    },
+    { provide: AUTH_USER_REPOSITORY, useClass: PrismaAuthUserRepository },
+    { provide: TOKEN_ISSUER, useClass: JwtTokenIssuer },
+    { provide: PASSWORD_HASHER, useClass: BcryptPasswordHasher },
   ],
-  exports: [AuthService],
+  exports: [LoginUseCase],
 })
 export class AuthModule {}

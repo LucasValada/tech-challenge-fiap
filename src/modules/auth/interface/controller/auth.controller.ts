@@ -1,12 +1,20 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { AuthService } from '../../application/use-case/auth.service';
+import { LoginUseCase } from '../../application/use-case/login.use-case';
 import { LoginDto } from '../../application/dto/login.dto';
+import { CredenciaisInvalidasError } from '../../domain/error/credenciais-invalidas.error';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly loginUseCase: LoginUseCase) {}
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -17,6 +25,13 @@ export class AuthController {
   })
   @ApiResponse({ status: 401, description: 'Credenciais inválidas' })
   async login(@Body() dto: LoginDto) {
-    return this.authService.login(dto.email, dto.senha);
+    try {
+      return await this.loginUseCase.execute(dto.email, dto.senha);
+    } catch (error) {
+      if (error instanceof CredenciaisInvalidasError) {
+        throw new UnauthorizedException(error.message);
+      }
+      throw error;
+    }
   }
 }
