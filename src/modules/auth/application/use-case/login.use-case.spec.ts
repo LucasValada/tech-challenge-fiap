@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { LoginUseCase } from './login.use-case';
 import { AUTH_USER_REPOSITORY } from '../../domain/repository/auth-user.repository';
 import { TOKEN_ISSUER } from '../../domain/service/token-issuer';
-import { PASSWORD_HASHER } from '../../domain/service/password-hasher';
+import { AUTH_HASHER } from '../../domain/service/password-hasher';
 import { CredenciaisInvalidasError } from '../../domain/error/credenciais-invalidas.error';
 
 const VALID_EMAIL = 'usuario.teste@example.com';
@@ -39,7 +39,7 @@ describe('LoginUseCase', () => {
         LoginUseCase,
         { provide: AUTH_USER_REPOSITORY, useValue: mockAuthUserRepository },
         { provide: TOKEN_ISSUER, useValue: mockTokenIssuer },
-        { provide: PASSWORD_HASHER, useValue: mockPasswordHasher },
+        { provide: AUTH_HASHER, useValue: mockPasswordHasher },
       ],
     }).compile();
 

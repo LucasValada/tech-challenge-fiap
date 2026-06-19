@@ -8,7 +8,7 @@ import {
   TokenIssuer,
 } from '../../domain/service/token-issuer';
 import {
-  PASSWORD_HASHER,
+  AUTH_HASHER,
   PasswordHasher,
 } from '../../domain/service/password-hasher';
 import { CredenciaisInvalidasError } from '../../domain/error/credenciais-invalidas.error';
@@ -20,7 +20,7 @@ export class LoginUseCase {
     private readonly authUserRepository: AuthUserRepository,
     @Inject(TOKEN_ISSUER)
     private readonly tokenIssuer: TokenIssuer,
-    @Inject(PASSWORD_HASHER)
+    @Inject(AUTH_HASHER)
     private readonly passwordHasher: PasswordHasher,
   ) {}
 

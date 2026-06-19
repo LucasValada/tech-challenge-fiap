@@ -8,7 +8,7 @@ import { LoginUseCase } from './application/use-case/login.use-case';
 import { JwtStrategy } from './interface/strategies/jwt.strategy';
 import { AUTH_USER_REPOSITORY } from './domain/repository/auth-user.repository';
 import { TOKEN_ISSUER } from './domain/service/token-issuer';
-import { PASSWORD_HASHER } from './domain/service/password-hasher';
+import { AUTH_HASHER } from './domain/service/password-hasher';
 import { PrismaAuthUserRepository } from '../../infra/database/prisma/repositories/prisma.auth-user.repository';
 import { JwtTokenIssuer } from './infra/jwt-token-issuer';
 import { BcryptPasswordHasher } from './infra/bcrypt-password-hasher';
@@ -38,7 +38,7 @@ import { BcryptPasswordHasher } from './infra/bcrypt-password-hasher';
     JwtStrategy,
     { provide: AUTH_USER_REPOSITORY, useClass: PrismaAuthUserRepository },
     { provide: TOKEN_ISSUER, useClass: JwtTokenIssuer },
-    { provide: PASSWORD_HASHER, useClass: BcryptPasswordHasher },
+    { provide: AUTH_HASHER, useClass: BcryptPasswordHasher },
   ],
   exports: [LoginUseCase],
 })
