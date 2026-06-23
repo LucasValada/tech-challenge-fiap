@@ -1,6 +1,11 @@
 import { ConflictException } from '@nestjs/common';
 import { garantirEmailUnico } from './garantirEmailUnico';
 
+const EMAIL_NOVO = 'novo@example.com';
+const EMAIL_EXISTENTE = 'existente@example.com';
+const EMAIL_DO_USUARIO = 'usuario@example.com';
+const USUARIO_ID = 'uuid-1';
+
 const mockUserRepo = {
   getAllUser: jest.fn(),
   getUserById: jest.fn(),
@@ -17,10 +22,10 @@ describe('garantirEmailUnico', () => {
     mockUserRepo.getUserByEmail.mockResolvedValue(null);
 
     await expect(
-      garantirEmailUnico(mockUserRepo, 'novo@email.com'),
+      garantirEmailUnico(mockUserRepo, EMAIL_NOVO),
     ).resolves.toBeUndefined();
     expect(mockUserRepo.getUserByEmail).toHaveBeenCalledWith(
-      'novo@email.com',
+      EMAIL_NOVO,
       undefined,
     );
   });
@@ -29,18 +34,18 @@ describe('garantirEmailUnico', () => {
     mockUserRepo.getUserByEmail.mockResolvedValue({ id: 'outro' });
 
     await expect(
-      garantirEmailUnico(mockUserRepo, 'existente@email.com'),
-    ).rejects.toThrow(ConflictException);
+      garantirEmailUnico(mockUserRepo, EMAIL_EXISTENTE),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('passa excludeId para o repositório no update', async () => {
     mockUserRepo.getUserByEmail.mockResolvedValue(null);
 
-    await garantirEmailUnico(mockUserRepo, 'user@email.com', 'uuid-1');
+    await garantirEmailUnico(mockUserRepo, EMAIL_DO_USUARIO, USUARIO_ID);
 
     expect(mockUserRepo.getUserByEmail).toHaveBeenCalledWith(
-      'user@email.com',
-      'uuid-1',
+      EMAIL_DO_USUARIO,
+      USUARIO_ID,
     );
   });
 });

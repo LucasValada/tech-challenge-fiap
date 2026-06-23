@@ -17,7 +17,11 @@ import {
   ApiResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../common/guards';
-import { UserService } from '../../application/use-case/user.service';
+import { GetAllUsersUseCase } from '../../application/use-case/get-all-users.use-case';
+import { GetUserByIdUseCase } from '../../application/use-case/get-user-by-id.use-case';
+import { CreateUserUseCase } from '../../application/use-case/create-user.use-case';
+import { UpdateUserUseCase } from '../../application/use-case/update-user.use-case';
+import { DeleteUserUseCase } from '../../application/use-case/delete-user.use-case';
 import {
   UserUpdateDto,
   UsuarioCreateDto,
@@ -28,7 +32,13 @@ import {
 @UseGuards(JwtAuthGuard)
 @Controller('user')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly getAllUsersUseCase: GetAllUsersUseCase,
+    private readonly getUserByIdUseCase: GetUserByIdUseCase,
+    private readonly createUserUseCase: CreateUserUseCase,
+    private readonly updateUserUseCase: UpdateUserUseCase,
+    private readonly deleteUserUseCase: DeleteUserUseCase,
+  ) {}
 
   @Get()
   @HttpCode(HttpStatus.OK)
@@ -37,8 +47,8 @@ export class UserController {
     status: 200,
     description: 'Lista de usuários retornada com sucesso',
   })
-  async getUser() {
-    return await this.userService.getAllUser();
+  getUser() {
+    return this.getAllUsersUseCase.execute();
   }
 
   @Get(':id')
@@ -46,8 +56,8 @@ export class UserController {
   @ApiOperation({ summary: 'Buscar usuário por ID' })
   @ApiResponse({ status: 200, description: 'Usuário encontrado' })
   @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
-  async getUserById(@Param('id') id: string) {
-    return await this.userService.getUserById(id);
+  getUserById(@Param('id') id: string) {
+    return this.getUserByIdUseCase.execute(id);
   }
 
   @Post('/')
@@ -58,9 +68,8 @@ export class UserController {
     description: 'Usuário criado com sucesso (senha gerada automaticamente)',
   })
   @ApiResponse({ status: 409, description: 'Email já cadastrado' })
-  async createUser(@Body() dto: UsuarioCreateDto) {
-    const user = await this.userService.createUser(dto);
-    return user;
+  createUser(@Body() dto: UsuarioCreateDto) {
+    return this.createUserUseCase.execute(dto);
   }
 
   @Put(':id')
@@ -69,19 +78,15 @@ export class UserController {
   @ApiResponse({ status: 200, description: 'Usuário atualizado com sucesso' })
   @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
   @ApiResponse({ status: 409, description: 'Email já cadastrado' })
-  async updateUser(@Param('id') id: string, @Body() dto: UserUpdateDto) {
-    const user = await this.userService.updateUser(id, dto);
-
-    return user;
+  updateUser(@Param('id') id: string, @Body() dto: UserUpdateDto) {
+    return this.updateUserUseCase.execute(id, dto);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Deletar usuário' })
   @ApiResponse({ status: 200, description: 'Usuário deletado com sucesso' })
   @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
-  async deleteUser(@Param('id') id: string) {
-    const user = await this.userService.deleteUser(id);
-
-    return user;
+  deleteUser(@Param('id') id: string) {
+    return this.deleteUserUseCase.execute(id);
   }
 }
