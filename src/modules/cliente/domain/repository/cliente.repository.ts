@@ -1,5 +1,5 @@
-import { Cliente } from './domain/entity/Client';
-import { ClientDto } from './application/dto/client.dto';
+import { Cliente } from '../entity/Client';
+import { ClientDto } from '../../application/dto/client.dto';
 
 export interface ClientRepository {
   getOne(id: string): Promise<Cliente | null>;

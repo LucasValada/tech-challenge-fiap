@@ -16,16 +16,26 @@ import {
   ApiOperation,
   ApiResponse,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../common/guards';
-import { ClientDto } from './application/dto/client.dto';
-import { clientServices } from './application/use-case/cliente.use-case';
+import { JwtAuthGuard } from '../../../common/guards';
+import { ClientDto } from '../application/dto/client.dto';
+import { CreateClienteUseCase } from '../application/use-case/createCliente.use-case';
+import { DeleteClientUseCase } from '../application/use-case/deleteCliente.use-case';
+import { GetAllClientServices } from '../application/use-case/getAllCliente.use-case';
+import { GetOneClienteUseCase } from '../application/use-case/getOnecliente.use-case';
+import { UpdateClienteUseCase } from '../application/use-case/updateCliente.use-case';
 
 @ApiTags('Clientes')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('cliente')
 export class ClienteController {
-  constructor(private readonly clientServices: clientServices) {}
+  constructor(
+    private readonly createClienteUseCase: CreateClienteUseCase,
+    private readonly deleteClientUseCase: DeleteClientUseCase,
+    private readonly getAllClientServices: GetAllClientServices,
+    private readonly getOneClienteUseCase: GetOneClienteUseCase,
+    private readonly updateClienteUseCase: UpdateClienteUseCase,
+  ) {}
 
   @Get('/')
   @HttpCode(HttpStatus.OK)
@@ -35,7 +45,7 @@ export class ClienteController {
     description: 'Lista de clientes retornada com sucesso',
   })
   async getAllClient() {
-    const response = await this.clientServices.getAllClient();
+    const response = await this.getAllClientServices.execute();
 
     return response;
   }
@@ -46,7 +56,7 @@ export class ClienteController {
   @ApiResponse({ status: 200, description: 'Cliente encontrado' })
   @ApiResponse({ status: 404, description: 'Cliente não encontrado' })
   async getOneClient(@Param('id') id: string) {
-    const response = await this.clientServices.getOneClient(id);
+    const response = await this.getOneClienteUseCase.execute(id);
 
     return response;
   }
@@ -57,7 +67,7 @@ export class ClienteController {
   @ApiResponse({ status: 201, description: 'Cliente criado com sucesso' })
   @ApiResponse({ status: 409, description: 'CPF/CNPJ já cadastrado' })
   async postHello(@Body() dto: ClientDto) {
-    return this.clientServices.createClient(dto);
+    return this.createClienteUseCase.execute(dto);
   }
 
   @Put('/update/:id')
@@ -66,7 +76,7 @@ export class ClienteController {
   @ApiResponse({ status: 200, description: 'Cliente atualizado com sucesso' })
   @ApiResponse({ status: 404, description: 'Cliente não encontrado' })
   async updateClient(@Param('id') id: string, @Body() dto: ClientDto) {
-    return this.clientServices.updateClient(id, dto);
+    return this.updateClienteUseCase.execute(id, dto);
   }
 
   @Delete('/delete/:id')
@@ -74,6 +84,6 @@ export class ClienteController {
   @ApiResponse({ status: 200, description: 'Cliente deletado com sucesso' })
   @ApiResponse({ status: 404, description: 'Cliente não encontrado' })
   async deleteClient(@Param('id') id: string) {
-    return this.clientServices.deleteClient(id);
+    return this.deleteClientUseCase.execute(id);
   }
 }

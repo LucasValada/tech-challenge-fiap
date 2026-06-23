@@ -4,7 +4,11 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { clientServices } from '../application/use-case/cliente.use-case';
+import { CreateClienteUseCase } from '../application/use-case/createCliente.use-case';
+import { DeleteClientUseCase } from '../application/use-case/deleteCliente.use-case';
+import { GetAllClientServices } from '../application/use-case/getAllCliente.use-case';
+import { GetOneClienteUseCase } from '../application/use-case/getOnecliente.use-case';
+import { UpdateClienteUseCase } from '../application/use-case/updateCliente.use-case';
 
 const mockClientRepository = {
   getOne: jest.fn(),
@@ -31,17 +35,29 @@ const clienteCriado = {
 };
 
 describe('clientServices', () => {
-  let service: clientServices;
+  let service_getAllClient: GetAllClientServices;
+  let service_getOneClient: GetOneClienteUseCase;
+  let service_createClient: CreateClienteUseCase;
+  let service_updateClient: UpdateClienteUseCase;
+  let service_deleteClient: DeleteClientUseCase;
 
   beforeEach(async () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
-        clientServices,
+        CreateClienteUseCase,
+        DeleteClientUseCase,
+        GetAllClientServices,
+        GetOneClienteUseCase,
+        UpdateClienteUseCase,
         { provide: 'CLIENT_REPOSITORY', useValue: mockClientRepository },
       ],
     }).compile();
 
-    service = moduleRef.get(clientServices);
+    service_getAllClient = moduleRef.get(GetAllClientServices);
+    service_getOneClient = moduleRef.get(GetOneClienteUseCase);
+    service_createClient = moduleRef.get(CreateClienteUseCase);
+    service_updateClient = moduleRef.get(UpdateClienteUseCase);
+    service_deleteClient = moduleRef.get(DeleteClientUseCase);
     jest.clearAllMocks();
   });
 
@@ -50,7 +66,7 @@ describe('clientServices', () => {
       const resultado = { client: [clienteCriado], count: 1 };
       mockClientRepository.getAllClient.mockResolvedValue(resultado);
 
-      const result = await service.getAllClient();
+      const result = await service_getAllClient.execute();
 
       expect(result).toBe(resultado);
     });
@@ -60,7 +76,7 @@ describe('clientServices', () => {
     it('retorna cliente quando encontrado', async () => {
       mockClientRepository.getOne.mockResolvedValue(clienteCriado);
 
-      const result = await service.getOneClient('uuid-1');
+      const result = await service_getOneClient.execute('uuid-1');
 
       expect(result).toBe(clienteCriado);
     });
@@ -68,9 +84,9 @@ describe('clientServices', () => {
     it('lança NotFoundException quando não encontrado', async () => {
       mockClientRepository.getOne.mockResolvedValue(null);
 
-      await expect(service.getOneClient('uuid-inexistente')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service_getOneClient.execute('uuid-inexistente'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -79,7 +95,7 @@ describe('clientServices', () => {
       mockClientRepository.getByCpfCnpj.mockResolvedValue(null);
       mockClientRepository.createClient.mockResolvedValue(clienteCriado);
 
-      const result = await service.createClient(clienteDto);
+      const result = await service_createClient.execute(clienteDto);
 
       expect(result).toBe(clienteCriado);
       expect(mockClientRepository.createClient).toHaveBeenCalled();
@@ -88,7 +104,7 @@ describe('clientServices', () => {
     it('lança ConflictException quando CPF/CNPJ já existe', async () => {
       mockClientRepository.getByCpfCnpj.mockResolvedValue(clienteCriado);
 
-      await expect(service.createClient(clienteDto)).rejects.toThrow(
+      await expect(service_createClient.execute(clienteDto)).rejects.toThrow(
         ConflictException,
       );
       expect(mockClientRepository.createClient).not.toHaveBeenCalled();
@@ -97,7 +113,7 @@ describe('clientServices', () => {
     it('lança BadRequestException para email inválido', async () => {
       const dtoInvalido = { ...clienteDto, email: 'email-invalido' };
 
-      await expect(service.createClient(dtoInvalido)).rejects.toThrow(
+      await expect(service_createClient.execute(dtoInvalido)).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -108,7 +124,7 @@ describe('clientServices', () => {
       mockClientRepository.getByCpfCnpj.mockResolvedValue(null);
       mockClientRepository.updateClient.mockResolvedValue(clienteCriado);
 
-      const result = await service.updateClient('uuid-1', clienteDto);
+      const result = await service_updateClient.execute('uuid-1', clienteDto);
 
       expect(result).toBe(clienteCriado);
     });
@@ -119,9 +135,9 @@ describe('clientServices', () => {
         id: 'outro-uuid',
       });
 
-      await expect(service.updateClient('uuid-1', clienteDto)).rejects.toThrow(
-        ConflictException,
-      );
+      await expect(
+        service_updateClient.execute('uuid-1', clienteDto),
+      ).rejects.toThrow(ConflictException);
     });
   });
 
@@ -129,7 +145,7 @@ describe('clientServices', () => {
     it('deleta cliente', async () => {
       mockClientRepository.deleteClient.mockResolvedValue(undefined);
 
-      await service.deleteClient('uuid-1');
+      await service_deleteClient.execute('uuid-1');
 
       expect(mockClientRepository.deleteClient).toHaveBeenCalledWith('uuid-1');
     });
