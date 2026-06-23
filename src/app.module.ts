@@ -5,9 +5,9 @@ import { UserModule } from './modules/user/user.module';
 import { AuthModule } from './modules/auth';
 import { VeiculoModule } from './modules/veiculo';
 import { ItemEstoqueModule } from './modules/item-estoque';
-import { ServicoModule } from './modules/servico';
 import { ClientModule } from './modules/cliente/client.module';
 import { OrdemServicoModule } from './modules/ordem-servico';
+import { ServicoModule } from './modules/servico/servico.module';
 
 @Module({
   imports: [

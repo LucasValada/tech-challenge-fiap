@@ -18,21 +18,31 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../../common/guards';
 import { CreateServicoDto, UpdateServicoDto } from '../../application/dto';
-import { ServicoService } from '../../application/use-case/servico.service';
+import { UpdateServicoUseCase } from '../../application/use-case/updateServico.use-case';
+import { FindByIdServicoUseCase } from '../../application/use-case/findByIdServico.use-case';
+import { FindAllServicoUseCase } from '../../application/use-case/findAllServico.use-case';
+import { DeleteServicoUseCase } from '../../application/use-case/deleteServico.use-case';
+import { CreateServicoUseCase } from '../../application/use-case/createServico.use-case';
 
 @ApiTags('Servicos')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('servicos')
 export class ServicoController {
-  constructor(private readonly servicoService: ServicoService) {}
+  constructor(
+    private readonly createServicoUseCase: CreateServicoUseCase,
+    private readonly deleteServicoUseCase: DeleteServicoUseCase,
+    private readonly findAllServicoUseCase: FindAllServicoUseCase,
+    private readonly findByIdServicoUseCase: FindByIdServicoUseCase,
+    private readonly updateServicoUseCase: UpdateServicoUseCase,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Criar novo serviço' })
   @ApiResponse({ status: 201, description: 'Serviço criado com sucesso' })
   async create(@Body() dto: CreateServicoDto) {
-    return this.servicoService.create(dto);
+    return this.createServicoUseCase.execute(dto);
   }
 
   @Get()
@@ -42,7 +52,7 @@ export class ServicoController {
     description: 'Lista de serviços retornada com sucesso',
   })
   async findAll() {
-    return this.servicoService.findAll();
+    return this.findAllServicoUseCase.execute();
   }
 
   @Get(':id')
@@ -50,7 +60,7 @@ export class ServicoController {
   @ApiResponse({ status: 200, description: 'Serviço encontrado' })
   @ApiResponse({ status: 404, description: 'Serviço não encontrado' })
   async findById(@Param('id') id: string) {
-    return this.servicoService.findById(id);
+    return this.findByIdServicoUseCase.execute(id);
   }
 
   @Put(':id')
@@ -58,7 +68,7 @@ export class ServicoController {
   @ApiResponse({ status: 200, description: 'Serviço atualizado com sucesso' })
   @ApiResponse({ status: 404, description: 'Serviço não encontrado' })
   async update(@Param('id') id: string, @Body() dto: UpdateServicoDto) {
-    return this.servicoService.update(id, dto);
+    return this.updateServicoUseCase.execute(id, dto);
   }
 
   @Delete(':id')
@@ -67,6 +77,6 @@ export class ServicoController {
   @ApiResponse({ status: 204, description: 'Serviço deletado com sucesso' })
   @ApiResponse({ status: 404, description: 'Serviço não encontrado' })
   async delete(@Param('id') id: string) {
-    await this.servicoService.delete(id);
+    await this.deleteServicoUseCase.execute(id);
   }
 }
