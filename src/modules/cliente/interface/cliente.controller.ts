@@ -20,7 +20,7 @@ import { JwtAuthGuard } from '../../../common/guards';
 import { ClientDto } from '../application/dto/client.dto';
 import { CreateClienteUseCase } from '../application/use-case/createCliente.use-case';
 import { DeleteClientUseCase } from '../application/use-case/deleteCliente.use-case';
-import { GetAllClientServices } from '../application/use-case/getAllCliente.use-case';
+import { GetAllClientUseCase } from '../application/use-case/getAllCliente.use-case';
 import { GetOneClienteUseCase } from '../application/use-case/getOnecliente.use-case';
 import { UpdateClienteUseCase } from '../application/use-case/updateCliente.use-case';
 
@@ -32,7 +32,7 @@ export class ClienteController {
   constructor(
     private readonly createClienteUseCase: CreateClienteUseCase,
     private readonly deleteClientUseCase: DeleteClientUseCase,
-    private readonly getAllClientServices: GetAllClientServices,
+    private readonly getAllClientUseCase: GetAllClientUseCase,
     private readonly getOneClienteUseCase: GetOneClienteUseCase,
     private readonly updateClienteUseCase: UpdateClienteUseCase,
   ) {}
@@ -45,7 +45,7 @@ export class ClienteController {
     description: 'Lista de clientes retornada com sucesso',
   })
   async getAllClient() {
-    const response = await this.getAllClientServices.execute();
+    const response = await this.getAllClientUseCase.execute();
 
     return response;
   }
@@ -66,7 +66,7 @@ export class ClienteController {
   @ApiOperation({ summary: 'Criar novo cliente' })
   @ApiResponse({ status: 201, description: 'Cliente criado com sucesso' })
   @ApiResponse({ status: 409, description: 'CPF/CNPJ já cadastrado' })
-  async postHello(@Body() dto: ClientDto) {
+  async createClient(@Body() dto: ClientDto) {
     return this.createClienteUseCase.execute(dto);
   }
 

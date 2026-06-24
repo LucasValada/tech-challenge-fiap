@@ -1,6 +1,7 @@
-import { Inject, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ClientRepository } from '../../domain/repository/cliente.repository';
 
+@Injectable()
 export class GetOneClienteUseCase {
   constructor(
     @Inject('CLIENT_REPOSITORY')

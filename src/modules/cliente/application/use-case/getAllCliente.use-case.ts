@@ -1,7 +1,8 @@
-import { Inject } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ClientRepository } from '../../domain/repository/cliente.repository';
 
-export class GetAllClientServices {
+@Injectable()
+export class GetAllClientUseCase {
   constructor(
     @Inject('CLIENT_REPOSITORY')
     private readonly clientRepository: ClientRepository,
