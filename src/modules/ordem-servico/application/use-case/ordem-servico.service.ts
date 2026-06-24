@@ -17,7 +17,7 @@ import {
 } from '../../domain/entity/OrdemServico';
 import { OSServicoLinha } from '../../domain/entity/OSServicoLinha';
 import { OSItemEstoqueLinha } from '../../domain/entity/OSItemEstoqueLinha';
-import { ClientRepository } from '../../../cliente/cliente.repository';
+import { ClientRepository } from '../../../cliente/domain/repository/cliente.repository';
 import {
   VEICULO_REPOSITORY,
   VeiculoRepository,

@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { ClientRepository } from '../../cliente.repository';
+import { ClientRepository } from '../repository/cliente.repository';
 import { Cliente } from '../entity/Client';
 
 export class ClientPolicyService {
