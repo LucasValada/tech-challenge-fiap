@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString } from 'class-validator';
 import { IsCpfCnpj } from '../../../../common/validators';
 
-export class ClientDto {
+export class ClienteDto {
   @IsString()
   @IsNotEmpty()
   @ApiProperty({

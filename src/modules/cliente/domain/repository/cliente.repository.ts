@@ -1,15 +1,15 @@
-import { Cliente } from '../entity/Client';
+import { Cliente } from '../entity/Cliente';
 
-export interface ClientRepository {
+export interface ClienteRepository {
   getOne(id: string): Promise<Cliente | null>;
 
-  getAllClient(): Promise<{ client: Cliente[]; count: number }>;
+  getAllCliente(): Promise<{ cliente: Cliente[]; count: number }>;
 
-  createClient(client: Cliente): Promise<Cliente>;
+  createCliente(client: Cliente): Promise<Cliente>;
 
   getByCpfCnpj(cpfCnpj: string, excludeId?: string): Promise<Cliente | null>;
 
-  updateClient(id: string, client: Cliente): Promise<Cliente>;
+  updateCliente(id: string, client: Cliente): Promise<Cliente>;
 
-  deleteClient(id: string): Promise<void>;
+  deleteCliente(id: string): Promise<void>;
 }

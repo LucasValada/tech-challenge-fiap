@@ -1,17 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ClientRepository } from '../../domain/repository/cliente.repository';
-import { ClientDto } from '../dto/client.dto';
-import { Cliente } from '../../domain/entity/Client';
-import { ClientPolicyService } from '../../domain/service/ClientPolicy.service';
+import { ClienteRepository } from '../../domain/repository/cliente.repository';
+import { ClienteDto } from '../dto/cliente.dto';
+import { Cliente } from '../../domain/entity/Cliente';
+import { ClientePolicyService } from '../../domain/service/ClientePolicy.service';
 
 @Injectable()
 export class UpdateClienteUseCase {
   constructor(
-    @Inject('CLIENT_REPOSITORY')
-    private readonly clientRepository: ClientRepository,
+    @Inject('CLIENTE_REPOSITORY')
+    private readonly clienteRepository: ClienteRepository,
   ) {}
 
-  async execute(id: string, data: ClientDto) {
+  async execute(id: string, data: ClienteDto) {
     const client = new Cliente(
       data.nome,
       data.telefone,
@@ -21,10 +21,10 @@ export class UpdateClienteUseCase {
       id,
     );
 
-    const clientPolicy = new ClientPolicyService(this.clientRepository, client);
-    await clientPolicy.validateClient(id);
+    const clientePolicy = new ClientePolicyService(this.clienteRepository, client);
+    await clientePolicy.validateClient(id);
 
-    const response = await this.clientRepository.updateClient(id, client);
+    const response = await this.clienteRepository.updateCliente(id, client);
     return response;
   }
 }

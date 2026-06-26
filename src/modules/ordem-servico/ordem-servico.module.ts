@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
-import { ClientModule } from '../cliente/client.module';
+import { ClienteModule } from '../cliente/cliente.module';
 import { VeiculoModule } from '../veiculo/veiculo.module';
 import { ServicoModule } from '../servico/servico.module';
 import { ItemEstoqueModule } from '../item-estoque/item-estoque.module';
@@ -19,7 +19,7 @@ import { PrismaOrdemServicoRepository } from '../../infra/database/prisma/reposi
 @Module({
   imports: [
     PrismaModule,
-    ClientModule,
+    ClienteModule,
     VeiculoModule,
     ServicoModule,
     ItemEstoqueModule,

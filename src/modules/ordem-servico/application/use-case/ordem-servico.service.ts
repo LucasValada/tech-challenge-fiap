@@ -17,7 +17,7 @@ import {
 } from '../../domain/entity/OrdemServico';
 import { OSServicoLinha } from '../../domain/entity/OSServicoLinha';
 import { OSItemEstoqueLinha } from '../../domain/entity/OSItemEstoqueLinha';
-import { ClientRepository } from '../../../cliente/domain/repository/cliente.repository';
+import { ClienteRepository } from '../../../cliente/domain/repository/cliente.repository';
 import {
   VEICULO_REPOSITORY,
   VeiculoRepository,
@@ -65,8 +65,8 @@ export class OrdemServicoService {
   constructor(
     @Inject(ORDEM_SERVICO_REPOSITORY)
     private readonly ordemServicoRepository: OrdemServicoRepository,
-    @Inject('CLIENT_REPOSITORY')
-    private readonly clientRepository: ClientRepository,
+    @Inject('CLIENTE_REPOSITORY')
+    private readonly clienteRepository: ClienteRepository,
     @Inject(VEICULO_REPOSITORY)
     private readonly veiculoRepository: VeiculoRepository,
     @Inject(SERVICO_REPOSITORY)
@@ -103,9 +103,9 @@ export class OrdemServicoService {
     const cpfCnpjNormalizado = normalizarCpfCnpj(dto.cpfCnpj);
     const placa = normalizarPlaca(dto.placa);
 
-    let cliente = await this.clientRepository.getByCpfCnpj(cpfCnpjNormalizado);
+    let cliente = await this.clienteRepository.getByCpfCnpj(cpfCnpjNormalizado);
     if (!cliente && cpfCnpjNormalizado !== dto.cpfCnpj) {
-      cliente = await this.clientRepository.getByCpfCnpj(dto.cpfCnpj);
+      cliente = await this.clienteRepository.getByCpfCnpj(dto.cpfCnpj);
     }
     if (!cliente) {
       throw new NotFoundException(
@@ -268,7 +268,7 @@ export class OrdemServicoService {
 
     try {
       const detalhes = await this.findByIdComDetalhes(ordemId);
-      const cliente = await this.clientRepository.getOne(detalhes.cliente.id);
+      const cliente = await this.clienteRepository.getOne(detalhes.cliente.id);
       if (!cliente?.email) return;
 
       const payload = {
@@ -320,7 +320,7 @@ export class OrdemServicoService {
 
     const detalhes = await this.findByIdComDetalhes(ordemId);
 
-    const cliente = await this.clientRepository.getOne(detalhes.cliente.id);
+    const cliente = await this.clienteRepository.getOne(detalhes.cliente.id);
     if (cliente?.email) {
       await this.mailService.enviarOrcamento({
         clienteNome: detalhes.cliente.nome,

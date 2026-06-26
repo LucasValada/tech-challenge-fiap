@@ -44,13 +44,13 @@ const mockOrdemRepo = {
   getRelatorioTempoMedioPorServico: jest.fn(),
 };
 
-const mockClientRepo = {
+const mockClienteRepo = {
   getOne: jest.fn(),
-  getAllClient: jest.fn(),
-  createClient: jest.fn(),
+  getAllCliente: jest.fn(),
+  createCliente: jest.fn(),
   getByCpfCnpj: jest.fn(),
-  updateClient: jest.fn(),
-  deleteClient: jest.fn(),
+  updateCliente: jest.fn(),
+  deleteCliente: jest.fn(),
 };
 
 const mockVeiculoRepo = {
@@ -118,7 +118,7 @@ describe('OrdemServicoService', () => {
       providers: [
         OrdemServicoService,
         { provide: ORDEM_SERVICO_REPOSITORY, useValue: mockOrdemRepo },
-        { provide: 'CLIENT_REPOSITORY', useValue: mockClientRepo },
+        { provide: 'CLIENTE_REPOSITORY', useValue: mockClienteRepo },
         { provide: VEICULO_REPOSITORY, useValue: mockVeiculoRepo },
         { provide: SERVICO_REPOSITORY, useValue: mockServicoRepo },
         { provide: ITEM_ESTOQUE_REPOSITORY, useValue: mockItemRepo },
@@ -206,17 +206,17 @@ describe('OrdemServicoService', () => {
     };
 
     it('lança NotFoundException quando cpfCnpj não tem cliente', async () => {
-      mockClientRepo.getByCpfCnpj.mockResolvedValue(null);
+      mockClienteRepo.getByCpfCnpj.mockResolvedValue(null);
 
       await expect(service.create('usuario-1', baseDto)).rejects.toThrow(
         NotFoundException,
       );
-      expect(mockClientRepo.getByCpfCnpj).toHaveBeenCalledWith('52998224725');
+      expect(mockClienteRepo.getByCpfCnpj).toHaveBeenCalledWith('52998224725');
       expect(mockOrdemRepo.createComItens).not.toHaveBeenCalled();
     });
 
     it('lança UnprocessableEntityException quando veículo é de outro cliente', async () => {
-      mockClientRepo.getByCpfCnpj.mockResolvedValue({
+      mockClienteRepo.getByCpfCnpj.mockResolvedValue({
         id: 'cliente-1',
         cpfCnpj: '52998224725',
       });
@@ -232,7 +232,7 @@ describe('OrdemServicoService', () => {
     });
 
     it('lança NotFoundException quando veículo não encontrado', async () => {
-      mockClientRepo.getByCpfCnpj.mockResolvedValue({
+      mockClienteRepo.getByCpfCnpj.mockResolvedValue({
         id: 'cliente-1',
         cpfCnpj: '52998224725',
       });
@@ -245,7 +245,7 @@ describe('OrdemServicoService', () => {
     });
 
     it('traduz erro de domínio quando createComItens lança', async () => {
-      mockClientRepo.getByCpfCnpj.mockResolvedValue({
+      mockClienteRepo.getByCpfCnpj.mockResolvedValue({
         id: 'cliente-1',
         cpfCnpj: '52998224725',
       });
@@ -263,7 +263,7 @@ describe('OrdemServicoService', () => {
     });
 
     it('cria OS no fluxo feliz com 1 servico e 1 item', async () => {
-      mockClientRepo.getByCpfCnpj.mockResolvedValue({
+      mockClienteRepo.getByCpfCnpj.mockResolvedValue({
         id: 'cliente-1',
         cpfCnpj: '52998224725',
       });
@@ -342,7 +342,7 @@ describe('OrdemServicoService', () => {
 
       it('dispara enviarNotificacaoFinalizacao em transição para FINALIZADA', async () => {
         mockTransicaoOk('EM_EXECUCAO');
-        mockClientRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
+        mockClienteRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
 
         await service.transicionarStatus('ordem-1', 'usuario-1', {
           status: 'FINALIZADA',
@@ -361,7 +361,7 @@ describe('OrdemServicoService', () => {
 
       it('dispara enviarNotificacaoEntrega em transição para ENTREGUE', async () => {
         mockTransicaoOk('FINALIZADA');
-        mockClientRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
+        mockClienteRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
 
         await service.transicionarStatus('ordem-1', 'usuario-1', {
           status: 'ENTREGUE',
@@ -389,12 +389,12 @@ describe('OrdemServicoService', () => {
           mockMailService.enviarNotificacaoFinalizacao,
         ).not.toHaveBeenCalled();
         expect(mockMailService.enviarNotificacaoEntrega).not.toHaveBeenCalled();
-        expect(mockClientRepo.getOne).not.toHaveBeenCalled();
+        expect(mockClienteRepo.getOne).not.toHaveBeenCalled();
       });
 
       it('não dispara email quando cliente não tem email cadastrado', async () => {
         mockTransicaoOk('EM_EXECUCAO');
-        mockClientRepo.getOne.mockResolvedValue({ email: null });
+        mockClienteRepo.getOne.mockResolvedValue({ email: null });
 
         await service.transicionarStatus('ordem-1', 'usuario-1', {
           status: 'FINALIZADA',
@@ -407,7 +407,7 @@ describe('OrdemServicoService', () => {
 
       it('falha silenciosamente no email sem bloquear a transição', async () => {
         mockTransicaoOk('EM_EXECUCAO');
-        mockClientRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
+        mockClienteRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
         mockMailService.enviarNotificacaoFinalizacao.mockRejectedValue(
           new Error('SMTP down'),
         );
@@ -628,7 +628,7 @@ describe('OrdemServicoService', () => {
       mockOrdemRepo.contarLinhas.mockResolvedValue({ servicos: 1, itens: 0 });
       mockOrdemRepo.transicionarStatus.mockResolvedValue({});
       mockOrdemRepo.findByIdComDetalhes.mockResolvedValue(detalhesView);
-      mockClientRepo.getOne.mockResolvedValue({
+      mockClienteRepo.getOne.mockResolvedValue({
         email: 'joao@email.com',
       });
       mockMailService.enviarOrcamento.mockResolvedValue(undefined);
@@ -651,7 +651,7 @@ describe('OrdemServicoService', () => {
       mockOrdemRepo.contarLinhas.mockResolvedValue({ servicos: 1, itens: 0 });
       mockOrdemRepo.transicionarStatus.mockResolvedValue({});
       mockOrdemRepo.findByIdComDetalhes.mockResolvedValue(detalhesView);
-      mockClientRepo.getOne.mockResolvedValue({ email: null });
+      mockClienteRepo.getOne.mockResolvedValue({ email: null });
 
       await service.enviarOrcamento('ordem-1', 'usuario-1');
 

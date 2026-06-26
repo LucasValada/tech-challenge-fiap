@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../modules/prisma/prisma.service';
-import { ClientRepository } from '../../../../modules/cliente/domain/repository/cliente.repository';
-import { Cliente } from '../../../../modules/cliente/domain/entity/Client';
+import { ClienteRepository } from '../../../../modules/cliente/domain/repository/cliente.repository';
+import { Cliente } from '../../../../modules/cliente/domain/entity/Cliente';
 
 @Injectable()
-export class PrismaClientRepository implements ClientRepository {
+export class PrismaClienteRepository implements ClienteRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async getOne(id: string): Promise<Cliente | null> {
@@ -19,7 +19,7 @@ export class PrismaClientRepository implements ClientRepository {
     return this.ToEntity(cliente);
   }
 
-  async getAllClient(): Promise<{ client: Cliente[]; count: number }> {
+  async getAllCliente(): Promise<{ cliente: Cliente[]; count: number }> {
     const cliente = await this.prisma.cliente.findMany({
       select: {
         id: true,
@@ -37,12 +37,12 @@ export class PrismaClientRepository implements ClientRepository {
     });
 
     return {
-      client: cliente.map((c) => this.ToEntity(c)),
+      cliente: cliente.map((c) => this.ToEntity(c)),
       count: cliente.length,
     };
   }
 
-  async createClient(client: any): Promise<Cliente> {
+  async createCliente(client: any): Promise<Cliente> {
     const response = await this.prisma.cliente.create({
       data: {
         nome: client.nome,
@@ -72,7 +72,7 @@ export class PrismaClientRepository implements ClientRepository {
     return this.ToEntity(response);
   }
 
-  async updateClient(id: string, client: Cliente): Promise<Cliente> {
+  async updateCliente(id: string, client: Cliente): Promise<Cliente> {
     const response = await this.prisma.cliente.update({
       where: { id: id },
       data: {
@@ -87,7 +87,7 @@ export class PrismaClientRepository implements ClientRepository {
     return this.ToEntity(response);
   }
 
-  async deleteClient(id: string): Promise<void> {
+  async deleteCliente(id: string): Promise<void> {
     await this.prisma.cliente.delete({
       where: {
         id: id,

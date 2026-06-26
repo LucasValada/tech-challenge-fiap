@@ -6,7 +6,7 @@ import { AuthModule } from './modules/auth';
 import { VeiculoModule } from './modules/veiculo';
 import { ItemEstoqueModule } from './modules/item-estoque';
 import { ServicoModule } from './modules/servico';
-import { ClientModule } from './modules/cliente/client.module';
+import { ClienteModule } from './modules/cliente/cliente.module';
 import { OrdemServicoModule } from './modules/ordem-servico';
 
 @Module({
@@ -20,7 +20,7 @@ import { OrdemServicoModule } from './modules/ordem-servico';
     VeiculoModule,
     ItemEstoqueModule,
     ServicoModule,
-    ClientModule,
+    ClienteModule,
     OrdemServicoModule,
   ],
   controllers: [],
