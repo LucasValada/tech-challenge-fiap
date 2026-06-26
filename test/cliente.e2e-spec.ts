@@ -40,7 +40,7 @@ describe('Clientes (e2e)', () => {
   it('GET /cliente — lista clientes', async () => {
     const res = await authRequest(ctx, 'get', '/cliente').expect(200);
 
-    expect(res.body.client).toBeInstanceOf(Array);
+    expect(res.body.cliente).toBeInstanceOf(Array);
     expect(res.body.count).toBeGreaterThanOrEqual(1);
   });
 

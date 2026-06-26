@@ -1,15 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ClientRepository } from '../../domain/repository/cliente.repository';
+import { ClienteRepository } from '../../domain/repository/cliente.repository';
 
 @Injectable()
-export class GetAllClientUseCase {
+export class GetAllClienteUseCase {
   constructor(
-    @Inject('CLIENT_REPOSITORY')
-    private readonly clientRepository: ClientRepository,
+    @Inject('CLIENTE_REPOSITORY')
+    private readonly clienteRepository: ClienteRepository,
   ) {}
 
   async execute() {
-    const response = await this.clientRepository.getAllClient();
+    const response = await this.clienteRepository.getAllCliente();
     return response;
   }
 }

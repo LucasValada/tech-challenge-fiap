@@ -1,4 +1,4 @@
-import { Cliente } from '../domain/entity/Client';
+import { Cliente } from './Cliente';
 
 describe('Cliente entity', () => {
   describe('IsValidEmail', () => {

@@ -1,28 +1,28 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { CreateClienteUseCase } from '../application/use-case/createCliente.use-case';
-import { ClientDto } from '../application/dto/client.dto';
-import { Cliente } from '../domain/entity/Client';
-import { ClientRepository } from '../domain/repository/cliente.repository';
+import { CreateClienteUseCase } from './createCliente.use-case';
+import { ClienteDto } from '../application/dto/cliente.dto';
+import { Cliente } from '../../domain/entity/Cliente';
+import { ClienteRepository } from '../../domain/repository/cliente.repository';
 
-type ClientRepositoryMock = {
+type ClienteRepositoryMock = {
   getOne: jest.Mock;
-  getAllClient: jest.Mock;
-  createClient: jest.Mock;
+  getAllCliente: jest.Mock;
+  createCliente: jest.Mock;
   getByCpfCnpj: jest.Mock;
-  updateClient: jest.Mock;
-  deleteClient: jest.Mock;
+  updateCliente: jest.Mock;
+  deleteCliente: jest.Mock;
 };
 
-const createRepositoryMock = (): ClientRepositoryMock => ({
+const createRepositoryMock = (): ClienteRepositoryMock => ({
   getOne: jest.fn(),
-  getAllClient: jest.fn(),
-  createClient: jest.fn(),
+  getAllCliente: jest.fn(),
+  createCliente: jest.fn(),
   getByCpfCnpj: jest.fn(),
-  updateClient: jest.fn(),
-  deleteClient: jest.fn(),
+  updateCliente: jest.fn(),
+  deleteCliente: jest.fn(),
 });
 
-const clienteDto: ClientDto = {
+const clienteDto: ClienteDto = {
   nome: 'Joao da Silva',
   telefone: '(11)999999999',
   email: 'joao@email.com',
@@ -42,22 +42,22 @@ const clienteCriado = new Cliente(
 );
 
 describe('CreateClienteUseCase', () => {
-  let repository: ClientRepositoryMock;
+  let repository: ClienteRepositoryMock;
   let useCase: CreateClienteUseCase;
 
   beforeEach(() => {
     repository = createRepositoryMock();
-    useCase = new CreateClienteUseCase(repository as ClientRepository);
+    useCase = new CreateClienteUseCase(repository as ClienteRepository);
   });
 
   it('cria cliente com dados validos', async () => {
     repository.getByCpfCnpj.mockResolvedValue(null);
-    repository.createClient.mockResolvedValue(clienteCriado);
+    repository.createCliente.mockResolvedValue(clienteCriado);
 
     const result = await useCase.execute(clienteDto);
 
     expect(result).toBe(clienteCriado);
-    expect(repository.createClient).toHaveBeenCalledWith(
+    expect(repository.createCliente).toHaveBeenCalledWith(
       expect.objectContaining({
         nome: clienteDto.nome,
         telefone: clienteDto.telefone,
@@ -74,7 +74,7 @@ describe('CreateClienteUseCase', () => {
     await expect(useCase.execute(clienteDto)).rejects.toThrow(
       ConflictException,
     );
-    expect(repository.createClient).not.toHaveBeenCalled();
+    expect(repository.createCliente).not.toHaveBeenCalled();
   });
 
   it('lanca BadRequestException para email invalido', async () => {
@@ -83,6 +83,6 @@ describe('CreateClienteUseCase', () => {
     await expect(useCase.execute(dtoInvalido)).rejects.toThrow(
       BadRequestException,
     );
-    expect(repository.createClient).not.toHaveBeenCalled();
+    expect(repository.createCliente).not.toHaveBeenCalled();
   });
 });
