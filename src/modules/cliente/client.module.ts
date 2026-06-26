@@ -4,7 +4,7 @@ import { PrismaClientRepository } from '../../infra/database/prisma/repositories
 import { PrismaModule } from '../prisma/prisma.module';
 import { CreateClienteUseCase } from './application/use-case/createCliente.use-case';
 import { DeleteClientUseCase } from './application/use-case/deleteCliente.use-case';
-import { GetAllClientServices } from './application/use-case/getAllCliente.use-case';
+import { GetAllClientUseCase } from './application/use-case/getAllCliente.use-case';
 import { GetOneClienteUseCase } from './application/use-case/getOnecliente.use-case';
 import { UpdateClienteUseCase } from './application/use-case/updateCliente.use-case';
 
@@ -14,7 +14,7 @@ import { UpdateClienteUseCase } from './application/use-case/updateCliente.use-c
   providers: [
     CreateClienteUseCase,
     DeleteClientUseCase,
-    GetAllClientServices,
+    GetAllClientUseCase,
     GetOneClienteUseCase,
     UpdateClienteUseCase,
     {
