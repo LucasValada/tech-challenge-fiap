@@ -9,7 +9,6 @@ import { ORDEM_SERVICO_REPOSITORY } from '../../domain/repository/ordem-servico.
 import { VEICULO_REPOSITORY } from '../../../veiculo/domain/repository/veiculo.repository';
 import { SERVICO_REPOSITORY } from '../../../servico/domain/repository/servico.repository';
 import { ITEM_ESTOQUE_REPOSITORY } from '../../../item-estoque/domain/repository/item-estoque.repository';
-import { MailService } from '../../../mail/mail.service';
 import { OrdemServico } from '../../domain/entity/OrdemServico';
 import {
   ClienteNaoEncontradoError,
@@ -80,7 +79,7 @@ const mockItemRepo = {
   delete: jest.fn(),
 };
 
-const mockMailService = {
+const mockEmailSender = {
   enviarOrcamento: jest.fn(),
   enviarNotificacaoFinalizacao: jest.fn(),
   enviarNotificacaoEntrega: jest.fn(),
@@ -122,7 +121,7 @@ describe('OrdemServicoService', () => {
         { provide: VEICULO_REPOSITORY, useValue: mockVeiculoRepo },
         { provide: SERVICO_REPOSITORY, useValue: mockServicoRepo },
         { provide: ITEM_ESTOQUE_REPOSITORY, useValue: mockItemRepo },
-        { provide: MailService, useValue: mockMailService },
+        { provide: 'EMAIL_SENDER', useValue: mockEmailSender },
       ],
     }).compile();
 
@@ -348,7 +347,7 @@ describe('OrdemServicoService', () => {
           status: 'FINALIZADA',
         });
 
-        expect(mockMailService.enviarNotificacaoFinalizacao).toHaveBeenCalledWith(
+        expect(mockEmailSender.enviarNotificacaoFinalizacao).toHaveBeenCalledWith(
           {
             clienteNome: 'João',
             clienteEmail: 'joao@email.com',
@@ -356,7 +355,7 @@ describe('OrdemServicoService', () => {
             placa: 'ABC1D23',
           },
         );
-        expect(mockMailService.enviarNotificacaoEntrega).not.toHaveBeenCalled();
+        expect(mockEmailSender.enviarNotificacaoEntrega).not.toHaveBeenCalled();
       });
 
       it('dispara enviarNotificacaoEntrega em transição para ENTREGUE', async () => {
@@ -367,14 +366,14 @@ describe('OrdemServicoService', () => {
           status: 'ENTREGUE',
         });
 
-        expect(mockMailService.enviarNotificacaoEntrega).toHaveBeenCalledWith({
+        expect(mockEmailSender.enviarNotificacaoEntrega).toHaveBeenCalledWith({
           clienteNome: 'João',
           clienteEmail: 'joao@email.com',
           codigoOS: 'OS-2026-000001',
           placa: 'ABC1D23',
         });
         expect(
-          mockMailService.enviarNotificacaoFinalizacao,
+          mockEmailSender.enviarNotificacaoFinalizacao,
         ).not.toHaveBeenCalled();
       });
 
@@ -386,9 +385,9 @@ describe('OrdemServicoService', () => {
         });
 
         expect(
-          mockMailService.enviarNotificacaoFinalizacao,
+          mockEmailSender.enviarNotificacaoFinalizacao,
         ).not.toHaveBeenCalled();
-        expect(mockMailService.enviarNotificacaoEntrega).not.toHaveBeenCalled();
+        expect(mockEmailSender.enviarNotificacaoEntrega).not.toHaveBeenCalled();
         expect(mockClienteRepo.getOne).not.toHaveBeenCalled();
       });
 
@@ -401,14 +400,15 @@ describe('OrdemServicoService', () => {
         });
 
         expect(
-          mockMailService.enviarNotificacaoFinalizacao,
+          mockEmailSender.enviarNotificacaoFinalizacao,
         ).not.toHaveBeenCalled();
       });
 
       it('falha silenciosamente no email sem bloquear a transição', async () => {
         mockTransicaoOk('EM_EXECUCAO');
         mockClienteRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
-        mockMailService.enviarNotificacaoFinalizacao.mockRejectedValue(
+        mockEmailSender.enviarNotificacaoFinalizacao.mockRejectedValue(
+
           new Error('SMTP down'),
         );
 
@@ -631,7 +631,7 @@ describe('OrdemServicoService', () => {
       mockClienteRepo.getOne.mockResolvedValue({
         email: 'joao@email.com',
       });
-      mockMailService.enviarOrcamento.mockResolvedValue(undefined);
+      mockEmailSender.enviarOrcamento.mockResolvedValue(undefined);
 
       const result = await service.enviarOrcamento('ordem-1', 'usuario-1');
 
@@ -643,7 +643,7 @@ describe('OrdemServicoService', () => {
         'usuario-1',
         'Orçamento enviado para aprovação do cliente',
       );
-      expect(mockMailService.enviarOrcamento).toHaveBeenCalled();
+      expect(mockEmailSender.enviarOrcamento).toHaveBeenCalled();
     });
 
     it('não envia email quando cliente não tem email', async () => {
@@ -655,7 +655,7 @@ describe('OrdemServicoService', () => {
 
       await service.enviarOrcamento('ordem-1', 'usuario-1');
 
-      expect(mockMailService.enviarOrcamento).not.toHaveBeenCalled();
+      expect(mockEmailSender.enviarOrcamento).not.toHaveBeenCalled();
     });
 
     it('lança ConflictException quando OS não está em EM_DIAGNOSTICO', async () => {
