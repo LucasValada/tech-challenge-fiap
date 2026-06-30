@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { OrdemServicoService } from './ordem-servico.service';
 import { ORDEM_SERVICO_REPOSITORY } from '../../domain/repository/ordem-servico.repository';
-import { VEICULO_REPOSITORY } from '../../../veiculo/domain/repository/veiculo.repository';
 import { SERVICO_REPOSITORY } from '../../../servico/domain/repository/servico.repository';
 import { ITEM_ESTOQUE_REPOSITORY } from '../../../item-estoque/domain/repository/item-estoque.repository';
 import { OrdemServico } from '../../domain/entity/OrdemServico';
@@ -118,7 +117,7 @@ describe('OrdemServicoService', () => {
         OrdemServicoService,
         { provide: ORDEM_SERVICO_REPOSITORY, useValue: mockOrdemRepo },
         { provide: 'CLIENTE_REPOSITORY', useValue: mockClienteRepo },
-        { provide: VEICULO_REPOSITORY, useValue: mockVeiculoRepo },
+        { provide: 'VEICULO_REPOSITORY', useValue: mockVeiculoRepo },
         { provide: SERVICO_REPOSITORY, useValue: mockServicoRepo },
         { provide: ITEM_ESTOQUE_REPOSITORY, useValue: mockItemRepo },
         { provide: 'EMAIL_SENDER', useValue: mockEmailSender },
