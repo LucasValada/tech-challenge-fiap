@@ -56,7 +56,7 @@ import {
 import { AdicionarServicoOSDto } from '../dto/adicionar-servico-os.dto';
 import { AdicionarItemEstoqueOSDto } from '../dto/adicionar-item-estoque-os.dto';
 import { TransicionarStatusDto } from '../dto/transicionar-status.dto';
-import { MailService } from '../../../mail/mail.service';
+import { EmailSender } from '../../../mail/domain/service/email-sender';
 
 @Injectable()
 export class OrdemServicoService {
@@ -73,7 +73,8 @@ export class OrdemServicoService {
     private readonly servicoRepository: ServicoRepository,
     @Inject(ITEM_ESTOQUE_REPOSITORY)
     private readonly itemEstoqueRepository: ItemEstoqueRepository,
-    private readonly mailService: MailService,
+    @Inject('EMAIL_SENDER')
+    private readonly emailSender: EmailSender,
   ) {}
 
   async findAll(): Promise<{ ordens: OrdemServico[]; count: number }> {
@@ -279,9 +280,9 @@ export class OrdemServicoService {
       };
 
       if (novoStatus === 'FINALIZADA') {
-        await this.mailService.enviarNotificacaoFinalizacao(payload);
+        await this.emailSender.enviarNotificacaoFinalizacao(payload);
       } else {
-        await this.mailService.enviarNotificacaoEntrega(payload);
+        await this.emailSender.enviarNotificacaoEntrega(payload);
       }
     } catch (error) {
       this.logger.error(
@@ -322,7 +323,7 @@ export class OrdemServicoService {
 
     const cliente = await this.clienteRepository.getOne(detalhes.cliente.id);
     if (cliente?.email) {
-      await this.mailService.enviarOrcamento({
+      await this.emailSender.enviarOrcamento({
         clienteNome: detalhes.cliente.nome,
         clienteEmail: cliente.email,
         codigoOS: detalhes.codigo,
