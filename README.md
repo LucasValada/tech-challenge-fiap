@@ -241,3 +241,172 @@ npx jest src/path/to/file.spec.ts
 | `npm test` | Testes unitários |
 | `npm run test:cov` | Testes com cobertura |
 | `npm run test:e2e` | Testes end-to-end |
+
+---
+
+## Infraestrutura (Fase 2)
+
+### Pré-requisitos
+
+| Ferramenta | Versão mínima | Instalação |
+|---|---|---|
+| Docker | 24+ | [docs.docker.com](https://docs.docker.com/get-docker/) |
+| Kind | 0.27+ | `brew install kind` ou [kind.sigs.k8s.io](https://kind.sigs.k8s.io/) |
+| Terraform | 1.6+ | [developer.hashicorp.com/terraform](https://developer.hashicorp.com/terraform/install) |
+| kubectl | qualquer | `brew install kubectl` |
+
+---
+
+### 1. Desenvolvimento local (docker-compose)
+
+O jeito mais rápido de subir o banco e a aplicação localmente:
+
+```bash
+# Sobe o PostgreSQL 17
+docker compose up -d
+
+# Copia variáveis de ambiente
+cp .env.example .env
+
+# Aplica migrations e inicia a API em modo watch
+npx prisma migrate dev
+npm run start:dev
+```
+
+Swagger UI disponível em `http://localhost:3000/api`.
+
+---
+
+### 2. Provisionar o cluster Kind com Terraform
+
+```bash
+cd infra
+
+# Baixa o provider tehcyx/kind
+terraform init
+
+# Cria o cluster (1 control-plane + 2 workers)
+terraform apply
+
+# Verificar os nós
+kubectl get nodes
+```
+
+Para destruir o cluster:
+
+```bash
+terraform destroy
+```
+
+#### Variáveis disponíveis
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `cluster_name` | `oficina-cluster` | Nome do cluster Kind |
+| `app_host_port` | `3000` | Porta do host mapeada para a API |
+| `db_host_port` | `5432` | Porta do host mapeada para o PostgreSQL |
+
+Exemplo sobrescrevendo a porta da aplicação:
+
+```bash
+terraform apply -var="app_host_port=8080"
+```
+
+---
+
+### 3. Aplicar os manifestos Kubernetes
+
+```bash
+# Namespace
+kubectl apply -f k8s/00-namespace.yaml
+
+# Banco de dados (StatefulSet + Services + Secret)
+kubectl apply -f k8s/postgres/
+kubectl wait --for=condition=ready pod -l app=postgres -n oficina --timeout=180s
+
+# ConfigMap e Secrets da aplicação
+kubectl apply -f k8s/app/01-configmap.yaml
+kubectl apply -f k8s/app/02-secret.yaml
+
+# Migrations (Job one-shot)
+export IMAGE_TAG="ghcr.io/<org>/<repo>:latest"
+sed "s|IMAGE_PLACEHOLDER|${IMAGE_TAG}|g" k8s/app/03-migration-job.yaml | kubectl apply -f -
+kubectl wait --for=condition=complete job/db-migration -n oficina --timeout=120s
+
+# Deployment + Service + HPA
+sed "s|IMAGE_PLACEHOLDER|${IMAGE_TAG}|g" k8s/app/04-deployment.yaml | kubectl apply -f -
+kubectl apply -f k8s/app/05-service.yaml
+kubectl apply -f k8s/app/06-hpa.yaml
+
+# Verificar pods
+kubectl get pods -n oficina
+```
+
+A API ficará acessível em `http://localhost:3000/api` (via NodePort mapeado pelo Kind).
+
+---
+
+### 4. Métricas e HPA
+
+O HPA exige o **Metrics Server** no cluster. Para Kind (certificado auto-assinado), instale com:
+
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+# Patch necessário para Kind aceitar TLS do kubelet
+kubectl patch deployment metrics-server -n kube-system \
+  --type='json' \
+  -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+```
+
+Verificar se o HPA está funcionando:
+
+```bash
+kubectl get hpa -n oficina
+```
+
+#### Simular carga para acionar o HPA (vídeo demonstrativo)
+
+```bash
+# Instale o hey (ferramenta de carga HTTP)
+go install github.com/rakyll/hey@latest
+
+# Gera 500 requisições simultâneas por 60 segundos
+hey -z 60s -c 100 http://localhost:3000/api
+
+# Em outro terminal, observe o HPA escalar os pods
+kubectl get hpa oficina-api-hpa -n oficina -w
+kubectl get pods -n oficina -w
+```
+
+---
+
+### 5. Imagem Docker
+
+```bash
+# Build local
+docker build -t oficina-api:local .
+
+# Carregar no cluster Kind para uso sem registry
+kind load docker-image oficina-api:local --name oficina-cluster
+```
+
+---
+
+### 6. Pipeline CI/CD (GitHub Actions)
+
+O workflow `.github/workflows/ci-cd.yml` executa automaticamente em pushes para `main`:
+
+| Estágio | O que faz |
+|---|---|
+| **Build & Test** | `npm ci` → `prisma generate` → `npm test` → `npm run build` |
+| **Docker Image** | Constrói e publica no GitHub Container Registry (`ghcr.io`) |
+| **Deploy to Kind** | `terraform apply` → carrega imagem no Kind → `kubectl apply` → valida rollout |
+
+Para habilitar o pipeline, configure os seguintes segredos no repositório GitHub (Settings → Secrets):
+
+| Secret | Descrição |
+|---|---|
+| `GITHUB_TOKEN` | Automático — usado para publicar a imagem no GHCR |
+
+> **Nota:** As credenciais em `k8s/app/02-secret.yaml` e `k8s/postgres/01-secret.yaml` são valores padrão para ambiente local. Em produção, substitua por segredos reais gerenciados externamente (ex: HashiCorp Vault, AWS Secrets Manager).
