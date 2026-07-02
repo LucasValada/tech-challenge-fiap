@@ -26,10 +26,7 @@ import {
   SERVICO_REPOSITORY,
   ServicoRepository,
 } from '../../../servico/domain/repository/servico.repository';
-import {
-  ITEM_ESTOQUE_REPOSITORY,
-  ItemEstoqueRepository,
-} from '../../../item-estoque/domain/repository/item-estoque.repository';
+import { ItemEstoqueRepository } from '../../../item-estoque/domain/repository/item-estoque.repository';
 import {
   ClienteNaoEncontradoError,
   EstoqueInsuficienteError,
@@ -71,7 +68,7 @@ export class OrdemServicoService {
     private readonly veiculoRepository: VeiculoRepository,
     @Inject(SERVICO_REPOSITORY)
     private readonly servicoRepository: ServicoRepository,
-    @Inject(ITEM_ESTOQUE_REPOSITORY)
+    @Inject('ITEM_ESTOQUE_REPOSITORY')
     private readonly itemEstoqueRepository: ItemEstoqueRepository,
     @Inject('EMAIL_SENDER')
     private readonly emailSender: EmailSender,
