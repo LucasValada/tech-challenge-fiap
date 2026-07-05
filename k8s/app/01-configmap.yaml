@@ -5,5 +5,8 @@ metadata:
   namespace: oficina
 data:
   NODE_ENV: "production"
-  PORT: "3000"
+  APPLICATION_PORT: "3000"
   JWT_EXPIRES_IN: "1h"
+  MAIL_HOST: "smtp.ethereal.email"
+  MAIL_PORT: "587"
+  MAIL_FROM: '"Oficina SOAT" <noreply@oficina.com>'

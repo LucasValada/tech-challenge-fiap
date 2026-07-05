@@ -46,6 +46,21 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: JWT_SECRET
+            - name: MAIL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: MAIL_USER
+            - name: MAIL_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: MAIL_PASS
+            - name: WEBHOOK_ORCAMENTO_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: WEBHOOK_ORCAMENTO_TOKEN
           # Resource limits are required for HPA to compute utilization percentages
           resources:
             requests:
