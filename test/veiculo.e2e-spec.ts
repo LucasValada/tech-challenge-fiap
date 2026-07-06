@@ -53,8 +53,8 @@ describe('Veículos (e2e)', () => {
   it('GET /veiculos — lista veículos', async () => {
     const res = await authRequest(ctx, 'get', '/veiculos').expect(200);
 
-    expect(res.body).toBeInstanceOf(Array);
-    expect(res.body.length).toBeGreaterThanOrEqual(1);
+    expect(res.body.veiculo).toBeInstanceOf(Array);
+    expect(res.body.count).toBeGreaterThanOrEqual(1);
   });
 
   it('GET /veiculos/:id — busca por ID', async () => {

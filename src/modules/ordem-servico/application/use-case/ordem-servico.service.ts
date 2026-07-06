@@ -18,10 +18,7 @@ import {
 import { OSServicoLinha } from '../../domain/entity/OSServicoLinha';
 import { OSItemEstoqueLinha } from '../../domain/entity/OSItemEstoqueLinha';
 import { ClienteRepository } from '../../../cliente/domain/repository/cliente.repository';
-import {
-  VEICULO_REPOSITORY,
-  VeiculoRepository,
-} from '../../../veiculo/domain/repository/veiculo.repository';
+import { VeiculoRepository } from '../../../veiculo/domain/repository/veiculo.repository';
 import {
   SERVICO_REPOSITORY,
   ServicoRepository,
@@ -67,7 +64,7 @@ export class OrdemServicoService {
     private readonly ordemServicoRepository: OrdemServicoRepository,
     @Inject('CLIENTE_REPOSITORY')
     private readonly clienteRepository: ClienteRepository,
-    @Inject(VEICULO_REPOSITORY)
+    @Inject('VEICULO_REPOSITORY')
     private readonly veiculoRepository: VeiculoRepository,
     @Inject(SERVICO_REPOSITORY)
     private readonly servicoRepository: ServicoRepository,
