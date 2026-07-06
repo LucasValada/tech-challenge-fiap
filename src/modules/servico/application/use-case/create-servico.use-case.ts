@@ -1,18 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { CreateServicoDto } from '../dto';
 import {
-  SERVICO_REPOSITORY,
+  CreateServicoData,
   ServicoRepository,
 } from '../../domain/repository/servico.repository';
+import { Servico } from '../../domain/entity/Servico';
 
 @Injectable()
 export class CreateServicoUseCase {
   constructor(
-    @Inject(SERVICO_REPOSITORY)
+    @Inject('SERVICO_REPOSITORY')
     private readonly servicoRepository: ServicoRepository,
   ) {}
 
-  async execute(dto: CreateServicoDto) {
-    return this.servicoRepository.create(dto);
+  execute(data: CreateServicoData): Promise<Servico> {
+    return this.servicoRepository.create(data);
   }
 }

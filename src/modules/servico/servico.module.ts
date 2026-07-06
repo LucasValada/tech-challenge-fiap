@@ -1,23 +1,22 @@
 import { Module } from '@nestjs/common';
 import { ServicoController } from './interface/controller/servico.controller';
-import { SERVICO_REPOSITORY } from './domain/repository/servico.repository';
+import { CreateServicoUseCase } from './application/use-case/create-servico.use-case';
+import { GetAllServicosUseCase } from './application/use-case/get-all-servicos.use-case';
+import { GetServicoByIdUseCase } from './application/use-case/get-servico-by-id.use-case';
+import { UpdateServicoUseCase } from './application/use-case/update-servico.use-case';
+import { DeleteServicoUseCase } from './application/use-case/delete-servico.use-case';
 import { PrismaServicoRepository } from '../../infra/database/prisma/repositories/prisma.servico.repository';
-import { CreateServicoUseCase } from './application/use-case/createServico.use-case';
-import { DeleteServicoUseCase } from './application/use-case/deleteServico.use-case';
-import { FindAllServicoUseCase } from './application/use-case/findAllServico.use-case';
-import { FindByIdServicoUseCase } from './application/use-case/findByIdServico.use-case';
-import { UpdateServicoUseCase } from './application/use-case/updateServico.use-case';
 
 @Module({
   controllers: [ServicoController],
   providers: [
     CreateServicoUseCase,
-    DeleteServicoUseCase,
-    FindAllServicoUseCase,
-    FindByIdServicoUseCase,
+    GetAllServicosUseCase,
+    GetServicoByIdUseCase,
     UpdateServicoUseCase,
-    { provide: SERVICO_REPOSITORY, useClass: PrismaServicoRepository },
+    DeleteServicoUseCase,
+    { provide: 'SERVICO_REPOSITORY', useClass: PrismaServicoRepository },
   ],
-  exports: [SERVICO_REPOSITORY],
+  exports: ['SERVICO_REPOSITORY'],
 })
 export class ServicoModule {}
