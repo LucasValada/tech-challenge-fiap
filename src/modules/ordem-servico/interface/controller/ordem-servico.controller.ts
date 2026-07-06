@@ -29,14 +29,40 @@ import { AdicionarServicoOSDto } from '../../application/dto/adicionar-servico-o
 import { AdicionarItemEstoqueOSDto } from '../../application/dto/adicionar-item-estoque-os.dto';
 import { AtualizarQuantidadeOSDto } from '../../application/dto/atualizar-quantidade-os.dto';
 import { TransicionarStatusDto } from '../../application/dto/transicionar-status.dto';
-import { OrdemServicoService } from '../../application/use-case/ordem-servico.service';
+import { GetAllOrdensServicoUseCase } from '../../application/use-case/get-all-ordens-servico.use-case';
+import { GetOrdemServicoByIdUseCase } from '../../application/use-case/get-ordem-servico-by-id.use-case';
+import { CreateOrdemServicoUseCase } from '../../application/use-case/create-ordem-servico.use-case';
+import { UpdateOrdemServicoUseCase } from '../../application/use-case/update-ordem-servico.use-case';
+import { DeleteOrdemServicoUseCase } from '../../application/use-case/delete-ordem-servico.use-case';
+import { AdicionarServicoOSUseCase } from '../../application/use-case/adicionar-servico-os.use-case';
+import { AtualizarQuantidadeServicoUseCase } from '../../application/use-case/atualizar-quantidade-servico.use-case';
+import { RemoverServicoOSUseCase } from '../../application/use-case/remover-servico-os.use-case';
+import { AdicionarItemEstoqueOSUseCase } from '../../application/use-case/adicionar-item-estoque-os.use-case';
+import { AtualizarQuantidadeItemEstoqueUseCase } from '../../application/use-case/atualizar-quantidade-item-estoque.use-case';
+import { RemoverItemEstoqueOSUseCase } from '../../application/use-case/remover-item-estoque-os.use-case';
+import { EnviarOrcamentoUseCase } from '../../application/use-case/enviar-orcamento.use-case';
+import { TransicionarStatusUseCase } from '../../application/use-case/transicionar-status.use-case';
 
 @ApiTags('Ordens de Serviço')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('ordens-servico')
 export class OrdemServicoController {
-  constructor(private readonly ordemServicoService: OrdemServicoService) {}
+  constructor(
+    private readonly getAllOrdensServicoUseCase: GetAllOrdensServicoUseCase,
+    private readonly getOrdemServicoByIdUseCase: GetOrdemServicoByIdUseCase,
+    private readonly createOrdemServicoUseCase: CreateOrdemServicoUseCase,
+    private readonly updateOrdemServicoUseCase: UpdateOrdemServicoUseCase,
+    private readonly deleteOrdemServicoUseCase: DeleteOrdemServicoUseCase,
+    private readonly adicionarServicoOSUseCase: AdicionarServicoOSUseCase,
+    private readonly atualizarQuantidadeServicoUseCase: AtualizarQuantidadeServicoUseCase,
+    private readonly removerServicoOSUseCase: RemoverServicoOSUseCase,
+    private readonly adicionarItemEstoqueOSUseCase: AdicionarItemEstoqueOSUseCase,
+    private readonly atualizarQuantidadeItemEstoqueUseCase: AtualizarQuantidadeItemEstoqueUseCase,
+    private readonly removerItemEstoqueOSUseCase: RemoverItemEstoqueOSUseCase,
+    private readonly enviarOrcamentoUseCase: EnviarOrcamentoUseCase,
+    private readonly transicionarStatusUseCase: TransicionarStatusUseCase,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -52,7 +78,7 @@ export class OrdemServicoController {
     description: 'Lista de OS ativas retornada com sucesso',
   })
   async findAll() {
-    return this.ordemServicoService.findAll();
+    return this.getAllOrdensServicoUseCase.execute();
   }
 
   @Get(':id')
@@ -65,7 +91,7 @@ export class OrdemServicoController {
   })
   @ApiResponse({ status: 404, description: 'Ordem de serviço não encontrada' })
   async findById(@Param('id', ParseUUIDPipe) id: string) {
-    return this.ordemServicoService.findByIdComDetalhes(id);
+    return this.getOrdemServicoByIdUseCase.execute(id);
   }
 
   @Post()
@@ -91,7 +117,7 @@ export class OrdemServicoController {
     @Req() req: Request & { user: AuthenticatedUser },
     @Body() dto: CreateOrdemServicoDto,
   ) {
-    return this.ordemServicoService.create(req.user.id, dto);
+    return this.createOrdemServicoUseCase.execute(req.user.id, dto);
   }
 
   @Put(':id')
@@ -105,7 +131,7 @@ export class OrdemServicoController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateOrdemServicoDto,
   ) {
-    return this.ordemServicoService.update(id, dto);
+    return this.updateOrdemServicoUseCase.execute(id, dto);
   }
 
   @Delete(':id')
@@ -117,7 +143,7 @@ export class OrdemServicoController {
   })
   @ApiResponse({ status: 404, description: 'Ordem de serviço não encontrada' })
   async delete(@Param('id', ParseUUIDPipe) id: string) {
-    await this.ordemServicoService.delete(id);
+    await this.deleteOrdemServicoUseCase.execute(id);
   }
 
   @Post(':id/servicos')
@@ -131,7 +157,7 @@ export class OrdemServicoController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AdicionarServicoOSDto,
   ) {
-    return this.ordemServicoService.adicionarServico(id, dto);
+    return this.adicionarServicoOSUseCase.execute(id, dto);
   }
 
   @Put(':id/servicos/:linhaId')
@@ -144,7 +170,7 @@ export class OrdemServicoController {
     @Param('linhaId', ParseUUIDPipe) linhaId: string,
     @Body() dto: AtualizarQuantidadeOSDto,
   ) {
-    return this.ordemServicoService.atualizarQuantidadeServico(
+    return this.atualizarQuantidadeServicoUseCase.execute(
       id,
       linhaId,
       dto.quantidade,
@@ -161,7 +187,7 @@ export class OrdemServicoController {
     @Param('id', ParseUUIDPipe) id: string,
     @Param('linhaId', ParseUUIDPipe) linhaId: string,
   ) {
-    await this.ordemServicoService.removerServico(id, linhaId);
+    await this.removerServicoOSUseCase.execute(id, linhaId);
   }
 
   @Post(':id/itens-estoque')
@@ -180,7 +206,7 @@ export class OrdemServicoController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AdicionarItemEstoqueOSDto,
   ) {
-    return this.ordemServicoService.adicionarItemEstoque(id, dto);
+    return this.adicionarItemEstoqueOSUseCase.execute(id, dto);
   }
 
   @Put(':id/itens-estoque/:linhaId')
@@ -200,7 +226,7 @@ export class OrdemServicoController {
     @Param('linhaId', ParseUUIDPipe) linhaId: string,
     @Body() dto: AtualizarQuantidadeOSDto,
   ) {
-    return this.ordemServicoService.atualizarQuantidadeItemEstoque(
+    return this.atualizarQuantidadeItemEstoqueUseCase.execute(
       id,
       linhaId,
       dto.quantidade,
@@ -219,7 +245,7 @@ export class OrdemServicoController {
     @Param('id', ParseUUIDPipe) id: string,
     @Param('linhaId', ParseUUIDPipe) linhaId: string,
   ) {
-    await this.ordemServicoService.removerItemEstoque(id, linhaId);
+    await this.removerItemEstoqueOSUseCase.execute(id, linhaId);
   }
 
   @Post(':id/enviar-orcamento')
@@ -248,7 +274,7 @@ export class OrdemServicoController {
     @Req() req: Request & { user: AuthenticatedUser },
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.ordemServicoService.enviarOrcamento(id, req.user.id);
+    return this.enviarOrcamentoUseCase.execute(id, req.user.id);
   }
 
   @Post(':id/transicao-status')
@@ -273,6 +299,6 @@ export class OrdemServicoController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: TransicionarStatusDto,
   ) {
-    return this.ordemServicoService.transicionarStatus(id, req.user.id, dto);
+    return this.transicionarStatusUseCase.execute(id, req.user.id, dto);
   }
 }

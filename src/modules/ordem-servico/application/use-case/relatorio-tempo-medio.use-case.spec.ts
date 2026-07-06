@@ -1,10 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
-import { RelatorioTempoMedioService } from './relatorio-tempo-medio.service';
-import { ORDEM_SERVICO_REPOSITORY } from '../../domain/repository/ordem-servico.repository';
+import { RelatorioTempoMedioUseCase } from './relatorio-tempo-medio.use-case';
+import { RelatorioTempoMedioFiltros } from '../../domain/repository/ordem-servico.repository';
 
-const mockOrdemRepo = {
-  getRelatorioTempoMedioPorServico: jest.fn(),
+const mockOrdemRepo = { getRelatorioTempoMedioPorServico: jest.fn() };
+
+const filtrosDaChamada = (): RelatorioTempoMedioFiltros => {
+  const calls = mockOrdemRepo.getRelatorioTempoMedioPorServico.mock
+    .calls as RelatorioTempoMedioFiltros[][];
+  return calls[0][0];
 };
 
 const relatorioBase = {
@@ -19,18 +23,18 @@ const relatorioBase = {
   ],
 };
 
-describe('RelatorioTempoMedioService', () => {
-  let service: RelatorioTempoMedioService;
+describe('RelatorioTempoMedioUseCase', () => {
+  let useCase: RelatorioTempoMedioUseCase;
 
   beforeEach(async () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
       providers: [
-        RelatorioTempoMedioService,
-        { provide: ORDEM_SERVICO_REPOSITORY, useValue: mockOrdemRepo },
+        RelatorioTempoMedioUseCase,
+        { provide: 'ORDEM_SERVICO_REPOSITORY', useValue: mockOrdemRepo },
       ],
     }).compile();
 
-    service = moduleRef.get(RelatorioTempoMedioService);
+    useCase = moduleRef.get(RelatorioTempoMedioUseCase);
     jest.clearAllMocks();
   });
 
@@ -39,13 +43,17 @@ describe('RelatorioTempoMedioService', () => {
       relatorioBase,
     );
 
-    const result = await service.gerarTempoMedioPorServico({});
+    const result = await useCase.execute({});
 
     expect(result.totalOrdensConsideradas).toBe(5);
     expect(result.periodo.dataInicio).toBeNull();
     expect(result.periodo.dataFim).toBeNull();
     expect(mockOrdemRepo.getRelatorioTempoMedioPorServico).toHaveBeenCalledWith(
-      { dataInicio: undefined, dataFim: undefined, servicoId: undefined },
+      {
+        dataInicio: undefined,
+        dataFim: undefined,
+        servicoId: undefined,
+      },
     );
   });
 
@@ -54,7 +62,7 @@ describe('RelatorioTempoMedioService', () => {
       relatorioBase,
     );
 
-    const result = await service.gerarTempoMedioPorServico({
+    const result = await useCase.execute({
       dataInicio: '2026-01-01',
       dataFim: '2026-01-31',
       servicoId: 'svc-1',
@@ -62,22 +70,18 @@ describe('RelatorioTempoMedioService', () => {
 
     expect(result.periodo.dataInicio).toBe('2026-01-01');
     expect(result.periodo.dataFim).toBe('2026-01-31');
-    const chamada =
-      mockOrdemRepo.getRelatorioTempoMedioPorServico.mock.calls[0][0];
+    const chamada = filtrosDaChamada();
     expect(chamada.dataInicio).toBeInstanceOf(Date);
     expect(chamada.dataFim).toBeInstanceOf(Date);
-    expect(chamada.dataFim.getUTCHours()).toBe(23);
-    expect(chamada.dataFim.getUTCMinutes()).toBe(59);
+    expect(chamada.dataFim?.getUTCHours()).toBe(23);
+    expect(chamada.dataFim?.getUTCMinutes()).toBe(59);
     expect(chamada.servicoId).toBe('svc-1');
   });
 
   it('lança BadRequestException quando dataInicio > dataFim', async () => {
     await expect(
-      service.gerarTempoMedioPorServico({
-        dataInicio: '2026-12-31',
-        dataFim: '2026-01-01',
-      }),
-    ).rejects.toThrow(BadRequestException);
+      useCase.execute({ dataInicio: '2026-12-31', dataFim: '2026-01-01' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
     expect(
       mockOrdemRepo.getRelatorioTempoMedioPorServico,
     ).not.toHaveBeenCalled();
@@ -88,13 +92,10 @@ describe('RelatorioTempoMedioService', () => {
       relatorioBase,
     );
 
-    const result = await service.gerarTempoMedioPorServico({
-      dataInicio: '2026-01-01',
-    });
+    const result = await useCase.execute({ dataInicio: '2026-01-01' });
 
     expect(result.periodo.dataFim).toBeNull();
-    const chamada =
-      mockOrdemRepo.getRelatorioTempoMedioPorServico.mock.calls[0][0];
+    const chamada = filtrosDaChamada();
     expect(chamada.dataInicio).toBeInstanceOf(Date);
     expect(chamada.dataFim).toBeUndefined();
   });
@@ -104,13 +105,10 @@ describe('RelatorioTempoMedioService', () => {
       relatorioBase,
     );
 
-    const result = await service.gerarTempoMedioPorServico({
-      dataFim: '2026-06-30',
-    });
+    const result = await useCase.execute({ dataFim: '2026-06-30' });
 
     expect(result.periodo.dataInicio).toBeNull();
-    const chamada =
-      mockOrdemRepo.getRelatorioTempoMedioPorServico.mock.calls[0][0];
+    const chamada = filtrosDaChamada();
     expect(chamada.dataInicio).toBeUndefined();
     expect(chamada.dataFim).toBeInstanceOf(Date);
   });

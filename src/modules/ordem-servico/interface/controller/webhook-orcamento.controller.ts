@@ -6,18 +6,16 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import {
-  ApiHeader,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
-import { WebhookTokenGuard, WEBHOOK_TOKEN_HEADER } from '../../../../common/guards';
+  WebhookTokenGuard,
+  WEBHOOK_TOKEN_HEADER,
+} from '../../../../common/guards';
 import {
   WebhookOrcamentoDto,
   WebhookOrcamentoResponseDto,
 } from '../../application/dto/webhook-orcamento.dto';
-import { WebhookOrcamentoService } from '../../application/use-case/webhook-orcamento.service';
+import { ProcessarWebhookOrcamentoUseCase } from '../../application/use-case/processar-webhook-orcamento.use-case';
 
 @ApiTags('Webhooks')
 @Controller('webhooks/orcamento')
@@ -29,7 +27,7 @@ import { WebhookOrcamentoService } from '../../application/use-case/webhook-orca
 })
 export class WebhookOrcamentoController {
   constructor(
-    private readonly webhookOrcamentoService: WebhookOrcamentoService,
+    private readonly processarWebhookOrcamentoUseCase: ProcessarWebhookOrcamentoUseCase,
   ) {}
 
   @Post()
@@ -45,7 +43,10 @@ export class WebhookOrcamentoController {
     description: 'Decisão processada',
     type: WebhookOrcamentoResponseDto,
   })
-  @ApiResponse({ status: 401, description: 'Token de webhook ausente ou inválido' })
+  @ApiResponse({
+    status: 401,
+    description: 'Token de webhook ausente ou inválido',
+  })
   @ApiResponse({ status: 404, description: 'OS não encontrada' })
   @ApiResponse({
     status: 409,
@@ -54,6 +55,6 @@ export class WebhookOrcamentoController {
   async receber(
     @Body() dto: WebhookOrcamentoDto,
   ): Promise<WebhookOrcamentoResponseDto> {
-    return this.webhookOrcamentoService.processarDecisao(dto);
+    return this.processarWebhookOrcamentoUseCase.execute(dto);
   }
 }

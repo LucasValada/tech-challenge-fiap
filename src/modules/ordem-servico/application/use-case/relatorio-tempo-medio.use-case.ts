@@ -1,21 +1,18 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
-import {
-  ORDEM_SERVICO_REPOSITORY,
-  OrdemServicoRepository,
-} from '../../domain/repository/ordem-servico.repository';
+import { OrdemServicoRepository } from '../../domain/repository/ordem-servico.repository';
 import {
   RelatorioTempoMedioQueryDto,
   RelatorioTempoMedioResponseDto,
 } from '../dto/relatorio-tempo-medio.dto';
 
 @Injectable()
-export class RelatorioTempoMedioService {
+export class RelatorioTempoMedioUseCase {
   constructor(
-    @Inject(ORDEM_SERVICO_REPOSITORY)
+    @Inject('ORDEM_SERVICO_REPOSITORY')
     private readonly ordemServicoRepository: OrdemServicoRepository,
   ) {}
 
-  async gerarTempoMedioPorServico(
+  async execute(
     query: RelatorioTempoMedioQueryDto,
   ): Promise<RelatorioTempoMedioResponseDto> {
     const dataInicio = query.dataInicio

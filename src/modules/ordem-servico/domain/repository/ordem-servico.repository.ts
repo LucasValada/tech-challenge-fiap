@@ -2,8 +2,6 @@ import { OrdemServico, StatusOrdemServico } from '../entity/OrdemServico';
 import { OSServicoLinha } from '../entity/OSServicoLinha';
 import { OSItemEstoqueLinha } from '../entity/OSItemEstoqueLinha';
 
-export const ORDEM_SERVICO_REPOSITORY = 'ORDEM_SERVICO_REPOSITORY';
-
 export interface CreateOrdemServicoComItensData {
   clienteId: string;
   veiculoId: string;
