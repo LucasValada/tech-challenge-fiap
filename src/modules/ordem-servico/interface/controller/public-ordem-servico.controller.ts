@@ -12,13 +12,15 @@ import {
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PublicOrdemServicoResponseDto } from '../../application/dto/public-ordem-servico.dto';
 import { AprovarOrcamentoDto } from '../../application/dto/aprovar-orcamento.dto';
-import { PublicOrdemServicoService } from '../../application/use-case/public-ordem-servico.service';
+import { ConsultarOrdemServicoPublicaUseCase } from '../../application/use-case/consultar-ordem-servico-publica.use-case';
+import { AprovarOrcamentoPublicoUseCase } from '../../application/use-case/aprovar-orcamento-publico.use-case';
 
 @ApiTags('Acompanhamento Público de OS')
 @Controller('public/ordens-servico')
 export class PublicOrdemServicoController {
   constructor(
-    private readonly publicOrdemServicoService: PublicOrdemServicoService,
+    private readonly consultarOrdemServicoPublicaUseCase: ConsultarOrdemServicoPublicaUseCase,
+    private readonly aprovarOrcamentoPublicoUseCase: AprovarOrcamentoPublicoUseCase,
   ) {}
 
   @Get(':codigo')
@@ -46,7 +48,7 @@ export class PublicOrdemServicoController {
     if (!placa || placa.trim().length === 0) {
       throw new BadRequestException('placa é obrigatória');
     }
-    return this.publicOrdemServicoService.consultar(codigo, placa);
+    return this.consultarOrdemServicoPublicaUseCase.execute(codigo, placa);
   }
 
   @Post(':codigo/aprovar')
@@ -69,6 +71,6 @@ export class PublicOrdemServicoController {
     @Param('codigo') codigo: string,
     @Body() dto: AprovarOrcamentoDto,
   ): Promise<PublicOrdemServicoResponseDto> {
-    return this.publicOrdemServicoService.aprovarOrcamento(codigo, dto.placa);
+    return this.aprovarOrcamentoPublicoUseCase.execute(codigo, dto.placa);
   }
 }

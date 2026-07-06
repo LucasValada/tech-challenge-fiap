@@ -1,0 +1,164 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ─── Stage 1: Build & Test ────────────────────────────────────────────────
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run unit tests
+        run: npm test -- --passWithNoTests
+
+      - name: Compile TypeScript
+        run: npm run build
+
+  # ─── Stage 2: Docker Image ────────────────────────────────────────────────
+  docker:
+    name: Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─── Stage 3: Deploy to Kind ──────────────────────────────────────────────
+  deploy:
+    name: Deploy to Kind
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Kind v0.27.0
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64
+          chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.6"
+
+      - name: Terraform — provision Kind cluster
+        working-directory: infra
+        run: |
+          terraform init
+          terraform apply -auto-approve
+
+      - name: Load Docker image into Kind
+        run: |
+          IMAGE="${{ needs.docker.outputs.image_tag }}"
+          SHA_TAG=$(echo "$IMAGE" | tr '\n' ' ' | grep -oP 'sha-\w+' | head -1)
+          FULL_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHA_TAG}"
+          docker pull "$FULL_TAG"
+          kind load docker-image "$FULL_TAG" --name oficina-cluster
+
+      - name: Deploy Metrics Server (required for HPA)
+        run: |
+          kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+          # Patch to allow insecure TLS against Kind's kubelet
+          kubectl patch deployment metrics-server -n kube-system \
+            --type='json' \
+            -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+
+      - name: Apply namespace and PostgreSQL manifests
+        run: |
+          kubectl apply -f k8s/00-namespace.yaml
+          kubectl apply -f k8s/postgres/
+          kubectl wait --for=condition=ready pod -l app=postgres -n oficina --timeout=180s
+
+      - name: Apply app config and secrets
+        run: |
+          kubectl apply -f k8s/app/01-configmap.yaml
+          kubectl apply -f k8s/app/02-secret.yaml
+
+      - name: Run database migrations
+        run: |
+          IMAGE="${{ needs.docker.outputs.image_tag }}"
+          SHA_TAG=$(echo "$IMAGE" | tr '\n' ' ' | grep -oP 'sha-\w+' | head -1)
+          FULL_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHA_TAG}"
+          sed "s|IMAGE_PLACEHOLDER|${FULL_TAG}|g" k8s/app/03-migration-job.yaml | kubectl apply -f -
+          kubectl wait --for=condition=complete job/db-migration -n oficina --timeout=120s
+
+      - name: Deploy application
+        run: |
+          IMAGE="${{ needs.docker.outputs.image_tag }}"
+          SHA_TAG=$(echo "$IMAGE" | tr '\n' ' ' | grep -oP 'sha-\w+' | head -1)
+          FULL_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHA_TAG}"
+          sed "s|IMAGE_PLACEHOLDER|${FULL_TAG}|g" k8s/app/04-deployment.yaml | kubectl apply -f -
+          kubectl apply -f k8s/app/05-service.yaml
+          kubectl apply -f k8s/app/06-hpa.yaml
+          kubectl rollout status deployment/oficina-api -n oficina --timeout=180s
+
+      - name: Smoke test
+        run: |
+          sleep 10
+          curl --fail http://localhost:3000/api || echo "Swagger UI not reachable — check NodePort mapping"

@@ -10,7 +10,7 @@ import {
   RelatorioTempoMedioQueryDto,
   RelatorioTempoMedioResponseDto,
 } from '../../application/dto/relatorio-tempo-medio.dto';
-import { RelatorioTempoMedioService } from '../../application/use-case/relatorio-tempo-medio.service';
+import { RelatorioTempoMedioUseCase } from '../../application/use-case/relatorio-tempo-medio.use-case';
 
 @ApiTags('Ordens de Serviço - Relatórios')
 @ApiBearerAuth()
@@ -18,7 +18,7 @@ import { RelatorioTempoMedioService } from '../../application/use-case/relatorio
 @Controller('ordens-servico/relatorios')
 export class RelatorioOrdemServicoController {
   constructor(
-    private readonly relatorioTempoMedioService: RelatorioTempoMedioService,
+    private readonly relatorioTempoMedioUseCase: RelatorioTempoMedioUseCase,
   ) {}
 
   @Get('tempo-medio-servicos')
@@ -39,6 +39,6 @@ export class RelatorioOrdemServicoController {
   async tempoMedioServicos(
     @Query() query: RelatorioTempoMedioQueryDto,
   ): Promise<RelatorioTempoMedioResponseDto> {
-    return this.relatorioTempoMedioService.gerarTempoMedioPorServico(query);
+    return this.relatorioTempoMedioUseCase.execute(query);
   }
 }

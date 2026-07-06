@@ -62,3 +62,11 @@ CLAUDE.md
 specs/
 .claude/
 .agents/
+
+# Terraform
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.*
+infra/oficina-cluster-config
+infra/crash.log
+infra/crash.*.log

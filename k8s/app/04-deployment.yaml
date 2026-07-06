@@ -1,0 +1,85 @@
+# Replace IMAGE_PLACEHOLDER with the actual image tag before applying:
+#   sed "s|IMAGE_PLACEHOLDER|ghcr.io/org/repo:sha-abc1234|g" 04-deployment.yaml | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oficina-api
+  namespace: oficina
+  labels:
+    app: oficina-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: oficina-api
+  template:
+    metadata:
+      labels:
+        app: oficina-api
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z postgres.oficina.svc.cluster.local 5432; do
+                echo "waiting for postgres..."; sleep 3
+              done
+      containers:
+        - name: oficina-api
+          image: IMAGE_PLACEHOLDER
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: app-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: JWT_SECRET
+            - name: MAIL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: MAIL_USER
+            - name: MAIL_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: MAIL_PASS
+            - name: WEBHOOK_ORCAMENTO_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: WEBHOOK_ORCAMENTO_TOKEN
+          # Resource limits are required for HPA to compute utilization percentages
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /api
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 3
