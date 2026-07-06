@@ -4,10 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  ORDEM_SERVICO_REPOSITORY,
-  OrdemServicoRepository,
-} from '../../domain/repository/ordem-servico.repository';
+import { OrdemServicoRepository } from '../../domain/repository/ordem-servico.repository';
 import { OSStatusInvalidoParaAprovacaoError } from '../../domain/errors';
 import {
   WebhookOrcamentoDto,
@@ -15,13 +12,13 @@ import {
 } from '../dto/webhook-orcamento.dto';
 
 @Injectable()
-export class WebhookOrcamentoService {
+export class ProcessarWebhookOrcamentoUseCase {
   constructor(
-    @Inject(ORDEM_SERVICO_REPOSITORY)
+    @Inject('ORDEM_SERVICO_REPOSITORY')
     private readonly ordemServicoRepository: OrdemServicoRepository,
   ) {}
 
-  async processarDecisao(
+  async execute(
     dto: WebhookOrcamentoDto,
   ): Promise<WebhookOrcamentoResponseDto> {
     const ordem = await this.ordemServicoRepository.findByCodigo(dto.codigoOS);
