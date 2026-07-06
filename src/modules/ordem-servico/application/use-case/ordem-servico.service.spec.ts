@@ -7,7 +7,6 @@ import {
 import { OrdemServicoService } from './ordem-servico.service';
 import { ORDEM_SERVICO_REPOSITORY } from '../../domain/repository/ordem-servico.repository';
 import { SERVICO_REPOSITORY } from '../../../servico/domain/repository/servico.repository';
-import { ITEM_ESTOQUE_REPOSITORY } from '../../../item-estoque/domain/repository/item-estoque.repository';
 import { OrdemServico } from '../../domain/entity/OrdemServico';
 import {
   ClienteNaoEncontradoError,
@@ -119,7 +118,7 @@ describe('OrdemServicoService', () => {
         { provide: 'CLIENTE_REPOSITORY', useValue: mockClienteRepo },
         { provide: 'VEICULO_REPOSITORY', useValue: mockVeiculoRepo },
         { provide: SERVICO_REPOSITORY, useValue: mockServicoRepo },
-        { provide: ITEM_ESTOQUE_REPOSITORY, useValue: mockItemRepo },
+        { provide: 'ITEM_ESTOQUE_REPOSITORY', useValue: mockItemRepo },
         { provide: 'EMAIL_SENDER', useValue: mockEmailSender },
       ],
     }).compile();
@@ -346,14 +345,14 @@ describe('OrdemServicoService', () => {
           status: 'FINALIZADA',
         });
 
-        expect(mockEmailSender.enviarNotificacaoFinalizacao).toHaveBeenCalledWith(
-          {
-            clienteNome: 'João',
-            clienteEmail: 'joao@email.com',
-            codigoOS: 'OS-2026-000001',
-            placa: 'ABC1D23',
-          },
-        );
+        expect(
+          mockEmailSender.enviarNotificacaoFinalizacao,
+        ).toHaveBeenCalledWith({
+          clienteNome: 'João',
+          clienteEmail: 'joao@email.com',
+          codigoOS: 'OS-2026-000001',
+          placa: 'ABC1D23',
+        });
         expect(mockEmailSender.enviarNotificacaoEntrega).not.toHaveBeenCalled();
       });
 
@@ -407,7 +406,6 @@ describe('OrdemServicoService', () => {
         mockTransicaoOk('EM_EXECUCAO');
         mockClienteRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
         mockEmailSender.enviarNotificacaoFinalizacao.mockRejectedValue(
-
           new Error('SMTP down'),
         );
 
