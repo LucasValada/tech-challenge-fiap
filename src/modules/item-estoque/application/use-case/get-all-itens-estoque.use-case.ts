@@ -1,0 +1,17 @@
+import { Inject, Injectable } from '@nestjs/common';
+import { ItemEstoqueRepository } from '../../domain/repository/item-estoque.repository';
+import { ItemEstoque } from '../../domain/entity/ItemEstoque';
+
+@Injectable()
+export class GetAllItensEstoqueUseCase {
+  constructor(
+    @Inject('ITEM_ESTOQUE_REPOSITORY')
+    private readonly itemEstoqueRepository: ItemEstoqueRepository,
+  ) {}
+
+  execute(
+    tipo?: 'PECA' | 'INSUMO',
+  ): Promise<{ itemEstoque: ItemEstoque[]; count: number }> {
+    return this.itemEstoqueRepository.findAll(tipo);
+  }
+}

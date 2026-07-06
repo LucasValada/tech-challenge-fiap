@@ -4,7 +4,7 @@ import { PrismaModule } from './modules/prisma/prisma.module';
 import { UserModule } from './modules/user/user.module';
 import { AuthModule } from './modules/auth';
 import { VeiculoModule } from './modules/veiculo';
-import { ItemEstoqueModule } from './modules/item-estoque';
+import { ItemEstoqueModule } from './modules/item-estoque/item-estoque.module';
 import { ServicoModule } from './modules/servico';
 import { ClienteModule } from './modules/cliente/cliente.module';
 import { OrdemServicoModule } from './modules/ordem-servico';

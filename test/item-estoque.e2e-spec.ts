@@ -44,8 +44,8 @@ describe('Itens de Estoque (e2e)', () => {
   it('GET /itens-estoque — lista itens', async () => {
     const res = await authRequest(ctx, 'get', '/itens-estoque').expect(200);
 
-    expect(res.body).toBeInstanceOf(Array);
-    expect(res.body.length).toBeGreaterThanOrEqual(1);
+    expect(res.body.itemEstoque).toBeInstanceOf(Array);
+    expect(res.body.count).toBeGreaterThanOrEqual(1);
   });
 
   it('GET /itens-estoque?tipo=PECA — filtra por tipo', async () => {
@@ -55,14 +55,21 @@ describe('Itens de Estoque (e2e)', () => {
       '/itens-estoque?tipo=PECA',
     ).expect(200);
 
-    expect(res.body).toBeInstanceOf(Array);
-    for (const item of res.body) {
+    expect(res.body.itemEstoque).toBeInstanceOf(Array);
+    for (const item of res.body.itemEstoque) {
       expect(item.tipo).toBe('PECA');
     }
   });
 
   it('GET /itens-estoque/baixo-estoque — lista baixo estoque', async () => {
-    await authRequest(ctx, 'get', '/itens-estoque/baixo-estoque').expect(200);
+    const res = await authRequest(
+      ctx,
+      'get',
+      '/itens-estoque/baixo-estoque',
+    ).expect(200);
+
+    expect(res.body.itemEstoque).toBeInstanceOf(Array);
+    expect(typeof res.body.count).toBe('number');
   });
 
   it('GET /itens-estoque/:id — busca por ID', async () => {
