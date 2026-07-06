@@ -1,10 +1,10 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { ClientRepository } from '../../cliente.repository';
-import { Cliente } from '../entity/Client';
+import { ClienteRepository } from '../repository/cliente.repository';
+import { Cliente } from '../entity/Cliente';
 
-export class ClientPolicyService {
+export class ClientePolicyService {
   constructor(
-    private readonly clientRepository: ClientRepository,
+    private readonly clienteRepository: ClienteRepository,
     private readonly client: Cliente,
   ) {}
   async validateClient(excludeId?: string): Promise<void> {
@@ -12,7 +12,7 @@ export class ClientPolicyService {
       throw new BadRequestException('Client with not valid email');
     }
 
-    const alreadyExists = await this.clientRepository.getByCpfCnpj(
+    const alreadyExists = await this.clienteRepository.getByCpfCnpj(
       this.client.cpfCnpj,
       excludeId,
     );

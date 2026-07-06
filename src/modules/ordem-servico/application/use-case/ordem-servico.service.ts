@@ -17,7 +17,7 @@ import {
 } from '../../domain/entity/OrdemServico';
 import { OSServicoLinha } from '../../domain/entity/OSServicoLinha';
 import { OSItemEstoqueLinha } from '../../domain/entity/OSItemEstoqueLinha';
-import { ClientRepository } from '../../../cliente/cliente.repository';
+import { ClienteRepository } from '../../../cliente/domain/repository/cliente.repository';
 import {
   VEICULO_REPOSITORY,
   VeiculoRepository,
@@ -56,7 +56,7 @@ import {
 import { AdicionarServicoOSDto } from '../dto/adicionar-servico-os.dto';
 import { AdicionarItemEstoqueOSDto } from '../dto/adicionar-item-estoque-os.dto';
 import { TransicionarStatusDto } from '../dto/transicionar-status.dto';
-import { MailService } from '../../../mail/mail.service';
+import { EmailSender } from '../../../mail/domain/service/email-sender';
 
 @Injectable()
 export class OrdemServicoService {
@@ -65,15 +65,16 @@ export class OrdemServicoService {
   constructor(
     @Inject(ORDEM_SERVICO_REPOSITORY)
     private readonly ordemServicoRepository: OrdemServicoRepository,
-    @Inject('CLIENT_REPOSITORY')
-    private readonly clientRepository: ClientRepository,
+    @Inject('CLIENTE_REPOSITORY')
+    private readonly clienteRepository: ClienteRepository,
     @Inject(VEICULO_REPOSITORY)
     private readonly veiculoRepository: VeiculoRepository,
     @Inject(SERVICO_REPOSITORY)
     private readonly servicoRepository: ServicoRepository,
     @Inject(ITEM_ESTOQUE_REPOSITORY)
     private readonly itemEstoqueRepository: ItemEstoqueRepository,
-    private readonly mailService: MailService,
+    @Inject('EMAIL_SENDER')
+    private readonly emailSender: EmailSender,
   ) {}
 
   async findAll(): Promise<{ ordens: OrdemServico[]; count: number }> {
@@ -103,9 +104,9 @@ export class OrdemServicoService {
     const cpfCnpjNormalizado = normalizarCpfCnpj(dto.cpfCnpj);
     const placa = normalizarPlaca(dto.placa);
 
-    let cliente = await this.clientRepository.getByCpfCnpj(cpfCnpjNormalizado);
+    let cliente = await this.clienteRepository.getByCpfCnpj(cpfCnpjNormalizado);
     if (!cliente && cpfCnpjNormalizado !== dto.cpfCnpj) {
-      cliente = await this.clientRepository.getByCpfCnpj(dto.cpfCnpj);
+      cliente = await this.clienteRepository.getByCpfCnpj(dto.cpfCnpj);
     }
     if (!cliente) {
       throw new NotFoundException(
@@ -268,7 +269,7 @@ export class OrdemServicoService {
 
     try {
       const detalhes = await this.findByIdComDetalhes(ordemId);
-      const cliente = await this.clientRepository.getOne(detalhes.cliente.id);
+      const cliente = await this.clienteRepository.getOne(detalhes.cliente.id);
       if (!cliente?.email) return;
 
       const payload = {
@@ -279,9 +280,9 @@ export class OrdemServicoService {
       };
 
       if (novoStatus === 'FINALIZADA') {
-        await this.mailService.enviarNotificacaoFinalizacao(payload);
+        await this.emailSender.enviarNotificacaoFinalizacao(payload);
       } else {
-        await this.mailService.enviarNotificacaoEntrega(payload);
+        await this.emailSender.enviarNotificacaoEntrega(payload);
       }
     } catch (error) {
       this.logger.error(
@@ -320,9 +321,9 @@ export class OrdemServicoService {
 
     const detalhes = await this.findByIdComDetalhes(ordemId);
 
-    const cliente = await this.clientRepository.getOne(detalhes.cliente.id);
+    const cliente = await this.clienteRepository.getOne(detalhes.cliente.id);
     if (cliente?.email) {
-      await this.mailService.enviarOrcamento({
+      await this.emailSender.enviarOrcamento({
         clienteNome: detalhes.cliente.nome,
         clienteEmail: cliente.email,
         codigoOS: detalhes.codigo,

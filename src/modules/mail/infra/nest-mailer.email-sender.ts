@@ -1,28 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { MailerService } from '@nestjs-modules/mailer';
-
-export interface OrcamentoEmailData {
-  clienteNome: string;
-  clienteEmail: string;
-  codigoOS: string;
-  placa: string;
-  servicos: { nome: string; quantidade: number; subtotal: number }[];
-  itens: { nome: string; quantidade: number; subtotal: number }[];
-  valorServicos: number;
-  valorPecas: number;
-  valorTotal: number;
-}
-
-export interface NotificacaoStatusEmailData {
-  clienteNome: string;
-  clienteEmail: string;
-  codigoOS: string;
-  placa: string;
-}
+import { getTestMessageUrl } from 'nodemailer';
+import {
+  EmailSender,
+  NotificacaoStatusEmailData,
+  OrcamentoEmailData,
+} from '../domain/service/email-sender';
 
 @Injectable()
-export class MailService {
-  private readonly logger = new Logger(MailService.name);
+export class NestMailerEmailSender implements EmailSender {
+  private readonly logger = new Logger(NestMailerEmailSender.name);
 
   constructor(private readonly mailerService: MailerService) {}
 
@@ -79,8 +66,7 @@ export class MailService {
         this.logger.log(`Accepted: ${info.accepted}`);
       }
 
-      const previewUrl =
-        (await (await import('nodemailer')).getTestMessageUrl(info)) || null;
+      const previewUrl = getTestMessageUrl(info) || null;
       if (previewUrl) {
         this.logger.log(`Preview URL (Ethereal): ${previewUrl}`);
       }
@@ -149,8 +135,7 @@ export class MailService {
       if (info?.messageId) {
         this.logger.log(`Message ID: ${info.messageId}`);
       }
-      const previewUrl =
-        (await (await import('nodemailer')).getTestMessageUrl(info)) || null;
+      const previewUrl = getTestMessageUrl(info) || null;
       if (previewUrl) {
         this.logger.log(`Preview URL (Ethereal): ${previewUrl}`);
       }

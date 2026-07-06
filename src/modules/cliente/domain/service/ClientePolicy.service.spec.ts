@@ -1,17 +1,17 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { ClientPolicyService } from '../domain/service/ClientPolicy.service';
-import { Cliente } from '../domain/entity/Client';
+import { ClientePolicyService } from './ClientePolicy.service';
+import { Cliente } from '../entity/Cliente';
 
 const mockRepository = {
   getOne: jest.fn(),
-  getAllClient: jest.fn(),
-  createClient: jest.fn(),
+  getAllCliente: jest.fn(),
+  createCliente: jest.fn(),
   getByCpfCnpj: jest.fn(),
-  updateClient: jest.fn(),
-  deleteClient: jest.fn(),
+  updateCliente: jest.fn(),
+  deleteCliente: jest.fn(),
 };
 
-describe('ClientPolicyService', () => {
+describe('ClientePolicyService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -26,7 +26,7 @@ describe('ClientPolicyService', () => {
     );
     mockRepository.getByCpfCnpj.mockResolvedValue(null);
 
-    const policy = new ClientPolicyService(mockRepository, cliente);
+    const policy = new ClientePolicyService(mockRepository, cliente);
 
     await expect(policy.validateClient()).resolves.toBeUndefined();
   });
@@ -39,7 +39,7 @@ describe('ClientPolicyService', () => {
       '529.982.247-25',
       'FISICA',
     );
-    const policy = new ClientPolicyService(mockRepository, cliente);
+    const policy = new ClientePolicyService(mockRepository, cliente);
 
     await expect(policy.validateClient()).rejects.toThrow(BadRequestException);
   });
@@ -47,7 +47,7 @@ describe('ClientPolicyService', () => {
   it('lança ConflictException quando CPF/CNPJ já existe', async () => {
     const cliente = new Cliente('João', null, null, '529.982.247-25', 'FISICA');
     mockRepository.getByCpfCnpj.mockResolvedValue({ id: 'outro' });
-    const policy = new ClientPolicyService(mockRepository, cliente);
+    const policy = new ClientePolicyService(mockRepository, cliente);
 
     await expect(policy.validateClient()).rejects.toThrow(ConflictException);
   });
@@ -55,7 +55,7 @@ describe('ClientPolicyService', () => {
   it('permite email null sem validar', async () => {
     const cliente = new Cliente('João', null, null, '529.982.247-25', 'FISICA');
     mockRepository.getByCpfCnpj.mockResolvedValue(null);
-    const policy = new ClientPolicyService(mockRepository, cliente);
+    const policy = new ClientePolicyService(mockRepository, cliente);
 
     await expect(policy.validateClient()).resolves.toBeUndefined();
   });
@@ -70,7 +70,7 @@ describe('ClientPolicyService', () => {
       'uuid-1',
     );
     mockRepository.getByCpfCnpj.mockResolvedValue(null);
-    const policy = new ClientPolicyService(mockRepository, cliente);
+    const policy = new ClientePolicyService(mockRepository, cliente);
 
     await policy.validateClient('uuid-1');
 

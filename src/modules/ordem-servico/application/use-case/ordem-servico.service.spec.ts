@@ -9,7 +9,6 @@ import { ORDEM_SERVICO_REPOSITORY } from '../../domain/repository/ordem-servico.
 import { VEICULO_REPOSITORY } from '../../../veiculo/domain/repository/veiculo.repository';
 import { SERVICO_REPOSITORY } from '../../../servico/domain/repository/servico.repository';
 import { ITEM_ESTOQUE_REPOSITORY } from '../../../item-estoque/domain/repository/item-estoque.repository';
-import { MailService } from '../../../mail/mail.service';
 import { OrdemServico } from '../../domain/entity/OrdemServico';
 import {
   ClienteNaoEncontradoError,
@@ -44,13 +43,13 @@ const mockOrdemRepo = {
   getRelatorioTempoMedioPorServico: jest.fn(),
 };
 
-const mockClientRepo = {
+const mockClienteRepo = {
   getOne: jest.fn(),
-  getAllClient: jest.fn(),
-  createClient: jest.fn(),
+  getAllCliente: jest.fn(),
+  createCliente: jest.fn(),
   getByCpfCnpj: jest.fn(),
-  updateClient: jest.fn(),
-  deleteClient: jest.fn(),
+  updateCliente: jest.fn(),
+  deleteCliente: jest.fn(),
 };
 
 const mockVeiculoRepo = {
@@ -80,7 +79,7 @@ const mockItemRepo = {
   delete: jest.fn(),
 };
 
-const mockMailService = {
+const mockEmailSender = {
   enviarOrcamento: jest.fn(),
   enviarNotificacaoFinalizacao: jest.fn(),
   enviarNotificacaoEntrega: jest.fn(),
@@ -118,11 +117,11 @@ describe('OrdemServicoService', () => {
       providers: [
         OrdemServicoService,
         { provide: ORDEM_SERVICO_REPOSITORY, useValue: mockOrdemRepo },
-        { provide: 'CLIENT_REPOSITORY', useValue: mockClientRepo },
+        { provide: 'CLIENTE_REPOSITORY', useValue: mockClienteRepo },
         { provide: VEICULO_REPOSITORY, useValue: mockVeiculoRepo },
         { provide: SERVICO_REPOSITORY, useValue: mockServicoRepo },
         { provide: ITEM_ESTOQUE_REPOSITORY, useValue: mockItemRepo },
-        { provide: MailService, useValue: mockMailService },
+        { provide: 'EMAIL_SENDER', useValue: mockEmailSender },
       ],
     }).compile();
 
@@ -206,17 +205,17 @@ describe('OrdemServicoService', () => {
     };
 
     it('lança NotFoundException quando cpfCnpj não tem cliente', async () => {
-      mockClientRepo.getByCpfCnpj.mockResolvedValue(null);
+      mockClienteRepo.getByCpfCnpj.mockResolvedValue(null);
 
       await expect(service.create('usuario-1', baseDto)).rejects.toThrow(
         NotFoundException,
       );
-      expect(mockClientRepo.getByCpfCnpj).toHaveBeenCalledWith('52998224725');
+      expect(mockClienteRepo.getByCpfCnpj).toHaveBeenCalledWith('52998224725');
       expect(mockOrdemRepo.createComItens).not.toHaveBeenCalled();
     });
 
     it('lança UnprocessableEntityException quando veículo é de outro cliente', async () => {
-      mockClientRepo.getByCpfCnpj.mockResolvedValue({
+      mockClienteRepo.getByCpfCnpj.mockResolvedValue({
         id: 'cliente-1',
         cpfCnpj: '52998224725',
       });
@@ -232,7 +231,7 @@ describe('OrdemServicoService', () => {
     });
 
     it('lança NotFoundException quando veículo não encontrado', async () => {
-      mockClientRepo.getByCpfCnpj.mockResolvedValue({
+      mockClienteRepo.getByCpfCnpj.mockResolvedValue({
         id: 'cliente-1',
         cpfCnpj: '52998224725',
       });
@@ -245,7 +244,7 @@ describe('OrdemServicoService', () => {
     });
 
     it('traduz erro de domínio quando createComItens lança', async () => {
-      mockClientRepo.getByCpfCnpj.mockResolvedValue({
+      mockClienteRepo.getByCpfCnpj.mockResolvedValue({
         id: 'cliente-1',
         cpfCnpj: '52998224725',
       });
@@ -263,7 +262,7 @@ describe('OrdemServicoService', () => {
     });
 
     it('cria OS no fluxo feliz com 1 servico e 1 item', async () => {
-      mockClientRepo.getByCpfCnpj.mockResolvedValue({
+      mockClienteRepo.getByCpfCnpj.mockResolvedValue({
         id: 'cliente-1',
         cpfCnpj: '52998224725',
       });
@@ -342,13 +341,13 @@ describe('OrdemServicoService', () => {
 
       it('dispara enviarNotificacaoFinalizacao em transição para FINALIZADA', async () => {
         mockTransicaoOk('EM_EXECUCAO');
-        mockClientRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
+        mockClienteRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
 
         await service.transicionarStatus('ordem-1', 'usuario-1', {
           status: 'FINALIZADA',
         });
 
-        expect(mockMailService.enviarNotificacaoFinalizacao).toHaveBeenCalledWith(
+        expect(mockEmailSender.enviarNotificacaoFinalizacao).toHaveBeenCalledWith(
           {
             clienteNome: 'João',
             clienteEmail: 'joao@email.com',
@@ -356,25 +355,25 @@ describe('OrdemServicoService', () => {
             placa: 'ABC1D23',
           },
         );
-        expect(mockMailService.enviarNotificacaoEntrega).not.toHaveBeenCalled();
+        expect(mockEmailSender.enviarNotificacaoEntrega).not.toHaveBeenCalled();
       });
 
       it('dispara enviarNotificacaoEntrega em transição para ENTREGUE', async () => {
         mockTransicaoOk('FINALIZADA');
-        mockClientRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
+        mockClienteRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
 
         await service.transicionarStatus('ordem-1', 'usuario-1', {
           status: 'ENTREGUE',
         });
 
-        expect(mockMailService.enviarNotificacaoEntrega).toHaveBeenCalledWith({
+        expect(mockEmailSender.enviarNotificacaoEntrega).toHaveBeenCalledWith({
           clienteNome: 'João',
           clienteEmail: 'joao@email.com',
           codigoOS: 'OS-2026-000001',
           placa: 'ABC1D23',
         });
         expect(
-          mockMailService.enviarNotificacaoFinalizacao,
+          mockEmailSender.enviarNotificacaoFinalizacao,
         ).not.toHaveBeenCalled();
       });
 
@@ -386,29 +385,30 @@ describe('OrdemServicoService', () => {
         });
 
         expect(
-          mockMailService.enviarNotificacaoFinalizacao,
+          mockEmailSender.enviarNotificacaoFinalizacao,
         ).not.toHaveBeenCalled();
-        expect(mockMailService.enviarNotificacaoEntrega).not.toHaveBeenCalled();
-        expect(mockClientRepo.getOne).not.toHaveBeenCalled();
+        expect(mockEmailSender.enviarNotificacaoEntrega).not.toHaveBeenCalled();
+        expect(mockClienteRepo.getOne).not.toHaveBeenCalled();
       });
 
       it('não dispara email quando cliente não tem email cadastrado', async () => {
         mockTransicaoOk('EM_EXECUCAO');
-        mockClientRepo.getOne.mockResolvedValue({ email: null });
+        mockClienteRepo.getOne.mockResolvedValue({ email: null });
 
         await service.transicionarStatus('ordem-1', 'usuario-1', {
           status: 'FINALIZADA',
         });
 
         expect(
-          mockMailService.enviarNotificacaoFinalizacao,
+          mockEmailSender.enviarNotificacaoFinalizacao,
         ).not.toHaveBeenCalled();
       });
 
       it('falha silenciosamente no email sem bloquear a transição', async () => {
         mockTransicaoOk('EM_EXECUCAO');
-        mockClientRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
-        mockMailService.enviarNotificacaoFinalizacao.mockRejectedValue(
+        mockClienteRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
+        mockEmailSender.enviarNotificacaoFinalizacao.mockRejectedValue(
+
           new Error('SMTP down'),
         );
 
@@ -628,10 +628,10 @@ describe('OrdemServicoService', () => {
       mockOrdemRepo.contarLinhas.mockResolvedValue({ servicos: 1, itens: 0 });
       mockOrdemRepo.transicionarStatus.mockResolvedValue({});
       mockOrdemRepo.findByIdComDetalhes.mockResolvedValue(detalhesView);
-      mockClientRepo.getOne.mockResolvedValue({
+      mockClienteRepo.getOne.mockResolvedValue({
         email: 'joao@email.com',
       });
-      mockMailService.enviarOrcamento.mockResolvedValue(undefined);
+      mockEmailSender.enviarOrcamento.mockResolvedValue(undefined);
 
       const result = await service.enviarOrcamento('ordem-1', 'usuario-1');
 
@@ -643,7 +643,7 @@ describe('OrdemServicoService', () => {
         'usuario-1',
         'Orçamento enviado para aprovação do cliente',
       );
-      expect(mockMailService.enviarOrcamento).toHaveBeenCalled();
+      expect(mockEmailSender.enviarOrcamento).toHaveBeenCalled();
     });
 
     it('não envia email quando cliente não tem email', async () => {
@@ -651,11 +651,11 @@ describe('OrdemServicoService', () => {
       mockOrdemRepo.contarLinhas.mockResolvedValue({ servicos: 1, itens: 0 });
       mockOrdemRepo.transicionarStatus.mockResolvedValue({});
       mockOrdemRepo.findByIdComDetalhes.mockResolvedValue(detalhesView);
-      mockClientRepo.getOne.mockResolvedValue({ email: null });
+      mockClienteRepo.getOne.mockResolvedValue({ email: null });
 
       await service.enviarOrcamento('ordem-1', 'usuario-1');
 
-      expect(mockMailService.enviarOrcamento).not.toHaveBeenCalled();
+      expect(mockEmailSender.enviarOrcamento).not.toHaveBeenCalled();
     });
 
     it('lança ConflictException quando OS não está em EM_DIAGNOSTICO', async () => {

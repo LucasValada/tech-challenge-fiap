@@ -1,7 +1,5 @@
 import { Usuario } from '../entity/User';
 
-export const USER_REPOSITORY = 'USER_REPOSITORY';
-
 export interface CreateUserData {
   nome: string;
   email: string;
