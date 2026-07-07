@@ -19,7 +19,7 @@ export class UpdateUserUseCase {
 
     const target = await this.userRepository.getUserById(id);
     if (!target) {
-      throw new NotFoundException('Usuário nao encontrado');
+      throw new NotFoundException('Usuário não encontrado');
     }
 
     return this.userRepository.updateUser(id, {

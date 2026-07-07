@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   Query,
@@ -77,7 +78,7 @@ export class ItemEstoqueController {
   @ApiOperation({ summary: 'Buscar item de estoque por ID' })
   @ApiResponse({ status: 200, description: 'Item de estoque encontrado' })
   @ApiResponse({ status: 404, description: 'Item de estoque não encontrado' })
-  findById(@Param('id') id: string) {
+  findById(@Param('id', ParseUUIDPipe) id: string) {
     return this.getItemEstoqueByIdUseCase.execute(id);
   }
 
@@ -88,7 +89,7 @@ export class ItemEstoqueController {
     description: 'Item de estoque atualizado com sucesso',
   })
   @ApiResponse({ status: 404, description: 'Item de estoque não encontrado' })
-  update(@Param('id') id: string, @Body() dto: UpdateItemEstoqueDto) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateItemEstoqueDto) {
     return this.updateItemEstoqueUseCase.execute(id, dto);
   }
 
@@ -100,7 +101,7 @@ export class ItemEstoqueController {
     description: 'Item de estoque deletado com sucesso',
   })
   @ApiResponse({ status: 404, description: 'Item de estoque não encontrado' })
-  async delete(@Param('id') id: string) {
+  async delete(@Param('id', ParseUUIDPipe) id: string) {
     await this.deleteItemEstoqueUseCase.execute(id);
   }
 }

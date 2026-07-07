@@ -101,7 +101,7 @@ describe('VeiculoController', () => {
 
   it('propaga NotFoundException do use case', async () => {
     mockGetVeiculoById.execute.mockRejectedValue(
-      new NotFoundException('Veículo nao encontrado'),
+      new NotFoundException('Veículo não encontrado'),
     );
 
     await expect(controller.findById('inexistente')).rejects.toThrow(

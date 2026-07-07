@@ -21,7 +21,7 @@ export class UpdateVeiculoUseCase {
   ): Promise<Veiculo> {
     const veiculo = await this.veiculoRepository.findById(id);
     if (!veiculo) {
-      throw new NotFoundException('Veículo nao encontrado');
+      throw new NotFoundException('Veículo não encontrado');
     }
 
     if (data.placa) {

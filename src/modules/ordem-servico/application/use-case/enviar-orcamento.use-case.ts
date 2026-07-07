@@ -65,7 +65,7 @@ export class EnviarOrcamentoUseCase {
       throw new NotFoundException('Ordem de serviço não encontrada');
     }
 
-    const cliente = await this.clienteRepository.getOne(detalhes.cliente.id);
+    const cliente = await this.clienteRepository.findById(detalhes.cliente.id);
     if (cliente?.email) {
       await this.emailSender.enviarOrcamento({
         clienteNome: detalhes.cliente.nome,

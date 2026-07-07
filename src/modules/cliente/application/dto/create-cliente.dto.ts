@@ -1,34 +1,39 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import {
+  IsEmail,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { IsCpfCnpj } from '../../../../common/validators';
 
-export class ClienteDto {
+export class CreateClienteDto {
   @IsString()
   @IsNotEmpty()
   @ApiProperty({
-    description: 'Nome do usuário',
-    example: 'John Doe',
-    required: true,
+    description: 'Nome do cliente',
+    example: 'João Silva',
   })
   nome!: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @ApiProperty({
-    description: 'Telefone do usuário',
-    example: '(11)937379050',
-    required: true,
+    description: 'Telefone do cliente',
+    example: '11999999999',
+    required: false,
   })
-  telefone!: string | null;
+  telefone?: string | null;
 
-  @IsString()
-  @IsNotEmpty()
+  @IsOptional()
+  @IsEmail()
   @ApiProperty({
-    description: 'Email do usuário',
-    example: 'example@email.com',
-    required: true,
+    description: 'Email do cliente',
+    example: 'joao@example.com',
+    required: false,
   })
-  email!: string | null;
+  email?: string | null;
 
   @IsString()
   @IsNotEmpty()
@@ -36,16 +41,15 @@ export class ClienteDto {
   @ApiProperty({
     description: 'CPF ou CNPJ do cliente (com ou sem pontuação)',
     example: '529.982.247-25',
-    required: true,
   })
   cpfCnpj!: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsIn(['FISICA', 'JURIDICA'])
   @ApiProperty({
     description: 'Tipo do cliente',
     example: 'FISICA',
-    required: true,
+    enum: ['FISICA', 'JURIDICA'],
   })
   tipoPessoa!: 'FISICA' | 'JURIDICA';
 }

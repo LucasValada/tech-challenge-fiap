@@ -12,7 +12,7 @@ export class GetItemEstoqueByIdUseCase {
   async execute(id: string): Promise<ItemEstoque> {
     const item = await this.itemEstoqueRepository.findById(id);
     if (!item) {
-      throw new NotFoundException('Item de estoque nao encontrado');
+      throw new NotFoundException('Item de estoque não encontrado');
     }
     return item;
   }

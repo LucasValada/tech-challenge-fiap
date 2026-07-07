@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   UseGuards,
@@ -60,7 +61,7 @@ export class VeiculoController {
   @ApiOperation({ summary: 'Buscar veículo por ID' })
   @ApiResponse({ status: 200, description: 'Veículo encontrado' })
   @ApiResponse({ status: 404, description: 'Veículo não encontrado' })
-  findById(@Param('id') id: string) {
+  findById(@Param('id', ParseUUIDPipe) id: string) {
     return this.getVeiculoByIdUseCase.execute(id);
   }
 
@@ -69,7 +70,10 @@ export class VeiculoController {
   @ApiResponse({ status: 200, description: 'Veículo atualizado com sucesso' })
   @ApiResponse({ status: 404, description: 'Veículo não encontrado' })
   @ApiResponse({ status: 409, description: 'Placa já cadastrada' })
-  update(@Param('id') id: string, @Body() dto: UpdateVeiculoDto) {
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateVeiculoDto,
+  ) {
     return this.updateVeiculoUseCase.execute(id, dto);
   }
 
@@ -78,7 +82,7 @@ export class VeiculoController {
   @ApiOperation({ summary: 'Deletar veículo' })
   @ApiResponse({ status: 204, description: 'Veículo deletado com sucesso' })
   @ApiResponse({ status: 404, description: 'Veículo não encontrado' })
-  async delete(@Param('id') id: string) {
+  async delete(@Param('id', ParseUUIDPipe) id: string) {
     await this.deleteVeiculoUseCase.execute(id);
   }
 }

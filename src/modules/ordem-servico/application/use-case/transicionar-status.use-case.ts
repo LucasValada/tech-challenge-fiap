@@ -60,7 +60,9 @@ export class TransicionarStatusUseCase {
         await this.ordemServicoRepository.findByIdComDetalhes(ordemId);
       if (!detalhes) return;
 
-      const cliente = await this.clienteRepository.getOne(detalhes.cliente.id);
+      const cliente = await this.clienteRepository.findById(
+        detalhes.cliente.id,
+      );
       if (!cliente?.email) return;
 
       const payload = {

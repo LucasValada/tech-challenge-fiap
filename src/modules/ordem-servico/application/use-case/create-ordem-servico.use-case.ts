@@ -38,9 +38,11 @@ export class CreateOrdemServicoUseCase {
     const cpfCnpjNormalizado = normalizarCpfCnpj(dto.cpfCnpj);
     const placa = normalizarPlaca(dto.placa);
 
-    let cliente = await this.clienteRepository.getByCpfCnpj(cpfCnpjNormalizado);
+    let cliente = await this.clienteRepository.findByCpfCnpj(
+      cpfCnpjNormalizado,
+    );
     if (!cliente && cpfCnpjNormalizado !== dto.cpfCnpj) {
-      cliente = await this.clienteRepository.getByCpfCnpj(dto.cpfCnpj);
+      cliente = await this.clienteRepository.findByCpfCnpj(dto.cpfCnpj);
     }
     if (!cliente) {
       throw new NotFoundException(

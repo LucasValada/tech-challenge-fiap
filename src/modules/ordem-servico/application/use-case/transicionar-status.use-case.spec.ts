@@ -8,7 +8,7 @@ const mockOrdemRepo = {
   transicionarStatus: jest.fn(),
   findByIdComDetalhes: jest.fn(),
 };
-const mockClienteRepo = { getOne: jest.fn() };
+const mockClienteRepo = { findById: jest.fn() };
 const mockEmailSender = {
   enviarNotificacaoFinalizacao: jest.fn(),
   enviarNotificacaoEntrega: jest.fn(),
@@ -76,7 +76,7 @@ describe('TransicionarStatusUseCase', () => {
 
   it('dispara enviarNotificacaoFinalizacao em transição para FINALIZADA', async () => {
     mockTransicaoOk('EM_EXECUCAO');
-    mockClienteRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
+    mockClienteRepo.findById.mockResolvedValue({ email: 'joao@email.com' });
 
     await useCase.execute('ordem-1', 'usuario-1', { status: 'FINALIZADA' });
 
@@ -91,7 +91,7 @@ describe('TransicionarStatusUseCase', () => {
 
   it('dispara enviarNotificacaoEntrega em transição para ENTREGUE', async () => {
     mockTransicaoOk('FINALIZADA');
-    mockClienteRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
+    mockClienteRepo.findById.mockResolvedValue({ email: 'joao@email.com' });
 
     await useCase.execute('ordem-1', 'usuario-1', { status: 'ENTREGUE' });
 
@@ -111,12 +111,12 @@ describe('TransicionarStatusUseCase', () => {
 
     expect(mockEmailSender.enviarNotificacaoFinalizacao).not.toHaveBeenCalled();
     expect(mockEmailSender.enviarNotificacaoEntrega).not.toHaveBeenCalled();
-    expect(mockClienteRepo.getOne).not.toHaveBeenCalled();
+    expect(mockClienteRepo.findById).not.toHaveBeenCalled();
   });
 
   it('não dispara email quando o cliente não tem email cadastrado', async () => {
     mockTransicaoOk('EM_EXECUCAO');
-    mockClienteRepo.getOne.mockResolvedValue({ email: null });
+    mockClienteRepo.findById.mockResolvedValue({ email: null });
 
     await useCase.execute('ordem-1', 'usuario-1', { status: 'FINALIZADA' });
 
@@ -125,7 +125,7 @@ describe('TransicionarStatusUseCase', () => {
 
   it('falha silenciosamente no email sem bloquear a transição', async () => {
     mockTransicaoOk('EM_EXECUCAO');
-    mockClienteRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
+    mockClienteRepo.findById.mockResolvedValue({ email: 'joao@email.com' });
     mockEmailSender.enviarNotificacaoFinalizacao.mockRejectedValue(
       new Error('SMTP down'),
     );

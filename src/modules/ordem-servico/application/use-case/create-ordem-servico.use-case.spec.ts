@@ -7,7 +7,7 @@ import { CreateOrdemServicoUseCase } from './create-ordem-servico.use-case';
 import { ServicoIndisponivelError } from '../../domain/errors';
 
 const mockOrdemRepo = { createComItens: jest.fn() };
-const mockClienteRepo = { getByCpfCnpj: jest.fn() };
+const mockClienteRepo = { findByCpfCnpj: jest.fn() };
 const mockVeiculoRepo = { findByPlaca: jest.fn() };
 
 const baseDto = {
@@ -34,17 +34,17 @@ describe('CreateOrdemServicoUseCase', () => {
   });
 
   it('lança NotFoundException quando cpfCnpj não tem cliente', async () => {
-    mockClienteRepo.getByCpfCnpj.mockResolvedValue(null);
+    mockClienteRepo.findByCpfCnpj.mockResolvedValue(null);
 
     await expect(useCase.execute('usuario-1', baseDto)).rejects.toBeInstanceOf(
       NotFoundException,
     );
-    expect(mockClienteRepo.getByCpfCnpj).toHaveBeenCalledWith('52998224725');
+    expect(mockClienteRepo.findByCpfCnpj).toHaveBeenCalledWith('52998224725');
     expect(mockOrdemRepo.createComItens).not.toHaveBeenCalled();
   });
 
   it('lança NotFoundException quando veículo não encontrado', async () => {
-    mockClienteRepo.getByCpfCnpj.mockResolvedValue({
+    mockClienteRepo.findByCpfCnpj.mockResolvedValue({
       id: 'cliente-1',
       cpfCnpj: '52998224725',
     });
@@ -57,7 +57,7 @@ describe('CreateOrdemServicoUseCase', () => {
   });
 
   it('lança UnprocessableEntityException quando veículo é de outro cliente', async () => {
-    mockClienteRepo.getByCpfCnpj.mockResolvedValue({
+    mockClienteRepo.findByCpfCnpj.mockResolvedValue({
       id: 'cliente-1',
       cpfCnpj: '52998224725',
     });
@@ -73,7 +73,7 @@ describe('CreateOrdemServicoUseCase', () => {
   });
 
   it('traduz erro de domínio quando createComItens lança', async () => {
-    mockClienteRepo.getByCpfCnpj.mockResolvedValue({
+    mockClienteRepo.findByCpfCnpj.mockResolvedValue({
       id: 'cliente-1',
       cpfCnpj: '52998224725',
     });
@@ -91,7 +91,7 @@ describe('CreateOrdemServicoUseCase', () => {
   });
 
   it('cria OS no fluxo feliz com 1 serviço e 1 item', async () => {
-    mockClienteRepo.getByCpfCnpj.mockResolvedValue({
+    mockClienteRepo.findByCpfCnpj.mockResolvedValue({
       id: 'cliente-1',
       cpfCnpj: '52998224725',
     });
