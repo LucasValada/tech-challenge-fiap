@@ -3,6 +3,7 @@ import { PrismaService } from '../../../../modules/prisma/prisma.service';
 import {
   CreateVeiculoData,
   UpdateVeiculoData,
+  VeiculoComCliente,
   VeiculoRepository,
 } from '../../../../modules/veiculo/domain/repository/veiculo.repository';
 import { Veiculo } from '../../../../modules/veiculo/domain/entity/Veiculo';
@@ -15,14 +16,14 @@ export class PrismaVeiculoRepository implements VeiculoRepository {
     return this.prisma.veiculo.create({ data });
   }
 
-  async findAll(): Promise<{ veiculo: Veiculo[]; count: number }> {
+  async findAll(): Promise<{ veiculo: VeiculoComCliente[]; count: number }> {
     const veiculo = await this.prisma.veiculo.findMany({
       include: { cliente: true },
     });
     return { veiculo, count: veiculo.length };
   }
 
-  async findById(id: string): Promise<Veiculo | null> {
+  async findById(id: string): Promise<VeiculoComCliente | null> {
     return this.prisma.veiculo.findUnique({
       where: { id },
       include: { cliente: true },
@@ -37,7 +38,7 @@ export class PrismaVeiculoRepository implements VeiculoRepository {
     return this.prisma.veiculo.findFirst({ where });
   }
 
-  async update(id: string, data: UpdateVeiculoData): Promise<Veiculo> {
+  async update(id: string, data: UpdateVeiculoData): Promise<VeiculoComCliente> {
     return this.prisma.veiculo.update({
       where: { id },
       data,

@@ -11,32 +11,29 @@ import {
 export class PrismaUserRepository implements UserRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getAllUser(): Promise<{ user: Usuario[]; count: number }> {
+  async create(data: CreateUserData): Promise<Usuario> {
+    return this.prisma.usuario.create({ data });
+  }
+
+  async findAll(): Promise<{ user: Usuario[]; count: number }> {
     const user = await this.prisma.usuario.findMany();
     return { user, count: user.length };
   }
 
-  async getUserById(id: string): Promise<Usuario | null> {
+  async findById(id: string): Promise<Usuario | null> {
     return this.prisma.usuario.findUnique({ where: { id } });
   }
 
-  async getUserByEmail(
-    email: string,
-    excludeId?: string,
-  ): Promise<Usuario | null> {
+  async findByEmail(email: string, excludeId?: string): Promise<Usuario | null> {
     const where = excludeId ? { email, NOT: { id: excludeId } } : { email };
     return this.prisma.usuario.findUnique({ where });
   }
 
-  async createUser(data: CreateUserData): Promise<Usuario> {
-    return this.prisma.usuario.create({ data });
-  }
-
-  async updateUser(id: string, data: UpdateUserData): Promise<Usuario> {
+  async update(id: string, data: UpdateUserData): Promise<Usuario> {
     return this.prisma.usuario.update({ where: { id }, data });
   }
 
-  async deleteUser(id: string): Promise<Usuario> {
+  async delete(id: string): Promise<Usuario> {
     return this.prisma.usuario.delete({ where: { id } });
   }
 }

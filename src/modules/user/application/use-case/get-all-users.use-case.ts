@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { UserRepository } from '../../domain/repository/user.repository';
-import { Usuario } from '../../domain/entity/User';
+import { UserListResponseDto } from '../dto/user.dto';
+import { toUserResponse } from '../mappers/toUserResponse';
 
 @Injectable()
 export class GetAllUsersUseCase {
@@ -9,7 +10,8 @@ export class GetAllUsersUseCase {
     private readonly userRepository: UserRepository,
   ) {}
 
-  execute(): Promise<{ user: Usuario[]; count: number }> {
-    return this.userRepository.getAllUser();
+  async execute(): Promise<UserListResponseDto> {
+    const { user, count } = await this.userRepository.findAll();
+    return { user: user.map(toUserResponse), count };
   }
 }

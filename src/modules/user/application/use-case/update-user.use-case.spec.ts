@@ -2,25 +2,23 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { UpdateUserUseCase } from './update-user.use-case';
 
-const USER_ID_EXISTENTE = 'uuid-existente';
-const USER_ID_INEXISTENTE = 'uuid-inexistente';
-const EMAIL_NORMALIZADO = 'usuario.teste@example.com';
-const EMAIL_MIXED_CASE = 'Usuario.Teste@Example.com';
-const NOME_NOVO = 'Atualizado';
+const USER_ID = 'user-uuid';
+const EMAIL_ATUAL = 'atual@teste.com';
+const EMAIL_NOVO = 'novo@teste.com';
 
-const mockUserRepository = {
-  getUserById: jest.fn(),
-  getUserByEmail: jest.fn(),
-  updateUser: jest.fn(),
-};
-
-const usuarioBase = {
-  id: USER_ID_EXISTENTE,
-  nome: 'Admin Teste',
-  email: EMAIL_NORMALIZADO,
-  senhaHash: 'fake-hash-for-tests',
+const usuarioMock = {
+  id: USER_ID,
+  nome: 'Admin',
+  email: EMAIL_ATUAL,
+  senhaHash: '$2a$10$secret',
   createdAt: new Date(),
   updatedAt: new Date(),
+};
+
+const mockUserRepository = {
+  findById: jest.fn(),
+  findByEmail: jest.fn(),
+  update: jest.fn(),
 };
 
 describe('UpdateUserUseCase', () => {
@@ -38,52 +36,61 @@ describe('UpdateUserUseCase', () => {
     jest.clearAllMocks();
   });
 
-  it('atualiza usuário existente e normaliza email', async () => {
-    mockUserRepository.getUserByEmail.mockResolvedValue(null);
-    mockUserRepository.getUserById.mockResolvedValue(usuarioBase);
-    const atualizado = { ...usuarioBase, nome: NOME_NOVO };
-    mockUserRepository.updateUser.mockResolvedValue(atualizado);
-
-    const result = await useCase.execute(USER_ID_EXISTENTE, {
-      email: EMAIL_MIXED_CASE,
-      nome: NOME_NOVO,
+  it('atualiza só o nome sem validar email quando ele não vem no payload', async () => {
+    mockUserRepository.findById.mockResolvedValue(usuarioMock);
+    mockUserRepository.update.mockResolvedValue({
+      ...usuarioMock,
+      nome: 'Novo Nome',
     });
 
-    expect(result).toBe(atualizado);
-    expect(mockUserRepository.getUserByEmail).toHaveBeenCalledWith(
-      EMAIL_NORMALIZADO,
-      USER_ID_EXISTENTE,
+    const result = await useCase.execute(USER_ID, { nome: 'Novo Nome' });
+
+    expect(result).not.toHaveProperty('senhaHash');
+    expect(result.nome).toBe('Novo Nome');
+    expect(mockUserRepository.findByEmail).not.toHaveBeenCalled();
+    expect(mockUserRepository.update).toHaveBeenCalledWith(USER_ID, {
+      nome: 'Novo Nome',
+    });
+  });
+
+  it('normaliza email e valida unicidade excluindo o próprio id', async () => {
+    mockUserRepository.findById.mockResolvedValue(usuarioMock);
+    mockUserRepository.findByEmail.mockResolvedValue(null);
+    mockUserRepository.update.mockResolvedValue({
+      ...usuarioMock,
+      email: EMAIL_NOVO,
+    });
+
+    await useCase.execute(USER_ID, { email: 'Novo@Teste.COM' });
+
+    expect(mockUserRepository.findByEmail).toHaveBeenCalledWith(
+      EMAIL_NOVO,
+      USER_ID,
     );
-    expect(mockUserRepository.updateUser).toHaveBeenCalledWith(
-      USER_ID_EXISTENTE,
-      { email: EMAIL_NORMALIZADO, nome: NOME_NOVO },
-    );
+    expect(mockUserRepository.update).toHaveBeenCalledWith(USER_ID, {
+      email: EMAIL_NOVO,
+    });
   });
 
   it('lança NotFoundException quando o usuário não existe', async () => {
-    mockUserRepository.getUserByEmail.mockResolvedValue(null);
-    mockUserRepository.getUserById.mockResolvedValue(null);
+    mockUserRepository.findById.mockResolvedValue(null);
 
     await expect(
-      useCase.execute(USER_ID_INEXISTENTE, {
-        email: EMAIL_NORMALIZADO,
-        nome: 'X',
-      }),
+      useCase.execute('inexistente', { nome: 'X' }),
     ).rejects.toBeInstanceOf(NotFoundException);
+    expect(mockUserRepository.update).not.toHaveBeenCalled();
   });
 
-  it('lança ConflictException quando email pertence a outro usuário', async () => {
-    mockUserRepository.getUserByEmail.mockResolvedValue({
-      ...usuarioBase,
+  it('lança ConflictException quando o email pertence a outro usuário', async () => {
+    mockUserRepository.findById.mockResolvedValue(usuarioMock);
+    mockUserRepository.findByEmail.mockResolvedValue({
+      ...usuarioMock,
       id: 'outro-uuid',
     });
 
     await expect(
-      useCase.execute(USER_ID_EXISTENTE, {
-        email: EMAIL_NORMALIZADO,
-        nome: NOME_NOVO,
-      }),
+      useCase.execute(USER_ID, { email: EMAIL_NOVO }),
     ).rejects.toBeInstanceOf(ConflictException);
-    expect(mockUserRepository.updateUser).not.toHaveBeenCalled();
+    expect(mockUserRepository.update).not.toHaveBeenCalled();
   });
 });

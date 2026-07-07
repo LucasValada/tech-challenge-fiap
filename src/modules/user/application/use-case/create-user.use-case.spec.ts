@@ -10,8 +10,8 @@ const FAKE_HASH = 'fake-hash-for-tests';
 const SENHA_GERADA_LENGTH = 8;
 
 const mockUserRepository = {
-  getUserByEmail: jest.fn(),
-  createUser: jest.fn(),
+  findByEmail: jest.fn(),
+  create: jest.fn(),
 };
 
 const mockPasswordHasher = {
@@ -43,9 +43,9 @@ describe('CreateUserUseCase', () => {
     jest.clearAllMocks();
   });
 
-  it('cria usuário, normaliza email e retorna a senha gerada em texto plano', async () => {
-    mockUserRepository.getUserByEmail.mockResolvedValue(null);
-    mockUserRepository.createUser.mockResolvedValue({ ...usuarioBase });
+  it('cria usuário, normaliza email e retorna user (sem senhaHash) + senhaGerada em texto plano', async () => {
+    mockUserRepository.findByEmail.mockResolvedValue(null);
+    mockUserRepository.create.mockResolvedValue({ ...usuarioBase });
     mockPasswordHasher.hash.mockResolvedValue(FAKE_HASH);
 
     const result = await useCase.execute({
@@ -53,12 +53,12 @@ describe('CreateUserUseCase', () => {
       nome: NOME,
     });
 
-    expect(mockUserRepository.getUserByEmail).toHaveBeenCalledWith(
+    expect(mockUserRepository.findByEmail).toHaveBeenCalledWith(
       EMAIL_NOVO_NORMALIZADO,
       undefined,
     );
     expect(mockPasswordHasher.hash).toHaveBeenCalledTimes(1);
-    expect(mockUserRepository.createUser).toHaveBeenCalledWith(
+    expect(mockUserRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         email: EMAIL_NOVO_NORMALIZADO,
         nome: NOME,
@@ -66,17 +66,25 @@ describe('CreateUserUseCase', () => {
       }),
     );
 
-    expect(result.senhaHash).not.toBe(FAKE_HASH);
-    expect(result.senhaHash).toHaveLength(SENHA_GERADA_LENGTH);
+    expect(result.user).not.toHaveProperty('senhaHash');
+    expect(result.user).toEqual({
+      id: usuarioBase.id,
+      nome: usuarioBase.nome,
+      email: usuarioBase.email,
+      createdAt: usuarioBase.createdAt,
+      updatedAt: usuarioBase.updatedAt,
+    });
+    expect(result.senhaGerada).toHaveLength(SENHA_GERADA_LENGTH);
+    expect(result.senhaGerada).not.toBe(FAKE_HASH);
   });
 
   it('lança ConflictException quando email já existe', async () => {
-    mockUserRepository.getUserByEmail.mockResolvedValue(usuarioBase);
+    mockUserRepository.findByEmail.mockResolvedValue(usuarioBase);
 
     await expect(
       useCase.execute({ email: EMAIL_EXISTENTE, nome: 'Outro' }),
     ).rejects.toBeInstanceOf(ConflictException);
-    expect(mockUserRepository.createUser).not.toHaveBeenCalled();
+    expect(mockUserRepository.create).not.toHaveBeenCalled();
     expect(mockPasswordHasher.hash).not.toHaveBeenCalled();
   });
 });

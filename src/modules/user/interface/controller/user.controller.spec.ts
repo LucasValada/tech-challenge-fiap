@@ -77,13 +77,12 @@ describe('UserController', () => {
     expect(mockUpdateUser.execute).toHaveBeenCalledWith(USER_ID, dto);
   });
 
-  it('DELETE /:id delega para DeleteUserUseCase com o id', async () => {
-    const deletado = { id: USER_ID };
-    mockDeleteUser.execute.mockResolvedValue(deletado);
+  it('DELETE /:id delega para DeleteUserUseCase com o id (sem body no retorno)', async () => {
+    mockDeleteUser.execute.mockResolvedValue(undefined);
 
     const result = await controller.deleteUser(USER_ID);
 
-    expect(result).toBe(deletado);
+    expect(result).toBeUndefined();
     expect(mockDeleteUser.execute).toHaveBeenCalledWith(USER_ID);
   });
 });

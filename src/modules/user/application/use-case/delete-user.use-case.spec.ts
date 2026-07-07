@@ -2,21 +2,20 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { DeleteUserUseCase } from './delete-user.use-case';
 
-const USER_ID_EXISTENTE = 'uuid-existente';
-const USER_ID_INEXISTENTE = 'uuid-inexistente';
+const USER_ID = 'user-uuid';
 
-const mockUserRepository = {
-  getUserById: jest.fn(),
-  deleteUser: jest.fn(),
-};
-
-const usuarioBase = {
-  id: USER_ID_EXISTENTE,
-  nome: 'Admin Teste',
-  email: 'usuario.teste@example.com',
-  senhaHash: 'fake-hash-for-tests',
+const usuarioMock = {
+  id: USER_ID,
+  nome: 'Admin',
+  email: 'admin@teste.com',
+  senhaHash: '$2a$10$secret',
   createdAt: new Date(),
   updatedAt: new Date(),
+};
+
+const mockUserRepository = {
+  findById: jest.fn(),
+  delete: jest.fn(),
 };
 
 describe('DeleteUserUseCase', () => {
@@ -35,23 +34,20 @@ describe('DeleteUserUseCase', () => {
   });
 
   it('deleta o usuário quando existe', async () => {
-    mockUserRepository.getUserById.mockResolvedValue(usuarioBase);
-    mockUserRepository.deleteUser.mockResolvedValue(usuarioBase);
+    mockUserRepository.findById.mockResolvedValue(usuarioMock);
+    mockUserRepository.delete.mockResolvedValue(usuarioMock);
 
-    const result = await useCase.execute(USER_ID_EXISTENTE);
+    await useCase.execute(USER_ID);
 
-    expect(result).toBe(usuarioBase);
-    expect(mockUserRepository.deleteUser).toHaveBeenCalledWith(
-      USER_ID_EXISTENTE,
-    );
+    expect(mockUserRepository.delete).toHaveBeenCalledWith(USER_ID);
   });
 
   it('lança NotFoundException quando o usuário não existe', async () => {
-    mockUserRepository.getUserById.mockResolvedValue(null);
+    mockUserRepository.findById.mockResolvedValue(null);
 
-    await expect(useCase.execute(USER_ID_INEXISTENTE)).rejects.toBeInstanceOf(
+    await expect(useCase.execute('inexistente')).rejects.toBeInstanceOf(
       NotFoundException,
     );
-    expect(mockUserRepository.deleteUser).not.toHaveBeenCalled();
+    expect(mockUserRepository.delete).not.toHaveBeenCalled();
   });
 });
