@@ -12,7 +12,7 @@ export class GetVeiculoByIdUseCase {
   async execute(id: string): Promise<Veiculo> {
     const veiculo = await this.veiculoRepository.findById(id);
     if (!veiculo) {
-      throw new NotFoundException('Veículo nao encontrado');
+      throw new NotFoundException('Veículo não encontrado');
     }
     return veiculo;
   }

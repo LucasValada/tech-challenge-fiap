@@ -11,7 +11,7 @@ const mockOrdemRepo = {
   transicionarStatus: jest.fn(),
   findByIdComDetalhes: jest.fn(),
 };
-const mockClienteRepo = { getOne: jest.fn() };
+const mockClienteRepo = { findById: jest.fn() };
 const mockEmailSender = { enviarOrcamento: jest.fn() };
 
 const detalhesView = {
@@ -58,7 +58,7 @@ describe('EnviarOrcamentoUseCase', () => {
     mockOrdemRepo.contarLinhas.mockResolvedValue({ servicos: 1, itens: 0 });
     mockOrdemRepo.transicionarStatus.mockResolvedValue({});
     mockOrdemRepo.findByIdComDetalhes.mockResolvedValue(detalhesView);
-    mockClienteRepo.getOne.mockResolvedValue({ email: 'joao@email.com' });
+    mockClienteRepo.findById.mockResolvedValue({ email: 'joao@email.com' });
     mockEmailSender.enviarOrcamento.mockResolvedValue(undefined);
 
     const result = await useCase.execute('ordem-1', 'usuario-1');
@@ -79,7 +79,7 @@ describe('EnviarOrcamentoUseCase', () => {
     mockOrdemRepo.contarLinhas.mockResolvedValue({ servicos: 1, itens: 0 });
     mockOrdemRepo.transicionarStatus.mockResolvedValue({});
     mockOrdemRepo.findByIdComDetalhes.mockResolvedValue(detalhesView);
-    mockClienteRepo.getOne.mockResolvedValue({ email: null });
+    mockClienteRepo.findById.mockResolvedValue({ email: null });
 
     await useCase.execute('ordem-1', 'usuario-1');
 

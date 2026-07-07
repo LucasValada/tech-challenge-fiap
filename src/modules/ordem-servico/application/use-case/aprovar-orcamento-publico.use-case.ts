@@ -51,7 +51,12 @@ export class AprovarOrcamentoPublicoUseCase {
       codigoNormalizado,
       placaNormalizada,
     );
+    if (!view) {
+      throw new NotFoundException(
+        'Ordem de serviço não encontrada após aprovação',
+      );
+    }
 
-    return view!;
+    return view;
   }
 }

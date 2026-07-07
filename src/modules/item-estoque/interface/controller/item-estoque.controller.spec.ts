@@ -130,7 +130,7 @@ describe('ItemEstoqueController', () => {
 
   it('propaga NotFoundException do use case', async () => {
     mockGetById.execute.mockRejectedValue(
-      new NotFoundException('Item de estoque nao encontrado'),
+      new NotFoundException('Item de estoque não encontrado'),
     );
 
     await expect(controller.findById('inexistente')).rejects.toThrow(

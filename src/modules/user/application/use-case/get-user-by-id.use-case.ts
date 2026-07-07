@@ -12,7 +12,7 @@ export class GetUserByIdUseCase {
   async execute(id: string): Promise<Usuario> {
     const user = await this.userRepository.getUserById(id);
     if (!user) {
-      throw new NotFoundException('Usuário nao encontrado');
+      throw new NotFoundException('Usuário não encontrado');
     }
     return user;
   }

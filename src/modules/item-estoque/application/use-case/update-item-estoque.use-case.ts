@@ -24,7 +24,7 @@ export class UpdateItemEstoqueUseCase {
   ): Promise<ItemEstoque> {
     const item = await this.itemEstoqueRepository.findById(id);
     if (!item) {
-      throw new NotFoundException('Item de estoque nao encontrado');
+      throw new NotFoundException('Item de estoque não encontrado');
     }
     if (data.sku) {
       await garantirSkuUnico(this.itemEstoqueRepository, data.sku, id);

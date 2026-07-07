@@ -1,15 +1,26 @@
 import { Cliente } from '../entity/Cliente';
 
+export interface CreateClienteData {
+  nome: string;
+  telefone?: string | null;
+  email?: string | null;
+  cpfCnpj: string;
+  tipoPessoa: 'FISICA' | 'JURIDICA';
+}
+
+export interface UpdateClienteData {
+  nome?: string;
+  telefone?: string | null;
+  email?: string | null;
+  cpfCnpj?: string;
+  tipoPessoa?: 'FISICA' | 'JURIDICA';
+}
+
 export interface ClienteRepository {
-  getOne(id: string): Promise<Cliente | null>;
-
-  getAllCliente(): Promise<{ cliente: Cliente[]; count: number }>;
-
-  createCliente(client: Cliente): Promise<Cliente>;
-
-  getByCpfCnpj(cpfCnpj: string, excludeId?: string): Promise<Cliente | null>;
-
-  updateCliente(id: string, client: Cliente): Promise<Cliente>;
-
-  deleteCliente(id: string): Promise<void>;
+  create(data: CreateClienteData): Promise<Cliente>;
+  findAll(): Promise<{ cliente: Cliente[]; count: number }>;
+  findById(id: string): Promise<Cliente | null>;
+  findByCpfCnpj(cpfCnpj: string, excludeId?: string): Promise<Cliente | null>;
+  update(id: string, data: UpdateClienteData): Promise<Cliente>;
+  delete(id: string): Promise<Cliente>;
 }

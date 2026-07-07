@@ -11,7 +11,7 @@ export class DeleteVeiculoUseCase {
   async execute(id: string): Promise<void> {
     const veiculo = await this.veiculoRepository.findById(id);
     if (!veiculo) {
-      throw new NotFoundException('Veículo nao encontrado');
+      throw new NotFoundException('Veículo não encontrado');
     }
     await this.veiculoRepository.delete(id);
   }

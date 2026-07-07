@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   UseGuards,
@@ -59,7 +60,7 @@ export class ServicoController {
   @ApiOperation({ summary: 'Buscar serviço por ID' })
   @ApiResponse({ status: 200, description: 'Serviço encontrado' })
   @ApiResponse({ status: 404, description: 'Serviço não encontrado' })
-  findById(@Param('id') id: string) {
+  findById(@Param('id', ParseUUIDPipe) id: string) {
     return this.getServicoByIdUseCase.execute(id);
   }
 
@@ -67,7 +68,10 @@ export class ServicoController {
   @ApiOperation({ summary: 'Atualizar serviço' })
   @ApiResponse({ status: 200, description: 'Serviço atualizado com sucesso' })
   @ApiResponse({ status: 404, description: 'Serviço não encontrado' })
-  update(@Param('id') id: string, @Body() dto: UpdateServicoDto) {
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateServicoDto,
+  ) {
     return this.updateServicoUseCase.execute(id, dto);
   }
 
@@ -76,7 +80,7 @@ export class ServicoController {
   @ApiOperation({ summary: 'Deletar serviço' })
   @ApiResponse({ status: 204, description: 'Serviço deletado com sucesso' })
   @ApiResponse({ status: 404, description: 'Serviço não encontrado' })
-  async delete(@Param('id') id: string) {
+  async delete(@Param('id', ParseUUIDPipe) id: string) {
     await this.deleteServicoUseCase.execute(id);
   }
 }

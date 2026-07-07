@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ClienteRepository } from '../../domain/repository/cliente.repository';
+import { buscarClienteOuFalhar } from '../../domain/services/buscarClienteOuFalhar';
 
 @Injectable()
 export class DeleteClienteUseCase {
@@ -8,8 +9,8 @@ export class DeleteClienteUseCase {
     private readonly clienteRepository: ClienteRepository,
   ) {}
 
-  async execute(id: string) {
-    const response = await this.clienteRepository.deleteCliente(id);
-    return response;
+  async execute(id: string): Promise<void> {
+    await buscarClienteOuFalhar(this.clienteRepository, id);
+    await this.clienteRepository.delete(id);
   }
 }

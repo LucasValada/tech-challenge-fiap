@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   UseGuards,
@@ -56,7 +57,7 @@ export class UserController {
   @ApiOperation({ summary: 'Buscar usuário por ID' })
   @ApiResponse({ status: 200, description: 'Usuário encontrado' })
   @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
-  getUserById(@Param('id') id: string) {
+  getUserById(@Param('id', ParseUUIDPipe) id: string) {
     return this.getUserByIdUseCase.execute(id);
   }
 
@@ -78,7 +79,10 @@ export class UserController {
   @ApiResponse({ status: 200, description: 'Usuário atualizado com sucesso' })
   @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
   @ApiResponse({ status: 409, description: 'Email já cadastrado' })
-  updateUser(@Param('id') id: string, @Body() dto: UserUpdateDto) {
+  updateUser(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UserUpdateDto,
+  ) {
     return this.updateUserUseCase.execute(id, dto);
   }
 
@@ -86,7 +90,7 @@ export class UserController {
   @ApiOperation({ summary: 'Deletar usuário' })
   @ApiResponse({ status: 200, description: 'Usuário deletado com sucesso' })
   @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
-  deleteUser(@Param('id') id: string) {
+  deleteUser(@Param('id', ParseUUIDPipe) id: string) {
     return this.deleteUserUseCase.execute(id);
   }
 }
