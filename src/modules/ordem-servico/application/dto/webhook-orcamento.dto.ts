@@ -1,7 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsBoolean, IsString, Matches } from 'class-validator';
+import { StatusOrdemServico } from '../../domain/entity/OrdemServico';
 
 const CODIGO_OS_REGEX = /^OS-\d{4}-\d{6}$/;
+
+const STATUS_OS_VALUES: StatusOrdemServico[] = [
+  'RECEBIDA',
+  'EM_DIAGNOSTICO',
+  'AGUARDANDO_APROVACAO',
+  'EM_EXECUCAO',
+  'FINALIZADA',
+  'ENTREGUE',
+];
 
 export class WebhookOrcamentoDto {
   @ApiProperty({
@@ -23,12 +33,17 @@ export class WebhookOrcamentoDto {
 }
 
 export class WebhookOrcamentoResponseDto {
-  @ApiProperty({ example: 'OS-2026-000001' })
+  @ApiProperty({
+    description: 'Código da OS afetada',
+    example: 'OS-2026-000001',
+  })
   codigo!: string;
 
   @ApiProperty({
+    description:
+      'Status resultante após processar a decisão (EM_EXECUCAO se aprovado, EM_DIAGNOSTICO se recusado)',
     example: 'EM_EXECUCAO',
-    description: 'Status resultante após processar a decisão',
+    enum: STATUS_OS_VALUES,
   })
-  status!: string;
+  status!: StatusOrdemServico;
 }

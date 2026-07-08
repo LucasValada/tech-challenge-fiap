@@ -52,6 +52,7 @@ export class ItemEstoqueController {
     status: 201,
     description: 'Item de estoque criado com sucesso',
   })
+  @ApiResponse({ status: 409, description: 'SKU já cadastrado' })
   create(@Body() dto: CreateItemEstoqueDto) {
     return this.createItemEstoqueUseCase.execute(dto);
   }
@@ -89,7 +90,11 @@ export class ItemEstoqueController {
     description: 'Item de estoque atualizado com sucesso',
   })
   @ApiResponse({ status: 404, description: 'Item de estoque não encontrado' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateItemEstoqueDto) {
+  @ApiResponse({ status: 409, description: 'SKU já cadastrado por outro item' })
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateItemEstoqueDto,
+  ) {
     return this.updateItemEstoqueUseCase.execute(id, dto);
   }
 

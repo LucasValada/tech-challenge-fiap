@@ -23,7 +23,7 @@ export class RelatorioOrdemServicoController {
 
   @Get('tempo-medio-servicos')
   @ApiOperation({
-    summary: 'Tempo médio de execução por tipo de serviço',
+    summary: 'Obter tempo médio de execução por tipo de serviço',
     description:
       'Calcula o tempo médio (em minutos) entre createdAt e finalizadaAt das ordens de serviço, agrupado por tipo de serviço. Considera apenas OS com finalizadaAt preenchido.',
   })
