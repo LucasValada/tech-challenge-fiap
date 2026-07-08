@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class UsuarioCreateDto {
   @IsString()
@@ -22,21 +22,62 @@ export class UsuarioCreateDto {
 }
 
 export class UserUpdateDto {
+  @IsOptional()
   @IsEmail()
-  @IsNotEmpty()
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Email do usuário',
     example: 'example@gmail.com',
-    required: true,
   })
-  email!: string;
+  email?: string;
 
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Nome do usuário',
     example: 'John Doe',
-    required: true,
   })
+  nome?: string;
+}
+
+export class UserResponseDto {
+  @ApiProperty({ description: 'ID do usuário' })
+  id!: string;
+
+  @ApiProperty({ description: 'Nome do usuário' })
   nome!: string;
+
+  @ApiProperty({ description: 'Email do usuário' })
+  email!: string;
+
+  @ApiProperty({ description: 'Data de criação' })
+  createdAt!: Date;
+
+  @ApiProperty({ description: 'Data da última atualização' })
+  updatedAt!: Date;
+}
+
+export class UserListResponseDto {
+  @ApiProperty({
+    description: 'Usuários cadastrados',
+    type: [UserResponseDto],
+  })
+  user!: UserResponseDto[];
+
+  @ApiProperty({ description: 'Total de usuários' })
+  count!: number;
+}
+
+export class UserCreatedResponseDto {
+  @ApiProperty({
+    description: 'Usuário criado',
+    type: UserResponseDto,
+  })
+  user!: UserResponseDto;
+
+  @ApiProperty({
+    description: 'Senha gerada em texto puro (mostrada apenas nesta resposta)',
+    example: 'aB3xY9zK',
+  })
+  senhaGerada!: string;
 }

@@ -6,8 +6,8 @@ export async function garantirEmailUnico(
   email: string,
   excludeId?: string,
 ): Promise<void> {
-  const existente = await userRepository.getUserByEmail(email, excludeId);
+  const existente = await userRepository.findByEmail(email, excludeId);
   if (existente) {
-    throw new ConflictException('Email ja cadastrado');
+    throw new ConflictException('Email já cadastrado');
   }
 }

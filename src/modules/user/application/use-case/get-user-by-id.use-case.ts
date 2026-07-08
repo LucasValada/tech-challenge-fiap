@@ -1,6 +1,8 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { UserRepository } from '../../domain/repository/user.repository';
-import { Usuario } from '../../domain/entity/User';
+import { buscarUsuarioOuFalhar } from '../../domain/services/buscarUsuarioOuFalhar';
+import { UserResponseDto } from '../dto/user.dto';
+import { toUserResponse } from '../mappers/toUserResponse';
 
 @Injectable()
 export class GetUserByIdUseCase {
@@ -9,11 +11,8 @@ export class GetUserByIdUseCase {
     private readonly userRepository: UserRepository,
   ) {}
 
-  async execute(id: string): Promise<Usuario> {
-    const user = await this.userRepository.getUserById(id);
-    if (!user) {
-      throw new NotFoundException('Usuário não encontrado');
-    }
-    return user;
+  async execute(id: string): Promise<UserResponseDto> {
+    const usuario = await buscarUsuarioOuFalhar(this.userRepository, id);
+    return toUserResponse(usuario);
   }
 }

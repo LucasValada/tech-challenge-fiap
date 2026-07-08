@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { GetAllUsersUseCase } from './get-all-users.use-case';
 
 const mockUserRepository = {
-  getAllUser: jest.fn(),
+  findAll: jest.fn(),
 };
 
 describe('GetAllUsersUseCase', () => {
@@ -20,13 +20,32 @@ describe('GetAllUsersUseCase', () => {
     jest.clearAllMocks();
   });
 
-  it('delega para o repositório e retorna a lista', async () => {
-    const resultado = { user: [], count: 0 };
-    mockUserRepository.getAllUser.mockResolvedValue(resultado);
+  it('mapeia usuários para UserResponseDto omitindo senhaHash', async () => {
+    const now = new Date();
+    mockUserRepository.findAll.mockResolvedValue({
+      user: [
+        {
+          id: 'u1',
+          nome: 'Admin',
+          email: 'admin@teste.com',
+          senhaHash: '$2a$10$secret',
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+      count: 1,
+    });
 
     const result = await useCase.execute();
 
-    expect(result).toBe(resultado);
-    expect(mockUserRepository.getAllUser).toHaveBeenCalled();
+    expect(result.count).toBe(1);
+    expect(result.user[0]).not.toHaveProperty('senhaHash');
+    expect(result.user[0]).toEqual({
+      id: 'u1',
+      nome: 'Admin',
+      email: 'admin@teste.com',
+      createdAt: now,
+      updatedAt: now,
+    });
   });
 });
