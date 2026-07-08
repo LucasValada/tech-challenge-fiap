@@ -123,6 +123,7 @@ jobs:
           IMAGE="${{ needs.docker.outputs.image_tag }}"
           SHA_TAG=$(echo "$IMAGE" | tr '\n' ' ' | grep -oP 'sha-\w+' | head -1)
           FULL_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHA_TAG}"
+          FULL_TAG="${FULL_TAG,,}"
           docker pull "$FULL_TAG"
           kind load docker-image "$FULL_TAG" --name oficina-cluster
 
@@ -150,6 +151,7 @@ jobs:
           IMAGE="${{ needs.docker.outputs.image_tag }}"
           SHA_TAG=$(echo "$IMAGE" | tr '\n' ' ' | grep -oP 'sha-\w+' | head -1)
           FULL_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHA_TAG}"
+          FULL_TAG="${FULL_TAG,,}"
           sed "s|IMAGE_PLACEHOLDER|${FULL_TAG}|g" k8s/app/03-migration-job.yaml | kubectl apply -f -
           kubectl wait --for=condition=complete job/db-migration -n oficina --timeout=120s
 
@@ -158,6 +160,7 @@ jobs:
           IMAGE="${{ needs.docker.outputs.image_tag }}"
           SHA_TAG=$(echo "$IMAGE" | tr '\n' ' ' | grep -oP 'sha-\w+' | head -1)
           FULL_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHA_TAG}"
+          FULL_TAG="${FULL_TAG,,}"
           sed "s|IMAGE_PLACEHOLDER|${FULL_TAG}|g" k8s/app/04-deployment.yaml | kubectl apply -f -
           kubectl apply -f k8s/app/05-service.yaml
           kubectl apply -f k8s/app/06-hpa.yaml
