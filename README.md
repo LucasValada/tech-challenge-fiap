@@ -16,6 +16,7 @@ Sistema de gerenciamento de oficina mecânica desenvolvido para o Tech Challenge
 - [Execução com Docker](#execução-com-docker-recomendado)
 - [Execução local (desenvolvimento)](#execução-local-desenvolvimento)
 - [Variáveis de ambiente](#variáveis-de-ambiente)
+- [Configuração de email (Ethereal)](#configuração-de-email-ethereal)
 - [Autenticação](#autenticação)
 - [Documentação da API](#documentação-da-api)
 - [Endpoints da API](#endpoints-da-api)
@@ -272,7 +273,55 @@ Copie `.env.example` para `.env` e preencha:
 | `MAIL_FROM` | não | Remetente padrão dos emails |
 | `WEBHOOK_ORCAMENTO_TOKEN` | sim | Token compartilhado para autenticar `POST /webhooks/orcamento` |
 
-Para o envio de email em desenvolvimento, crie uma conta gratuita em [ethereal.email](https://ethereal.email) e use as credenciais geradas.
+Para o envio de email em desenvolvimento, siga o passo a passo da seção [Configuração de email (Ethereal)](#configuração-de-email-ethereal).
+
+## Configuração de email (Ethereal)
+
+O envio de email de orçamento, finalização e entrega da OS é feito via SMTP. Para não depender de um provedor real em ambiente de desenvolvimento, a aplicação foi pensada para funcionar com [Ethereal](https://ethereal.email), um SMTP falso e gratuito que captura toda mensagem enviada e disponibiliza uma URL de preview (nenhum email chega ao destinatário real).
+
+### 1. Criar uma conta Ethereal
+
+1. Acesse [https://ethereal.email/create](https://ethereal.email/create)
+2. Clique em **Create Ethereal Account** — a conta é gerada instantaneamente, sem cadastro nem confirmação de email
+3. A página exibe as credenciais SMTP:
+
+```
+Name:     Ethereal <ethereal.user@ethereal.email>
+Username: xxxxxxxxxxxxxxxxxx@ethereal.email
+Password: yyyyyyyyyyyyyyyyyy
+Host:     smtp.ethereal.email
+Port:     587
+Security: STARTTLS
+```
+
+> **Anote as credenciais** — a página não fica salva. Se perder, basta gerar uma conta nova.
+
+### 2. Preencher o `.env`
+
+Cole os valores gerados nas variáveis `MAIL_*` do `.env`:
+
+```env
+MAIL_HOST="smtp.ethereal.email"
+MAIL_PORT=587
+MAIL_USER="<Username gerado pelo Ethereal>"
+MAIL_PASS="<Password gerada pelo Ethereal>"
+MAIL_FROM='"Oficina SOAT" <noreply@oficina.com>'
+```
+
+O `MAIL_FROM` pode ser qualquer valor — o Ethereal aceita qualquer remetente.
+
+### 3. Ver os emails enviados
+
+Após disparar qualquer email pela API (`POST /ordens-servico/:id/enviar-orcamento` ou uma transição para `FINALIZADA`/`ENTREGUE`), o log da aplicação imprime uma **Preview URL**:
+
+```
+LOG [NestMailerEmailSender] Email de orçamento enviado para cliente@teste.com (OS: OS-2026-000001)
+LOG [NestMailerEmailSender] Preview URL (Ethereal): https://ethereal.email/message/akw7gic6bekDZcIrak6...
+```
+
+Abra a URL no navegador para ver o email exatamente como o cliente receberia (assunto, corpo em texto puro, HTML se houver). Também é possível abrir [https://ethereal.email/messages](https://ethereal.email/messages) logado com a conta criada para ver todos os emails na caixa de entrada.
+
+> **Em produção**, substitua `MAIL_HOST`/`MAIL_PORT`/`MAIL_USER`/`MAIL_PASS` por um provedor SMTP real (SendGrid, Amazon SES, Gmail, etc). Se qualquer envio falhar, a aplicação registra o erro no log e segue o fluxo — o email é best-effort e uma falha não bloqueia a transição de status da OS.
 
 ## Autenticação
 
