@@ -166,6 +166,29 @@ jobs:
           kubectl apply -f k8s/app/06-hpa.yaml
           kubectl rollout status deployment/oficina-api -n oficina --timeout=180s
 
+      - name: Diagnose cluster state on failure
+        if: failure()
+        run: |
+          echo "=== Namespaces ==="
+          kubectl get ns
+          echo
+          echo "=== All resources in oficina namespace ==="
+          kubectl get all -n oficina -o wide
+          echo
+          echo "=== Recent events ==="
+          kubectl get events -n oficina --sort-by=.lastTimestamp | tail -40
+          echo
+          echo "=== Pod descriptions ==="
+          kubectl describe pods -n oficina
+          echo
+          echo "=== App container logs (current) ==="
+          for pod in $(kubectl get pods -n oficina -l app=oficina-api -o name); do
+            echo "--- $pod ---"
+            kubectl logs "$pod" -n oficina --tail=200 --all-containers=true || true
+            echo "--- $pod (previous) ---"
+            kubectl logs "$pod" -n oficina --tail=200 --all-containers=true --previous || true
+          done
+
       - name: Smoke test
         run: |
           sleep 10
