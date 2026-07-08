@@ -25,7 +25,7 @@ import { GetVeiculoByIdUseCase } from '../../application/use-case/get-veiculo-by
 import { UpdateVeiculoUseCase } from '../../application/use-case/update-veiculo.use-case';
 import { DeleteVeiculoUseCase } from '../../application/use-case/delete-veiculo.use-case';
 
-@ApiTags('Veiculos')
+@ApiTags('Veículos')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('veiculos')

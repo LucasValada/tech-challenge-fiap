@@ -13,7 +13,8 @@ import {
 export class CreateVeiculoDto {
   @ApiProperty({
     example: 'ABC1D23',
-    description: 'Brazilian license plate (Mercosul ABC1D23 or legacy ABC1234)',
+    description:
+      'Placa do veículo no padrão Mercosul (ABC1D23) ou legacy (ABC1234); é normalizada para uppercase e sem hífens',
   })
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.replaceAll('-', '').toUpperCase() : value,
@@ -26,23 +27,36 @@ export class CreateVeiculoDto {
   })
   placa!: string;
 
-  @ApiProperty({ example: 'Toyota' })
+  @ApiProperty({
+    example: 'Toyota',
+    description: 'Marca do veículo',
+  })
   @IsString()
   @IsNotEmpty()
   marca!: string;
 
-  @ApiProperty({ example: 'Corolla' })
+  @ApiProperty({
+    example: 'Corolla',
+    description: 'Modelo do veículo',
+  })
   @IsString()
   @IsNotEmpty()
   modelo!: string;
 
-  @ApiProperty({ example: 2023 })
+  @ApiProperty({
+    example: 2023,
+    description: 'Ano de fabricação do veículo (entre 1900 e ano atual + 1)',
+  })
   @IsInt()
   @Min(1900)
   @Max(new Date().getFullYear() + 1)
   ano!: number;
 
-  @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000' })
+  @ApiProperty({
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    description: 'Identificador (UUID) do cliente dono do veículo',
+    format: 'uuid',
+  })
   @IsUUID()
   @IsNotEmpty()
   clienteId!: string;

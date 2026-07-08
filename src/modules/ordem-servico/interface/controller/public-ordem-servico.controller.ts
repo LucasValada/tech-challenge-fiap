@@ -55,7 +55,7 @@ export class PublicOrdemServicoController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Cliente aprova o orçamento da OS (transiciona AGUARDANDO_APROVACAO → EM_EXECUCAO)',
+      'Aprovar orçamento da OS (transiciona AGUARDANDO_APROVACAO → EM_EXECUCAO)',
   })
   @ApiResponse({
     status: 200,

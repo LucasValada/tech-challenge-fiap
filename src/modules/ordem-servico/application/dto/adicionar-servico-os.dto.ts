@@ -3,8 +3,9 @@ import { IsInt, IsUUID, Min } from 'class-validator';
 
 export class AdicionarServicoOSDto {
   @ApiProperty({
-    description: 'ID do serviço cadastrado',
+    description: 'Identificador (UUID) do serviço cadastrado',
     example: '3f2b8b7e-6f4e-4e2b-9a41-ddc5d8a1b2c3',
+    format: 'uuid',
   })
   @IsUUID()
   servicoId!: string;

@@ -25,7 +25,7 @@ import { GetServicoByIdUseCase } from '../../application/use-case/get-servico-by
 import { UpdateServicoUseCase } from '../../application/use-case/update-servico.use-case';
 import { DeleteServicoUseCase } from '../../application/use-case/delete-servico.use-case';
 
-@ApiTags('Servicos')
+@ApiTags('Serviços')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('servicos')

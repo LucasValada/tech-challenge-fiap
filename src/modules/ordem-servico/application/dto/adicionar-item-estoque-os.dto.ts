@@ -3,8 +3,9 @@ import { IsInt, IsUUID, Min } from 'class-validator';
 
 export class AdicionarItemEstoqueOSDto {
   @ApiProperty({
-    description: 'ID do item de estoque',
+    description: 'Identificador (UUID) do item de estoque cadastrado',
     example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    format: 'uuid',
   })
   @IsUUID()
   itemEstoqueId!: string;

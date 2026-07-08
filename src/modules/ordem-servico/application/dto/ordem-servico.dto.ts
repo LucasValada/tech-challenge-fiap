@@ -16,8 +16,9 @@ import { PLACA_REGEX } from './ordem-servico.constants';
 
 export class CreateOrdemServicoServicoLinhaDto {
   @ApiProperty({
-    description: 'ID do serviço cadastrado',
+    description: 'Identificador (UUID) do serviço cadastrado',
     example: '3f2b8b7e-6f4e-4e2b-9a41-ddc5d8a1b2c3',
+    format: 'uuid',
   })
   @IsUUID()
   servicoId!: string;
@@ -30,8 +31,9 @@ export class CreateOrdemServicoServicoLinhaDto {
 
 export class CreateOrdemServicoItemEstoqueLinhaDto {
   @ApiProperty({
-    description: 'ID do item de estoque',
+    description: 'Identificador (UUID) do item de estoque cadastrado',
     example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    format: 'uuid',
   })
   @IsUUID()
   itemEstoqueId!: string;
