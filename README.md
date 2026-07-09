@@ -5,6 +5,7 @@ Sistema de gerenciamento de oficina mecânica desenvolvido para o Tech Challenge
 ## Índice
 
 - [Objetivos](#objetivos)
+- [Vídeo demonstrativo](#vídeo-demonstrativo)
 - [Clean Architecture](#clean-architecture)
 - [Arquitetura](#arquitetura)
   - [Componentes da aplicação](#componentes-da-aplicação)
@@ -35,6 +36,12 @@ Sistema de gerenciamento de oficina mecânica desenvolvido para o Tech Challenge
 - Controlar estoque de peças e insumos com alerta de estoque mínimo
 - Monitorar tempo médio de execução dos serviços
 - Prover infraestrutura reprodutível via Terraform e Kubernetes, com deploy automatizado por pipeline CI/CD
+
+## Vídeo demonstrativo
+
+> _Em breve._ Vídeo (YouTube, não listado, até 15 minutos) cobrindo deploy da aplicação, execução do CI/CD, consumo das APIs e escalabilidade automática do HPA sob carga.
+
+**Link:** _a ser adicionado_
 
 ## Clean Architecture
 
@@ -68,28 +75,32 @@ src/infra/database/prisma/repositories/
 graph TB
     Client[Cliente HTTP<br/>Swagger UI / curl / Postman]
 
-    subgraph Interface[Camada Interface]
+    subgraph Interface[Camada Interface — src/modules/&lt;m&gt;/interface]
         Controllers[Controllers + Guards<br/>JwtAuthGuard, WebhookTokenGuard]
         DTOs[DTOs de entrada e resposta<br/>com class-validator]
     end
 
-    subgraph Application[Camada Application]
+    subgraph Application[Camada Application — src/modules/&lt;m&gt;/application]
         UseCases[Use Cases<br/>1 classe = 1 responsabilidade]
         Mappers[Mappers de resposta<br/>toUserResponse etc]
         Shared[Shared helpers<br/>traduzirErroDominio]
     end
 
-    subgraph Domain[Camada Domain]
+    subgraph Domain[Camada Domain — src/modules/&lt;m&gt;/domain]
         Entities[Entities<br/>OrdemServico, Cliente, Veiculo etc]
         DomainSvc[Domain Services puros<br/>garantirCpfCnpjUnico, buscarClienteOuFalhar<br/>maquinaDeEstadosOS, calcularTotaisOS]
-        Repos[Repository Interfaces<br/>+ Errors tipados]
+        Repos[Repository Interfaces<br/>+ Errors tipados<br/>EmailSender, PasswordHasher, TokenIssuer]
     end
 
-    subgraph Infra[Camada Infra]
-        PrismaRepos[Prisma Repositories<br/>implementam as interfaces do domain]
-        EmailAdapter[NestMailer EmailSender<br/>implementa EmailSender do mail/domain]
-        Hasher[BcryptPasswordHasher]
-        Jwt[JwtTokenIssuer]
+    subgraph ModuleInfra[Adapters por módulo — src/modules/&lt;m&gt;/infra]
+        Hasher[BcryptPasswordHasher<br/>auth/infra e user/infra]
+        Jwt[JwtTokenIssuer<br/>auth/infra]
+        EmailAdapter[NestMailerEmailSender<br/>mail/infra, provider EMAIL_SENDER]
+    end
+
+    subgraph SharedInfra[Infra compartilhada — src/infra e src/modules/prisma]
+        PrismaSvc[PrismaService<br/>pg.Pool + PrismaPg adapter]
+        PrismaRepos[Prisma Repositories<br/>src/infra/database/prisma/repositories]
     end
 
     Client --> Controllers
@@ -100,23 +111,25 @@ graph TB
     UseCases --> Mappers
     UseCases --> Shared
     DomainSvc --> Entities
-    Repos -.-> PrismaRepos
-    PrismaRepos --> Postgres[(PostgreSQL 17)]
-    UseCases -.-> EmailAdapter
+    Repos -.->|implementado por| PrismaRepos
+    Repos -.->|implementado por| Hasher
+    Repos -.->|implementado por| Jwt
+    Repos -.->|implementado por| EmailAdapter
+    PrismaRepos --> PrismaSvc
+    PrismaSvc --> Postgres[(PostgreSQL 17)]
     EmailAdapter --> SMTP[SMTP Ethereal]
-    UseCases -.-> Hasher
-    UseCases -.-> Jwt
 ```
 
 ### Infraestrutura provisionada
 
 ```mermaid
 graph TB
-    Host[Host localhost:3000]
+    HostApp[Host localhost:3000]
+    HostDb[Host localhost:5432]
 
     subgraph KindCluster[Kind Cluster provisionado por Terraform]
         subgraph ControlPlane[Control Plane]
-            CP[oficina-cluster-control-plane<br/>extra_port_mappings 30080->3000, 30432->5432]
+            CP[oficina-cluster-control-plane<br/>extra_port_mappings:<br/>host 3000 ↔ NodePort 30080<br/>host 5432 ↔ NodePort 30432]
         end
 
         subgraph Workers[Workers]
@@ -127,10 +140,11 @@ graph TB
         subgraph NamespaceOficina[Namespace oficina]
             HPA[HorizontalPodAutoscaler<br/>min 2, max 10<br/>CPU 70%, Memória 80%]
             Deploy[Deployment oficina-api<br/>2 réplicas com readiness/liveness]
-            SvcApi[Service oficina-api<br/>NodePort 30080]
+            SvcApi[Service oficina-api<br/>NodePort 30080 → containerPort 3000]
             SS[StatefulSet postgres<br/>1 réplica]
             PVC[PVC 5Gi<br/>volumeClaimTemplates]
-            SvcPg[Service postgres<br/>ClusterIP + NodePort 30432]
+            SvcPgCluster[Service postgres<br/>ClusterIP :5432<br/>consumido pelos pods da API]
+            SvcPgNode[Service postgres-nodeport<br/>NodePort 30432 → 5432<br/>acesso opcional externo]
             CM[ConfigMap app-config<br/>APPLICATION_PORT, MAIL_HOST etc]
             Sec[Secret app-secret<br/>DATABASE_URL, JWT_SECRET, MAIL_PASS etc]
             Job[Job db-migration<br/>prisma migrate deploy]
@@ -140,18 +154,20 @@ graph TB
             MS[Metrics Server<br/>--kubelet-insecure-tls]
         end
 
-        HPA -.-> Deploy
+        HPA -.->|escala CPU 70%, mem 80%| Deploy
         SvcApi --> Deploy
         SS --> PVC
-        SvcPg --> SS
+        SvcPgCluster --> SS
+        SvcPgNode --> SS
         Deploy -.->|envFrom| CM
         Deploy -.->|envFrom| Sec
-        Deploy -.->|DATABASE_URL| SvcPg
-        Job --> SvcPg
+        Deploy -.->|DATABASE_URL| SvcPgCluster
+        Job --> SvcPgCluster
         MS -.->|coleta métricas| Deploy
     end
 
-    Host -.->|host_port 3000| CP
+    HostApp -.->|host_port 3000| CP
+    HostDb -.->|host_port 5432| CP
     CP --- W1
     CP --- W2
 ```
