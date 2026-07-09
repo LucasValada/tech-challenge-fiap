@@ -191,5 +191,65 @@ jobs:
 
       - name: Smoke test
         run: |
-          sleep 10
-          curl --fail http://localhost:3000/api || echo "Swagger UI not reachable — check NodePort mapping"
+          set -euo pipefail
+          API=http://localhost:3000
+
+          echo "=== 1. Aguarda /api ficar disponível ==="
+          for i in $(seq 1 30); do
+            if curl -sf "$API/api" > /dev/null; then
+              echo "API ready após ${i}s"
+              break
+            fi
+            if [ "$i" = 30 ]; then
+              echo "API não respondeu em 30s"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          echo "=== 2. Login admin ==="
+          TOKEN=$(curl -sf -X POST "$API/auth/login" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"admin@oficina.com","senha":"senha123"}' | jq -er '.accessToken')
+          echo "Token OK (${#TOKEN} chars)"
+          AUTH="Authorization: Bearer $TOKEN"
+
+          echo "=== 3. Cria cliente PF ==="
+          CLIENTE_ID=$(curl -sf -X POST "$API/cliente" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d '{"nome":"Smoke Test","tipoPessoa":"FISICA","cpfCnpj":"52998224725"}' | jq -er '.id')
+          echo "Cliente $CLIENTE_ID"
+
+          echo "=== 4. Cria veículo ==="
+          curl -sf -X POST "$API/veiculos" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d "{\"clienteId\":\"$CLIENTE_ID\",\"placa\":\"ABC1D23\",\"marca\":\"Honda\",\"modelo\":\"Civic\",\"ano\":2020}" | jq -e '.id > ""' > /dev/null
+
+          echo "=== 5. Cria serviço ==="
+          SERVICO_ID=$(curl -sf -X POST "$API/servicos" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d '{"nome":"Troca de óleo","precoBase":150.00,"tempoEstimadoMin":30}' | jq -er '.id')
+          echo "Servico $SERVICO_ID"
+
+          echo "=== 6. Abre OS ==="
+          OS_JSON=$(curl -sf -X POST "$API/ordens-servico" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d "{\"cpfCnpj\":\"52998224725\",\"placa\":\"ABC1D23\",\"servicos\":[{\"servicoId\":\"$SERVICO_ID\",\"quantidade\":1}]}")
+          OS_ID=$(echo "$OS_JSON" | jq -er '.id')
+          OS_CODIGO=$(echo "$OS_JSON" | jq -er '.codigo')
+          echo "OS $OS_CODIGO (id=$OS_ID)"
+
+          echo "=== 7. Consulta OS por ID (autenticada) ==="
+          curl -sf "$API/ordens-servico/$OS_ID" -H "$AUTH" | jq -e '.status == "RECEBIDA"' > /dev/null
+          echo "Status RECEBIDA confirmado"
+
+          echo "=== 8. Consulta pública (sem token) ==="
+          curl -sf "$API/public/ordens-servico/$OS_CODIGO?placa=ABC1D23" | jq -e '.status == "RECEBIDA"' > /dev/null
+          echo "Endpoint público OK"
+
+          echo "=== 9. Auth negado sem token (401 esperado) ==="
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API/cliente")
+          [ "$HTTP_CODE" = "401" ] || { echo "Esperado 401, veio $HTTP_CODE"; exit 1; }
+          echo "401 confirmado"
+
+          echo "=== Smoke test OK ==="
