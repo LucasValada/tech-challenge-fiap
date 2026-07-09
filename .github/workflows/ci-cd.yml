@@ -272,12 +272,36 @@ jobs:
           [ "$COUNT" = "0" ] || { echo "Lista deveria excluir FINALIZADA/ENTREGUE, mas count=$COUNT"; exit 1; }
           echo "Filtro Fase 2 confirmado (count=0)"
 
-          echo "=== 13. Auth negado sem token (401 esperado) ==="
+          echo "=== 13. Webhook externo aprova orçamento de uma nova OS ==="
+          OS2_JSON=$(curl -sf -X POST "$API/ordens-servico" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d "{\"cpfCnpj\":\"52998224725\",\"placa\":\"ABC1D23\",\"servicos\":[{\"servicoId\":\"$SERVICO_ID\",\"quantidade\":1}]}")
+          OS2_ID=$(echo "$OS2_JSON" | jq -er '.id')
+          OS2_CODIGO=$(echo "$OS2_JSON" | jq -er '.codigo')
+          for status in EM_DIAGNOSTICO AGUARDANDO_APROVACAO; do
+            curl -sf -X POST "$API/ordens-servico/$OS2_ID/transicao-status" \
+              -H "$AUTH" -H "Content-Type: application/json" \
+              -d "{\"status\":\"$status\"}" > /dev/null
+          done
+          WEBHOOK_TOKEN=$(kubectl get secret app-secret -n oficina -o jsonpath='{.data.WEBHOOK_ORCAMENTO_TOKEN}' | base64 -d)
+          curl -sf -X POST "$API/webhooks/orcamento" \
+            -H "Content-Type: application/json" \
+            -H "X-Webhook-Token: $WEBHOOK_TOKEN" \
+            -d "{\"codigoOS\":\"$OS2_CODIGO\",\"aprovado\":true}" | jq -e '.status == "EM_EXECUCAO"' > /dev/null
+          echo "Webhook transicionou OS $OS2_CODIGO para EM_EXECUCAO"
+
+          echo "=== 14. Auth negado sem token (401 esperado) ==="
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API/cliente")
           [ "$HTTP_CODE" = "401" ] || { echo "Esperado 401, veio $HTTP_CODE"; exit 1; }
           echo "401 confirmado"
 
-          echo "=== 14. Valida réplicas disponíveis no deployment ==="
+          echo "=== 15. HPA provisionado ==="
+          kubectl get hpa oficina-api-hpa -n oficina > /dev/null
+          MIN=$(kubectl get hpa oficina-api-hpa -n oficina -o jsonpath='{.spec.minReplicas}')
+          MAX=$(kubectl get hpa oficina-api-hpa -n oficina -o jsonpath='{.spec.maxReplicas}')
+          echo "HPA configurado (min=$MIN, max=$MAX)"
+
+          echo "=== 16. Valida réplicas disponíveis no deployment ==="
           AVAILABLE=$(kubectl get deployment/oficina-api -n oficina -o jsonpath='{.status.availableReplicas}')
           [ "$AVAILABLE" = "2" ] || { echo "Esperado 2 réplicas disponíveis, veio $AVAILABLE"; exit 1; }
           echo "2 pods disponíveis servindo tráfego"
