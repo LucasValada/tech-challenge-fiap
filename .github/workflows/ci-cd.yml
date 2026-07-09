@@ -231,25 +231,55 @@ jobs:
             -d '{"nome":"Troca de óleo","precoBase":150.00,"tempoEstimadoMin":30}' | jq -er '.id')
           echo "Servico $SERVICO_ID"
 
-          echo "=== 6. Abre OS ==="
+          echo "=== 6. Cria item de estoque (INSUMO, 50 unidades) ==="
+          ITEM_ID=$(curl -sf -X POST "$API/itens-estoque" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d '{"nome":"Óleo 5W30","tipo":"INSUMO","sku":"SMOKE-OLE","precoUnitario":45.00,"quantidadeEstoque":50,"estoqueMinimo":10}' | jq -er '.id')
+          echo "Item $ITEM_ID"
+
+          echo "=== 7. Abre OS com 1 serviço + 4 unidades do item ==="
           OS_JSON=$(curl -sf -X POST "$API/ordens-servico" \
             -H "$AUTH" -H "Content-Type: application/json" \
-            -d "{\"cpfCnpj\":\"52998224725\",\"placa\":\"ABC1D23\",\"servicos\":[{\"servicoId\":\"$SERVICO_ID\",\"quantidade\":1}]}")
+            -d "{\"cpfCnpj\":\"52998224725\",\"placa\":\"ABC1D23\",\"servicos\":[{\"servicoId\":\"$SERVICO_ID\",\"quantidade\":1}],\"itens\":[{\"itemEstoqueId\":\"$ITEM_ID\",\"quantidade\":4}]}")
           OS_ID=$(echo "$OS_JSON" | jq -er '.id')
           OS_CODIGO=$(echo "$OS_JSON" | jq -er '.codigo')
           echo "OS $OS_CODIGO (id=$OS_ID)"
 
-          echo "=== 7. Consulta OS por ID (autenticada) ==="
+          echo "=== 8. Valida decremento de estoque (50 - 4 = 46) ==="
+          QTD=$(curl -sf "$API/itens-estoque/$ITEM_ID" -H "$AUTH" | jq -er '.quantidadeEstoque')
+          [ "$QTD" = "46" ] || { echo "Estoque esperado 46, veio $QTD"; exit 1; }
+          echo "Estoque decrementou para 46 (transação atômica OK)"
+
+          echo "=== 9. Consulta OS por ID (autenticada) ==="
           curl -sf "$API/ordens-servico/$OS_ID" -H "$AUTH" | jq -e '.status == "RECEBIDA"' > /dev/null
           echo "Status RECEBIDA confirmado"
 
-          echo "=== 8. Consulta pública (sem token) ==="
+          echo "=== 10. Consulta pública (sem token) ==="
           curl -sf "$API/public/ordens-servico/$OS_CODIGO?placa=ABC1D23" | jq -e '.status == "RECEBIDA"' > /dev/null
           echo "Endpoint público OK"
 
-          echo "=== 9. Auth negado sem token (401 esperado) ==="
+          echo "=== 11. Transiciona OS RECEBIDA → ENTREGUE (5 avanços lineares) ==="
+          for status in EM_DIAGNOSTICO AGUARDANDO_APROVACAO EM_EXECUCAO FINALIZADA ENTREGUE; do
+            resultado=$(curl -sf -X POST "$API/ordens-servico/$OS_ID/transicao-status" \
+              -H "$AUTH" -H "Content-Type: application/json" \
+              -d "{\"status\":\"$status\"}" | jq -er '.status')
+            [ "$resultado" = "$status" ] || { echo "Transição para $status falhou (veio $resultado)"; exit 1; }
+            echo "  → $status"
+          done
+
+          echo "=== 12. Valida filtro Fase 2 — OS ENTREGUE não aparece na listagem ==="
+          COUNT=$(curl -sf "$API/ordens-servico" -H "$AUTH" | jq -er '.count // (.ordens | length)')
+          [ "$COUNT" = "0" ] || { echo "Lista deveria excluir FINALIZADA/ENTREGUE, mas count=$COUNT"; exit 1; }
+          echo "Filtro Fase 2 confirmado (count=0)"
+
+          echo "=== 13. Auth negado sem token (401 esperado) ==="
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API/cliente")
           [ "$HTTP_CODE" = "401" ] || { echo "Esperado 401, veio $HTTP_CODE"; exit 1; }
           echo "401 confirmado"
+
+          echo "=== 14. Valida réplicas disponíveis no deployment ==="
+          AVAILABLE=$(kubectl get deployment/oficina-api -n oficina -o jsonpath='{.status.availableReplicas}')
+          [ "$AVAILABLE" = "2" ] || { echo "Esperado 2 réplicas disponíveis, veio $AVAILABLE"; exit 1; }
+          echo "2 pods disponíveis servindo tráfego"
 
           echo "=== Smoke test OK ==="
