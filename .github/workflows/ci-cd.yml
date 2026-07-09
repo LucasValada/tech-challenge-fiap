@@ -139,7 +139,7 @@ jobs:
         run: |
           kubectl apply -f k8s/00-namespace.yaml
           kubectl apply -f k8s/postgres/
-          kubectl wait --for=condition=ready pod -l app=postgres -n oficina --timeout=180s
+          kubectl rollout status statefulset/postgres -n oficina --timeout=180s
 
       - name: Apply app config and secrets
         run: |
