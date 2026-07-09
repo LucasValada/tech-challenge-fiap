@@ -51,12 +51,16 @@ Todos os módulos de negócio (`auth`, `cliente`, `mail`, `item-estoque`, `ordem
 src/modules/<módulo>/
 ├── interface/          → Controllers (HTTP), validações de entrada (DTOs), guards
 ├── application/        → Use cases (1 arquivo = 1 responsabilidade), mappers de resposta
-├── domain/             → Entities (regras de negócio), Repository interfaces, Domain services puros
+├── domain/             → Entities, Repository interfaces, Domain services puros
+├── infra/              → Adaptadores específicos do módulo (ex.: BcryptPasswordHasher
+│                         em auth/infra e user/infra, JwtTokenIssuer em auth/infra,
+│                         NestMailerEmailSender em mail/infra)
 └── <módulo>.module.ts  → Wire-up NestJS (providers, imports, exports)
 
 src/infra/database/prisma/repositories/
-                        → Implementações concretas dos Repository interfaces
-                          (adaptadores Prisma na camada infra, fora do módulo)
+                        → Prisma repositories centralizados, implementando as
+                          Repository interfaces expostas por cada domínio
+                          (usam o PrismaService de src/modules/prisma)
 ```
 
 **Princípios aplicados:**
@@ -143,6 +147,7 @@ graph TB
             SvcApi[Service oficina-api<br/>NodePort 30080 → containerPort 3000]
             SS[StatefulSet postgres<br/>1 réplica]
             PVC[PVC 5Gi<br/>volumeClaimTemplates]
+            PgSec[Secret postgres-secret<br/>POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB]
             SvcPgCluster[Service postgres<br/>ClusterIP :5432<br/>consumido pelos pods da API]
             SvcPgNode[Service postgres-nodeport<br/>NodePort 30432 → 5432<br/>acesso opcional externo]
             CM[ConfigMap app-config<br/>APPLICATION_PORT, MAIL_HOST etc]
@@ -157,6 +162,7 @@ graph TB
         HPA -.->|escala CPU 70%, mem 80%| Deploy
         SvcApi --> Deploy
         SS --> PVC
+        SS -.->|envFrom| PgSec
         SvcPgCluster --> SS
         SvcPgNode --> SS
         Deploy -.->|envFrom| CM
@@ -176,21 +182,21 @@ graph TB
 
 ```mermaid
 graph LR
-    Dev[Developer<br/>push para main]
-    GH[GitHub Actions<br/>ci-cd.yml]
+    Dev[Developer<br/>push ou PR em main ou develop]
+    GH[GitHub Actions<br/>ci-cd.yml<br/>concurrency cancela runs obsoletos<br/>actions com SHA pinning e node24]
 
     Dev --> GH
 
     subgraph Pipeline[Pipeline em 3 estágios]
-        S1[Estágio 1 - Test<br/>npm ci<br/>prisma generate<br/>npm test<br/>npm run build]
-        S2[Estágio 2 - Docker<br/>build imagem<br/>push para GHCR<br/>tag sha-xxx + latest]
-        S3[Estágio 3 - Deploy Kind<br/>terraform apply<br/>kind load docker-image<br/>Metrics Server + patch TLS<br/>kubectl apply k8s/postgres<br/>Job de migration<br/>kubectl apply k8s/app<br/>smoke test /api]
+        S1[Estágio 1 - Build and Test<br/>npm ci<br/>prisma generate<br/>npm test - 300 unitários<br/>npm run build]
+        S2[Estágio 2 - Docker<br/>setup-buildx-action<br/>build multi-stage<br/>fix Prisma .ts imports<br/>cache GHA<br/>push para GHCR - tag sha-xxx + latest na main]
+        S3[Estágio 3 - Deploy to Kind<br/>terraform apply provisiona cluster<br/>kind load docker-image<br/>Metrics Server + patch TLS<br/>kubectl apply k8s/postgres + rollout status<br/>Job de migration<br/>kubectl apply k8s/app<br/>Diagnose on failure - dumpa pods/events/logs<br/>Smoke test 16 verificações end-to-end]
 
         S1 --> S2 --> S3
     end
 
     GH --> S1
-    S3 --> Cluster[Kind Cluster efêmero<br/>com aplicação de pé]
+    S3 --> Cluster[Kind Cluster efêmero<br/>com aplicação validada]
 ```
 
 ## Justificativa do banco de dados
@@ -212,7 +218,7 @@ graph LR
 | Prisma | 7.x |
 | PostgreSQL | 17 |
 | Docker / Docker Compose | 29.x / 5.x |
-| Kubernetes | 1.35 (via Kind 0.32) |
+| Kubernetes | 1.35 (via Kind 0.27+) |
 | Terraform | 1.6+ |
 
 ## Pré-requisitos
@@ -582,7 +588,7 @@ kubectl apply -f k8s/00-namespace.yaml
 
 # Banco de dados (StatefulSet + Services + Secret)
 kubectl apply -f k8s/postgres/
-kubectl wait --for=condition=ready pod -l app=postgres -n oficina --timeout=180s
+kubectl rollout status statefulset/postgres -n oficina --timeout=180s
 
 # ConfigMap e Secrets da aplicação
 kubectl apply -f k8s/app/01-configmap.yaml
@@ -655,18 +661,18 @@ kind load docker-image oficina-api:local --name oficina-cluster
 
 ### 6. Pipeline CI/CD (GitHub Actions)
 
-O workflow `.github/workflows/ci-cd.yml` executa automaticamente em pushes para `main`:
+O workflow `.github/workflows/ci-cd.yml` executa automaticamente em **push e pull request** nas branches **`main` e `develop`**. Um bloco `concurrency` cancela runs anteriores da mesma branch/PR quando um novo commit chega, evitando fila de builds obsoletos. Todas as actions estão pinadas por SHA completo (segurança supply chain) nas versões que declaram `node24`.
 
 | Estágio | O que faz |
 |---|---|
-| **Build & Test** | `npm ci` → `prisma generate` → `npm test` → `npm run build` |
-| **Docker Image** | Constrói e publica no GitHub Container Registry (`ghcr.io`) |
-| **Deploy to Kind** | `terraform apply` → carrega imagem no Kind → `kubectl apply` → valida rollout |
+| **Build & Test** | `npm ci` → `npx prisma generate` → `npm test` (300 unit tests) → `npm run build` |
+| **Docker Image** | `docker/setup-buildx-action` → login no GHCR → build multi-stage com fix Prisma `.ts` imports → push com tag `sha-<hash>` (+ `latest` só na branch default) → cache GHA |
+| **Deploy to Kind** | Instala Kind + kubectl + Terraform → `terraform apply` provisiona o cluster → `kind load docker-image` → Metrics Server + `--kubelet-insecure-tls` → `kubectl apply` postgres com `rollout status` → Job de migration → `kubectl apply` deployment/service/HPA → **Smoke test em 16 verificações end-to-end** (login, CRUDs, decremento atômico de estoque, máquina de estados completa, filtro Fase 2, webhook externo com token do secret, HPA provisionado, réplicas ativas) |
 
-Para habilitar o pipeline, configure os seguintes segredos no repositório GitHub (Settings → Secrets):
+Se qualquer step do estágio 3 falhar, um step `if: failure()` executa **Diagnose cluster state on failure**, dumpando `kubectl get all`, `kubectl describe pods`, eventos e logs (atuais e previous) do namespace `oficina` — evita ter que reproduzir localmente.
 
 | Secret | Descrição |
 |---|---|
-| `GITHUB_TOKEN` | Automático — usado para publicar a imagem no GHCR |
+| `GITHUB_TOKEN` | Fornecido automaticamente pelo GitHub Actions — usado para publicar a imagem no GHCR |
 
-> **Nota:** As credenciais em `k8s/app/02-secret.yaml` e `k8s/postgres/01-secret.yaml` são valores padrão para ambiente local. Em produção, substitua por segredos reais gerenciados externamente (ex.: HashiCorp Vault, AWS Secrets Manager).
+> **Nota:** As credenciais em `k8s/app/02-secret.yaml` e `k8s/postgres/01-secret.yaml` são valores placeholder versionados no repo.
