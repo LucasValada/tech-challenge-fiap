@@ -22,10 +22,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Setup Node.js 24
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "24"
           cache: "npm"
@@ -57,13 +57,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -71,7 +71,7 @@ jobs:
 
       - name: Extract Docker metadata
         id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -80,7 +80,7 @@ jobs:
 
       - name: Build and push image
         id: build
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           push: true
@@ -97,7 +97,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Install Kind v0.27.0
         run: |
@@ -105,10 +105,10 @@ jobs:
           chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
 
       - name: Install kubectl
-        uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4
+        uses: azure/setup-kubectl@829323503d1be3d00ca8346e5391ca0b07a9ab0d # v5.1.0
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: "~> 1.6"
 
@@ -191,5 +191,119 @@ jobs:
 
       - name: Smoke test
         run: |
-          sleep 10
-          curl --fail http://localhost:3000/api || echo "Swagger UI not reachable — check NodePort mapping"
+          set -euo pipefail
+          API=http://localhost:3000
+
+          echo "=== 1. Aguarda /api ficar disponível ==="
+          for i in $(seq 1 30); do
+            if curl -sf "$API/api" > /dev/null; then
+              echo "API ready após ${i}s"
+              break
+            fi
+            if [ "$i" = 30 ]; then
+              echo "API não respondeu em 30s"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          echo "=== 2. Login admin ==="
+          TOKEN=$(curl -sf -X POST "$API/auth/login" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"admin@oficina.com","senha":"senha123"}' | jq -er '.accessToken')
+          echo "Token OK (${#TOKEN} chars)"
+          AUTH="Authorization: Bearer $TOKEN"
+
+          echo "=== 3. Cria cliente PF ==="
+          CLIENTE_ID=$(curl -sf -X POST "$API/cliente" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d '{"nome":"Smoke Test","tipoPessoa":"FISICA","cpfCnpj":"52998224725"}' | jq -er '.id')
+          echo "Cliente $CLIENTE_ID"
+
+          echo "=== 4. Cria veículo ==="
+          curl -sf -X POST "$API/veiculos" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d "{\"clienteId\":\"$CLIENTE_ID\",\"placa\":\"ABC1D23\",\"marca\":\"Honda\",\"modelo\":\"Civic\",\"ano\":2020}" | jq -e '.id > ""' > /dev/null
+
+          echo "=== 5. Cria serviço ==="
+          SERVICO_ID=$(curl -sf -X POST "$API/servicos" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d '{"nome":"Troca de óleo","precoBase":150.00,"tempoEstimadoMin":30}' | jq -er '.id')
+          echo "Servico $SERVICO_ID"
+
+          echo "=== 6. Cria item de estoque (INSUMO, 50 unidades) ==="
+          ITEM_ID=$(curl -sf -X POST "$API/itens-estoque" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d '{"nome":"Óleo 5W30","tipo":"INSUMO","sku":"SMOKE-OLE","precoUnitario":45.00,"quantidadeEstoque":50,"estoqueMinimo":10}' | jq -er '.id')
+          echo "Item $ITEM_ID"
+
+          echo "=== 7. Abre OS com 1 serviço + 4 unidades do item ==="
+          OS_JSON=$(curl -sf -X POST "$API/ordens-servico" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d "{\"cpfCnpj\":\"52998224725\",\"placa\":\"ABC1D23\",\"servicos\":[{\"servicoId\":\"$SERVICO_ID\",\"quantidade\":1}],\"itens\":[{\"itemEstoqueId\":\"$ITEM_ID\",\"quantidade\":4}]}")
+          OS_ID=$(echo "$OS_JSON" | jq -er '.id')
+          OS_CODIGO=$(echo "$OS_JSON" | jq -er '.codigo')
+          echo "OS $OS_CODIGO (id=$OS_ID)"
+
+          echo "=== 8. Valida decremento de estoque (50 - 4 = 46) ==="
+          QTD=$(curl -sf "$API/itens-estoque/$ITEM_ID" -H "$AUTH" | jq -er '.quantidadeEstoque')
+          [ "$QTD" = "46" ] || { echo "Estoque esperado 46, veio $QTD"; exit 1; }
+          echo "Estoque decrementou para 46 (transação atômica OK)"
+
+          echo "=== 9. Consulta OS por ID (autenticada) ==="
+          curl -sf "$API/ordens-servico/$OS_ID" -H "$AUTH" | jq -e '.status == "RECEBIDA"' > /dev/null
+          echo "Status RECEBIDA confirmado"
+
+          echo "=== 10. Consulta pública (sem token) ==="
+          curl -sf "$API/public/ordens-servico/$OS_CODIGO?placa=ABC1D23" | jq -e '.status == "RECEBIDA"' > /dev/null
+          echo "Endpoint público OK"
+
+          echo "=== 11. Transiciona OS RECEBIDA → ENTREGUE (5 avanços lineares) ==="
+          for status in EM_DIAGNOSTICO AGUARDANDO_APROVACAO EM_EXECUCAO FINALIZADA ENTREGUE; do
+            resultado=$(curl -sf -X POST "$API/ordens-servico/$OS_ID/transicao-status" \
+              -H "$AUTH" -H "Content-Type: application/json" \
+              -d "{\"status\":\"$status\"}" | jq -er '.status')
+            [ "$resultado" = "$status" ] || { echo "Transição para $status falhou (veio $resultado)"; exit 1; }
+            echo "  → $status"
+          done
+
+          echo "=== 12. Valida filtro Fase 2 — OS ENTREGUE não aparece na listagem ==="
+          COUNT=$(curl -sf "$API/ordens-servico" -H "$AUTH" | jq -er '.count // (.ordens | length)')
+          [ "$COUNT" = "0" ] || { echo "Lista deveria excluir FINALIZADA/ENTREGUE, mas count=$COUNT"; exit 1; }
+          echo "Filtro Fase 2 confirmado (count=0)"
+
+          echo "=== 13. Webhook externo aprova orçamento de uma nova OS ==="
+          OS2_JSON=$(curl -sf -X POST "$API/ordens-servico" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d "{\"cpfCnpj\":\"52998224725\",\"placa\":\"ABC1D23\",\"servicos\":[{\"servicoId\":\"$SERVICO_ID\",\"quantidade\":1}]}")
+          OS2_ID=$(echo "$OS2_JSON" | jq -er '.id')
+          OS2_CODIGO=$(echo "$OS2_JSON" | jq -er '.codigo')
+          for status in EM_DIAGNOSTICO AGUARDANDO_APROVACAO; do
+            curl -sf -X POST "$API/ordens-servico/$OS2_ID/transicao-status" \
+              -H "$AUTH" -H "Content-Type: application/json" \
+              -d "{\"status\":\"$status\"}" > /dev/null
+          done
+          WEBHOOK_TOKEN=$(kubectl get secret app-secret -n oficina -o jsonpath='{.data.WEBHOOK_ORCAMENTO_TOKEN}' | base64 -d)
+          curl -sf -X POST "$API/webhooks/orcamento" \
+            -H "Content-Type: application/json" \
+            -H "X-Webhook-Token: $WEBHOOK_TOKEN" \
+            -d "{\"codigoOS\":\"$OS2_CODIGO\",\"aprovado\":true}" | jq -e '.status == "EM_EXECUCAO"' > /dev/null
+          echo "Webhook transicionou OS $OS2_CODIGO para EM_EXECUCAO"
+
+          echo "=== 14. Auth negado sem token (401 esperado) ==="
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API/cliente")
+          [ "$HTTP_CODE" = "401" ] || { echo "Esperado 401, veio $HTTP_CODE"; exit 1; }
+          echo "401 confirmado"
+
+          echo "=== 15. HPA provisionado ==="
+          kubectl get hpa oficina-api-hpa -n oficina > /dev/null
+          MIN=$(kubectl get hpa oficina-api-hpa -n oficina -o jsonpath='{.spec.minReplicas}')
+          MAX=$(kubectl get hpa oficina-api-hpa -n oficina -o jsonpath='{.spec.maxReplicas}')
+          echo "HPA configurado (min=$MIN, max=$MAX)"
+
+          echo "=== 16. Valida réplicas disponíveis no deployment ==="
+          AVAILABLE=$(kubectl get deployment/oficina-api -n oficina -o jsonpath='{.status.availableReplicas}')
+          [ "$AVAILABLE" = "2" ] || { echo "Esperado 2 réplicas disponíveis, veio $AVAILABLE"; exit 1; }
+          echo "2 pods disponíveis servindo tráfego"
+
+          echo "=== Smoke test OK ==="
