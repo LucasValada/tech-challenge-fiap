@@ -183,18 +183,23 @@ graph TB
 ```mermaid
 graph LR
     Dev[Developer<br/>push ou PR em main ou develop]
-    GH[GitHub Actions<br/>ci-cd.yml<br/>concurrency cancela runs obsoletos<br/>actions com SHA pinning e node24]
+    GH[GitHub Actions<br/>concurrency cancela runs obsoletos<br/>actions com SHA pinning e node24]
 
     Dev --> GH
 
-    subgraph Pipeline[Pipeline em 3 estágios]
-        S1[Estágio 1 - Build and Test<br/>npm ci<br/>prisma generate<br/>npm test - 300 unitários<br/>npm run build]
+    subgraph CI[ci.yml - Continuous Integration<br/>dispara em push e pull_request]
+        CIJob[Build and Test<br/>npm ci<br/>prisma generate<br/>npm test - 300 unitários<br/>npm run build]
+    end
+
+    subgraph CD[cd.yml - Continuous Delivery<br/>dispara apenas em push]
+        S1[Estágio 1 - Build and Test guard<br/>mesma validação do CI<br/>garante que push quebrado não deploya]
         S2[Estágio 2 - Docker<br/>setup-buildx-action<br/>build multi-stage<br/>fix Prisma .ts imports<br/>cache GHA<br/>push para GHCR - tag sha-xxx + latest na main]
         S3[Estágio 3 - Deploy to Kind<br/>terraform apply provisiona cluster<br/>kind load docker-image<br/>Metrics Server + patch TLS<br/>kubectl apply k8s/postgres + rollout status<br/>Job de migration<br/>kubectl apply k8s/app<br/>Diagnose on failure - dumpa pods/events/logs<br/>Smoke test 16 verificações end-to-end]
 
         S1 --> S2 --> S3
     end
 
+    GH --> CIJob
     GH --> S1
     S3 --> Cluster[Kind Cluster efêmero<br/>com aplicação validada]
 ```
@@ -659,17 +664,48 @@ kind load docker-image oficina-api:local --name oficina-cluster
 
 ---
 
-### 6. Pipeline CI/CD (GitHub Actions)
+### 6. Pipelines CI e CD (GitHub Actions)
 
-O workflow `.github/workflows/ci-cd.yml` executa automaticamente em **push e pull request** nas branches **`main` e `develop`**. Um bloco `concurrency` cancela runs anteriores da mesma branch/PR quando um novo commit chega, evitando fila de builds obsoletos. Todas as actions estão pinadas por SHA completo (segurança supply chain) nas versões que declaram `node24`.
+O projeto separa **Continuous Integration** e **Continuous Delivery** em dois workflows dedicados dentro de `.github/workflows/`. Cada arquivo tem seu próprio bloco `concurrency` que cancela runs anteriores da mesma branch/PR quando um novo commit chega. Todas as actions estão pinadas por SHA completo (segurança supply chain) nas versões que declaram `node24`.
+
+#### `ci.yml` — Continuous Integration
+
+Feedback rápido de validação para cada mudança de código.
+
+| Aspecto | Valor |
+|---|---|
+| **Trigger** | `push` e `pull_request` em `main` e `develop` |
+| **Job** | `Build & Test` — `npm ci` → `npx prisma generate` → `npm test` (300 unit tests) → `npm run build` |
+| **Duração média** | ~1 min |
+
+#### `cd.yml` — Continuous Delivery
+
+Empacota e entrega a aplicação no cluster.
+
+| Aspecto | Valor |
+|---|---|
+| **Trigger** | `push` em `main` e `develop` (não roda em PR) |
+| **Jobs encadeados** | `test` (guard) → `docker` → `deploy` |
+| **Duração média** | ~10 min |
+
+**Estágios do `cd.yml`:**
 
 | Estágio | O que faz |
 |---|---|
-| **Build & Test** | `npm ci` → `npx prisma generate` → `npm test` (300 unit tests) → `npm run build` |
+| **Build & Test (guard)** | Repete a validação do CI antes de empacotar, garantindo que um push com testes quebrados nunca produza imagem publicada nem chegue ao cluster |
 | **Docker Image** | `docker/setup-buildx-action` → login no GHCR → build multi-stage com fix Prisma `.ts` imports → push com tag `sha-<hash>` (+ `latest` só na branch default) → cache GHA |
 | **Deploy to Kind** | Instala Kind + kubectl + Terraform → `terraform apply` provisiona o cluster → `kind load docker-image` → Metrics Server + `--kubelet-insecure-tls` → `kubectl apply` postgres com `rollout status` → Job de migration → `kubectl apply` deployment/service/HPA → **Smoke test em 16 verificações end-to-end** (login, CRUDs, decremento atômico de estoque, máquina de estados completa, filtro Fase 2, webhook externo com token do secret, HPA provisionado, réplicas ativas) |
 
-Se qualquer step do estágio 3 falhar, um step `if: failure()` executa **Diagnose cluster state on failure**, dumpando `kubectl get all`, `kubectl describe pods`, eventos e logs (atuais e previous) do namespace `oficina` — evita ter que reproduzir localmente.
+Se qualquer step do estágio Deploy falhar, um step `if: failure()` executa **Diagnose cluster state on failure**, dumpando `kubectl get all`, `kubectl describe pods`, eventos e logs (atuais e previous) do namespace `oficina` — evita ter que reproduzir localmente.
+
+#### Comportamento por evento
+
+| Evento | ci.yml | cd.yml |
+|---|:---:|:---:|
+| Pull request para `main`/`develop` | ✅ roda | ⏭ não dispara |
+| Push (merge) em `main`/`develop` | ✅ roda | ✅ roda |
+
+Os dois rodam em paralelo no push, cada um com sua própria responsabilidade.
 
 | Secret | Descrição |
 |---|---|
