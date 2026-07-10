@@ -1,9 +1,7 @@
-name: CI/CD Pipeline
+name: CD
 
 on:
   push:
-    branches: [main, develop]
-  pull_request:
     branches: [main, develop]
 
 env:
@@ -15,9 +13,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ─── Stage 1: Build & Test ────────────────────────────────────────────────
+  # ─── Stage 1: Test guard ──────────────────────────────────────────────────
+  # Repete a validação do CI antes de empacotar/deployar, garantindo que um
+  # push com testes quebrados nunca produza imagem publicada nem deploy.
   test:
-    name: Build & Test
+    name: Build & Test (guard)
     runs-on: ubuntu-latest
 
     steps:
