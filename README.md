@@ -83,22 +83,22 @@ Os dois diagramas a seguir seguem a notação [C4 Model](https://c4model.com/): 
 C4Container
     title Container Diagram — Sistema Oficina
 
-    Person(cliente, "Cliente HTTP", "Consumo via Swagger UI, curl ou Postman com JWT")
-    Person(clientePublico, "Consumidor público", "Acessa /public/ordens-servico sem autenticação")
-    System_Ext(webhookExterno, "Sistema Externo de Aprovação", "Envia decisão de orçamento via POST /webhooks/orcamento com X-Webhook-Token")
+    Person(clientes, "Clientes HTTP", "Consumo autenticado (Swagger UI, curl, Postman com JWT) ou público (código da OS + placa via /public/ordens-servico)")
 
     System_Boundary(oficina, "Sistema Oficina") {
         Container(api, "Oficina API", "NestJS 11 / Node 24", "Gestão de OS, clientes, veículos, serviços e itens de estoque")
         ContainerDb(db, "PostgreSQL 17", "Banco relacional", "Persistência via Prisma 7 com pg driver adapter")
     }
 
-    System_Ext(smtp, "SMTP Ethereal", "Servidor SMTP falso para emails de orçamento, finalização e entrega em ambiente de desenvolvimento")
+    Boundary(externos, "Sistemas externos", "boundary") {
+        System_Ext(webhookExterno, "Sistema Externo de Aprovação", "Envia decisão de orçamento via POST /webhooks/orcamento com X-Webhook-Token")
+        System_Ext(smtp, "SMTP Ethereal", "Servidor SMTP falso para emails de orçamento, finalização e entrega em ambiente de desenvolvimento")
+    }
 
-    Rel(cliente, api, "HTTPS / REST", "JSON + Bearer JWT")
-    Rel(clientePublico, api, "HTTPS / REST", "código da OS + placa")
+    Rel(clientes, api, "HTTPS / REST", "JSON + JWT (privado) ou código+placa (público)")
     Rel(webhookExterno, api, "POST /webhooks/orcamento", "JSON + X-Webhook-Token")
     Rel(api, db, "reads/writes", "TCP 5432 via Prisma")
-    Rel(api, smtp, "envia emails de orçamento, finalização e entrega", "SMTP 587")
+    Rel(api, smtp, "envia emails", "SMTP 587")
 ```
 
 #### Diagrama C4 — nível Component
@@ -142,8 +142,10 @@ C4Component
         }
     }
 
-    ContainerDb(db, "PostgreSQL 17", "Banco relacional")
-    System_Ext(smtp, "SMTP Ethereal", "Emails de dev")
+    Boundary(externos, "Sistemas externos", "boundary") {
+        ContainerDb(db, "PostgreSQL 17", "Banco relacional")
+        System_Ext(smtp, "SMTP Ethereal", "Emails de dev")
+    }
 
     Rel(cliente, controllers, "HTTPS / REST")
     Rel(controllers, dtos, "valida entrada")
