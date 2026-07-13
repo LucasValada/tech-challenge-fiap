@@ -75,95 +75,116 @@ src/infra/database/prisma/repositories/
 
 ### Componentes da aplicação
 
-Os dois diagramas a seguir seguem a notação [C4 Model](https://c4model.com/): o primeiro no nível **Container** mostra a aplicação como uma unidade e seus vizinhos (banco, SMTP, consumidores), e o segundo no nível **Component** faz o zoom dentro da Oficina API para revelar as quatro camadas da Clean Architecture.
-
-#### Diagrama C4 — nível Container
+#### Nível Container
 
 ```mermaid
-C4Container
-    title Container Diagram — Sistema Oficina
+graph TB
+    classDef person fill:#08427B,stroke:#052E56,color:#fff,font-weight:bold
+    classDef external fill:#999999,stroke:#6B6B6B,color:#fff
+    classDef container fill:#438DD5,stroke:#3B7BC0,color:#fff,font-weight:bold
+    classDef database fill:#438DD5,stroke:#3B7BC0,color:#fff,font-weight:bold
 
-    Person(clientes, "Clientes HTTP", "Consumo autenticado (Swagger UI, curl, Postman com JWT) ou público (código da OS + placa via /public/ordens-servico)")
+    Clientes["<b>Clientes HTTP</b><br/><i>[Person]</i><br/>Consumo autenticado (Swagger UI,<br/>curl, Postman com JWT) ou público<br/>(código da OS + placa via<br/>/public/ordens-servico)"]
 
-    System_Boundary(oficina, "Sistema Oficina") {
-        Container(api, "Oficina API", "NestJS 11 / Node 24", "Gestão de OS, clientes, veículos, serviços e itens de estoque")
-        ContainerDb(db, "PostgreSQL 17", "Banco relacional", "Persistência via Prisma 7 com pg driver adapter")
-    }
+    subgraph Oficina["Sistema Oficina"]
+        API["<b>Oficina API</b><br/><i>[Container: NestJS 11 / Node 24]</i><br/>Gestão de OS, clientes, veículos,<br/>serviços e itens de estoque"]
+        DB[("<b>PostgreSQL 17</b><br/><i>[ContainerDb: Banco relacional]</i><br/>Persistência via Prisma 7<br/>com pg driver adapter")]
+    end
 
-    Boundary(externos, "Sistemas externos", "boundary") {
-        System_Ext(webhookExterno, "Sistema Externo de Aprovação", "Envia decisão de orçamento via POST /webhooks/orcamento com X-Webhook-Token")
-        System_Ext(smtp, "SMTP Ethereal", "Servidor SMTP falso para emails de orçamento, finalização e entrega em ambiente de desenvolvimento")
-    }
+    subgraph Externos["Sistemas externos"]
+        Webhook["<b>Sistema Externo de Aprovação</b><br/><i>[External System]</i><br/>Envia decisão de orçamento via<br/>POST /webhooks/orcamento com<br/>X-Webhook-Token"]
+        SMTP["<b>SMTP Ethereal</b><br/><i>[External System]</i><br/>Servidor SMTP falso para emails<br/>de orçamento, finalização e entrega"]
+    end
 
-    Rel(clientes, api, "HTTPS / REST", "JSON + JWT (privado) ou código+placa (público)")
-    Rel(webhookExterno, api, "POST /webhooks/orcamento", "JSON + X-Webhook-Token")
-    Rel(api, db, "reads/writes", "TCP 5432 via Prisma")
-    Rel(api, smtp, "envia emails", "SMTP 587")
+    Clientes -->|"HTTPS / REST<br/>JSON + JWT (privado) ou<br/>código+placa (público)"| API
+    Webhook -->|"POST /webhooks/orcamento<br/>JSON + X-Webhook-Token"| API
+    API -->|"reads/writes<br/>TCP 5432 via Prisma"| DB
+    API -->|"envia emails<br/>SMTP 587"| SMTP
+
+    class Clientes person
+    class Webhook,SMTP external
+    class API container
+    class DB database
 ```
 
-#### Diagrama C4 — nível Component
+#### Nível Component
 
-Zoom dentro do Container **Oficina API** mostrando as quatro camadas da Clean Architecture. As relações rotuladas como **implementa** representam a inversão de dependência: os adapters de infra implementam interfaces expostas pelo domain, e não o contrário.
+Zoom dentro do Container **Oficina API** mostrando as quatro camadas da Clean Architecture. As relações tracejadas rotuladas como **implementa** representam a inversão de dependência: os adapters de infra implementam interfaces expostas pelo domain, e não o contrário.
 
 ```mermaid
-C4Component
-    title Component Diagram — Oficina API (Clean Architecture)
+graph TB
+    classDef person fill:#08427B,stroke:#052E56,color:#fff,font-weight:bold
+    classDef external fill:#999999,stroke:#6B6B6B,color:#fff
+    classDef database fill:#438DD5,stroke:#3B7BC0,color:#fff,font-weight:bold
+    classDef component fill:#85BBF0,stroke:#5D82A8,color:#000
 
-    Person(cliente, "Cliente HTTP", "Consumo autenticado ou público")
+    Cliente["<b>Cliente HTTP</b><br/><i>[Person]</i><br/>Consumo autenticado ou público"]
 
-    Container_Boundary(api, "Oficina API — NestJS") {
+    subgraph OficinaAPI["Oficina API — NestJS [Container]"]
+        direction TB
 
-        Boundary(interfaceLayer, "Camada Interface — src/modules/<m>/interface") {
-            Component(controllers, "Controllers + Guards", "NestJS Controller", "JwtAuthGuard, WebhookTokenGuard")
-            Component(dtos, "DTOs de entrada e resposta", "class-validator", "Validação declarativa de payload")
-        }
+        subgraph InterfaceLayer["Camada Interface — src/modules/&lt;m&gt;/interface"]
+            direction LR
+            Controllers["<b>Controllers + Guards</b><br/><i>[Component: NestJS Controller]</i><br/>JwtAuthGuard, WebhookTokenGuard"]
+            DTOs["<b>DTOs de entrada e resposta</b><br/><i>[Component: class-validator]</i><br/>Validação declarativa de payload"]
+        end
 
-        Boundary(applicationLayer, "Camada Application — src/modules/<m>/application") {
-            Component(useCases, "Use Cases", "@Injectable NestJS", "1 classe = 1 responsabilidade, método execute")
-            Component(mappers, "Mappers de resposta", "TypeScript", "toUserResponse etc")
-            Component(shared, "Shared helpers", "TypeScript", "traduzirErroDominio, etc")
-        }
+        subgraph ApplicationLayer["Camada Application — src/modules/&lt;m&gt;/application"]
+            direction LR
+            UseCases["<b>Use Cases</b><br/><i>[Component: @Injectable NestJS]</i><br/>1 classe = 1 responsabilidade,<br/>método execute"]
+            Mappers["<b>Mappers de resposta</b><br/><i>[Component: TypeScript]</i><br/>toUserResponse etc"]
+            Shared["<b>Shared helpers</b><br/><i>[Component: TypeScript]</i><br/>traduzirErroDominio, etc"]
+        end
 
-        Boundary(domainLayer, "Camada Domain — src/modules/<m>/domain") {
-            Component(entities, "Entities", "Classes puras", "OrdemServico, Cliente, Veiculo etc")
-            Component(domainSvc, "Domain Services", "Funções puras", "garantirCpfCnpjUnico, buscarClienteOuFalhar, maquinaDeEstadosOS, calcularTotaisOS")
-            Component(repos, "Repository & Adapter Interfaces (ports) + Errors tipados", "Contratos TS", "Cliente/Veiculo/OS/User Repository (persistência) + EmailSender, PasswordHasher, TokenIssuer (adapters)")
-        }
+        subgraph DomainLayer["Camada Domain — src/modules/&lt;m&gt;/domain"]
+            direction LR
+            Entities["<b>Entities</b><br/><i>[Component: Classes puras]</i><br/>OrdemServico, Cliente, Veiculo etc"]
+            DomainSvc["<b>Domain Services</b><br/><i>[Component: Funções puras]</i><br/>garantirCpfCnpjUnico, buscarClienteOuFalhar,<br/>maquinaDeEstadosOS, calcularTotaisOS"]
+            Repos["<b>Repository & Adapter Interfaces (ports)</b><br/><i>[Component: Contratos TS + Errors tipados]</i><br/>Cliente/Veiculo/OS/User Repository (persistência)<br/>+ EmailSender, PasswordHasher, TokenIssuer (adapters)"]
+        end
 
-        Boundary(moduleInfra, "Adapters por módulo — src/modules/<m>/infra") {
-            Component(bcrypt, "BcryptPasswordHasher", "bcrypt", "auth/infra e user/infra")
-            Component(jwt, "JwtTokenIssuer", "@nestjs/jwt", "auth/infra")
-            Component(mailer, "NestMailerEmailSender", "@nestjs-modules/mailer", "mail/infra, provider EMAIL_SENDER")
-        }
+        subgraph ModuleInfra["Adapters por módulo — src/modules/&lt;m&gt;/infra"]
+            direction LR
+            Bcrypt["<b>BcryptPasswordHasher</b><br/><i>[Component: bcrypt]</i><br/>auth/infra e user/infra"]
+            Jwt["<b>JwtTokenIssuer</b><br/><i>[Component: @nestjs/jwt]</i><br/>auth/infra"]
+            Mailer["<b>NestMailerEmailSender</b><br/><i>[Component: @nestjs-modules/mailer]</i><br/>mail/infra, provider EMAIL_SENDER"]
+        end
 
-        Boundary(sharedInfra, "Infra compartilhada — src/infra e src/modules/prisma") {
-            Component(prismaSvc, "PrismaService", "pg.Pool + PrismaPg adapter", "Bootstrap do Prisma Client")
-            Component(prismaRepos, "Prisma Repositories", "Prisma Client 7", "src/infra/database/prisma/repositories")
-        }
-    }
+        subgraph SharedInfra["Infra compartilhada — src/infra e src/modules/prisma"]
+            direction LR
+            PrismaSvc["<b>PrismaService</b><br/><i>[Component: pg.Pool + PrismaPg adapter]</i><br/>Bootstrap do Prisma Client"]
+            PrismaRepos["<b>Prisma Repositories</b><br/><i>[Component: Prisma Client 7]</i><br/>src/infra/database/prisma/repositories"]
+        end
+    end
 
-    Boundary(externos, "Sistemas externos", "boundary") {
-        ContainerDb(db, "PostgreSQL 17", "Banco relacional")
-        System_Ext(smtp, "SMTP Ethereal", "Emails de dev")
-    }
+    subgraph Externos["Sistemas externos"]
+        direction TB
+        DB[("<b>PostgreSQL 17</b><br/><i>[ContainerDb: Banco relacional]</i>")]
+        SMTP["<b>SMTP Ethereal</b><br/><i>[External System]</i><br/>Emails de dev"]
+    end
 
-    Rel(cliente, controllers, "HTTPS / REST")
-    Rel(controllers, dtos, "valida entrada")
-    Rel(controllers, useCases, "invoca")
-    Rel(useCases, domainSvc, "usa")
-    Rel(useCases, repos, "depende de contratos")
-    Rel(useCases, mappers, "usa")
-    Rel(useCases, shared, "usa")
-    Rel(domainSvc, entities, "opera sobre")
+    Cliente -->|"HTTPS / REST"| Controllers
+    Controllers -->|"valida entrada"| DTOs
+    Controllers -->|"invoca"| UseCases
+    UseCases -->|"usa"| DomainSvc
+    UseCases -->|"depende de contratos"| Repos
+    UseCases -->|"usa"| Mappers
+    UseCases -->|"usa"| Shared
+    DomainSvc -->|"opera sobre"| Entities
 
-    Rel(prismaRepos, repos, "implementa")
-    Rel(bcrypt, repos, "implementa (PasswordHasher)")
-    Rel(jwt, repos, "implementa (TokenIssuer)")
-    Rel(mailer, repos, "implementa (EmailSender)")
+    PrismaRepos -.->|"implementa"| Repos
+    Bcrypt -.->|"implementa (PasswordHasher)"| Repos
+    Jwt -.->|"implementa (TokenIssuer)"| Repos
+    Mailer -.->|"implementa (EmailSender)"| Repos
 
-    Rel(prismaRepos, prismaSvc, "usa Prisma Client")
-    Rel(prismaSvc, db, "TCP 5432", "pg driver")
-    Rel(mailer, smtp, "envia email", "SMTP 587")
+    PrismaRepos -->|"usa Prisma Client"| PrismaSvc
+    PrismaSvc -->|"TCP 5432 / pg driver"| DB
+    Mailer -->|"envia email / SMTP 587"| SMTP
+
+    class Cliente person
+    class DB database
+    class SMTP external
+    class Controllers,DTOs,UseCases,Mappers,Shared,Entities,DomainSvc,Repos,Bcrypt,Jwt,Mailer,PrismaSvc,PrismaRepos component
 ```
 
 ### Infraestrutura provisionada
