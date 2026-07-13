@@ -75,53 +75,116 @@ src/infra/database/prisma/repositories/
 
 ### Componentes da aplicação
 
+#### Nível Container
+
 ```mermaid
 graph TB
-    Client[Cliente HTTP<br/>Swagger UI / curl / Postman]
+    classDef person fill:#08427B,stroke:#052E56,color:#fff,font-weight:bold
+    classDef external fill:#999999,stroke:#6B6B6B,color:#fff
+    classDef container fill:#438DD5,stroke:#3B7BC0,color:#fff,font-weight:bold
+    classDef database fill:#438DD5,stroke:#3B7BC0,color:#fff,font-weight:bold
 
-    subgraph Interface[Camada Interface — src/modules/&lt;m&gt;/interface]
-        Controllers[Controllers + Guards<br/>JwtAuthGuard, WebhookTokenGuard]
-        DTOs[DTOs de entrada e resposta<br/>com class-validator]
+    Clientes["<b>Clientes HTTP</b><br/><i>[Person]</i><br/>Consumo autenticado (Swagger UI,<br/>curl, Postman com JWT) ou público<br/>(código da OS + placa via<br/>/public/ordens-servico)"]
+
+    subgraph Oficina["Sistema Oficina"]
+        API["<b>Oficina API</b><br/><i>[Container: NestJS / Node]</i><br/>Gestão de OS, clientes, veículos,<br/>serviços e itens de estoque"]
+        DB[("<b>PostgreSQL 17</b><br/><i>[ContainerDb: Banco relacional]</i><br/>Persistência via Prisma 7<br/>com pg driver adapter")]
     end
 
-    subgraph Application[Camada Application — src/modules/&lt;m&gt;/application]
-        UseCases[Use Cases<br/>1 classe = 1 responsabilidade]
-        Mappers[Mappers de resposta<br/>toUserResponse etc]
-        Shared[Shared helpers<br/>traduzirErroDominio]
+    subgraph Externos["Sistemas externos"]
+        Webhook["<b>Sistema Externo de Aprovação</b><br/><i>[External System]</i><br/>Envia decisão de orçamento via<br/>POST /webhooks/orcamento com<br/>X-Webhook-Token"]
+        SMTP["<b>SMTP Ethereal</b><br/><i>[External System]</i><br/>Servidor SMTP falso para emails<br/>de orçamento, finalização e entrega"]
     end
 
-    subgraph Domain[Camada Domain — src/modules/&lt;m&gt;/domain]
-        Entities[Entities<br/>OrdemServico, Cliente, Veiculo etc]
-        DomainSvc[Domain Services puros<br/>garantirCpfCnpjUnico, buscarClienteOuFalhar<br/>maquinaDeEstadosOS, calcularTotaisOS]
-        Repos[Repository Interfaces<br/>+ Errors tipados<br/>EmailSender, PasswordHasher, TokenIssuer]
+    Clientes -->|"HTTPS / REST<br/>JSON + JWT (privado) ou<br/>código+placa (público)"| API
+    Webhook -->|"POST /webhooks/orcamento<br/>JSON + X-Webhook-Token"| API
+    API -->|"reads/writes<br/>TCP 5432 via Prisma"| DB
+    API -->|"envia emails<br/>SMTP 587"| SMTP
+
+    class Clientes person
+    class Webhook,SMTP external
+    class API container
+    class DB database
+```
+
+#### Nível Component
+
+Zoom dentro do Container **Oficina API** mostrando as quatro camadas da Clean Architecture. As relações tracejadas rotuladas como **implementa** representam a inversão de dependência: os adapters de infra implementam interfaces expostas pelo domain, e não o contrário.
+
+```mermaid
+graph TB
+    classDef person fill:#08427B,stroke:#052E56,color:#fff,font-weight:bold
+    classDef external fill:#999999,stroke:#6B6B6B,color:#fff
+    classDef database fill:#438DD5,stroke:#3B7BC0,color:#fff,font-weight:bold
+    classDef component fill:#85BBF0,stroke:#5D82A8,color:#000
+
+    Cliente["<b>Cliente HTTP</b><br/><i>[Person]</i><br/>Consumo autenticado ou público"]
+
+    subgraph OficinaAPI["Oficina API — NestJS [Container]"]
+        direction TB
+
+        subgraph InterfaceLayer["Camada Interface — src/modules/&lt;m&gt;/interface"]
+            direction LR
+            Controllers["<b>Controllers + Guards</b><br/><i>[Component: NestJS Controller]</i><br/>JwtAuthGuard, WebhookTokenGuard"]
+            DTOs["<b>DTOs de entrada e resposta</b><br/><i>[Component: class-validator]</i><br/>Validação declarativa de payload"]
+        end
+
+        subgraph ApplicationLayer["Camada Application — src/modules/&lt;m&gt;/application"]
+            direction LR
+            UseCases["<b>Use Cases</b><br/><i>[Component: @Injectable NestJS]</i><br/>1 classe = 1 responsabilidade,<br/>método execute"]
+            Mappers["<b>Mappers de resposta</b><br/><i>[Component: TypeScript]</i><br/>toUserResponse etc"]
+            Shared["<b>Shared helpers</b><br/><i>[Component: TypeScript]</i><br/>traduzirErroDominio, etc"]
+        end
+
+        subgraph DomainLayer["Camada Domain — src/modules/&lt;m&gt;/domain"]
+            direction LR
+            Entities["<b>Entities</b><br/><i>[Component: Classes puras]</i><br/>OrdemServico, Cliente, Veiculo etc"]
+            DomainSvc["<b>Domain Services</b><br/><i>[Component: Funções puras]</i><br/>garantirCpfCnpjUnico, buscarClienteOuFalhar,<br/>maquinaDeEstadosOS, calcularTotaisOS"]
+            Repos["<b>Repository & Adapter Interfaces (ports)</b><br/><i>[Component: Contratos TS + Errors tipados]</i><br/>Cliente/Veiculo/OS/User Repository (persistência)<br/>+ EmailSender, PasswordHasher, TokenIssuer (adapters)"]
+        end
+
+        subgraph ModuleInfra["Adapters por módulo — src/modules/&lt;m&gt;/infra"]
+            direction LR
+            Bcrypt["<b>BcryptPasswordHasher</b><br/><i>[Component: bcrypt]</i><br/>auth/infra e user/infra"]
+            Jwt["<b>JwtTokenIssuer</b><br/><i>[Component: @nestjs/jwt]</i><br/>auth/infra"]
+            Mailer["<b>NestMailerEmailSender</b><br/><i>[Component: @nestjs-modules/mailer]</i><br/>mail/infra, provider EMAIL_SENDER"]
+        end
+
+        subgraph SharedInfra["Infra compartilhada — src/infra e src/modules/prisma"]
+            direction LR
+            PrismaSvc["<b>PrismaService</b><br/><i>[Component: pg.Pool + PrismaPg adapter]</i><br/>Bootstrap do Prisma Client"]
+            PrismaRepos["<b>Prisma Repositories</b><br/><i>[Component: Prisma Client 7]</i><br/>src/infra/database/prisma/repositories"]
+        end
     end
 
-    subgraph ModuleInfra[Adapters por módulo — src/modules/&lt;m&gt;/infra]
-        Hasher[BcryptPasswordHasher<br/>auth/infra e user/infra]
-        Jwt[JwtTokenIssuer<br/>auth/infra]
-        EmailAdapter[NestMailerEmailSender<br/>mail/infra, provider EMAIL_SENDER]
+    subgraph Externos["Sistemas externos"]
+        direction TB
+        DB[("<b>PostgreSQL 17</b><br/><i>[ContainerDb: Banco relacional]</i>")]
+        SMTP["<b>SMTP Ethereal</b><br/><i>[External System]</i><br/>Emails de dev"]
     end
 
-    subgraph SharedInfra[Infra compartilhada — src/infra e src/modules/prisma]
-        PrismaSvc[PrismaService<br/>pg.Pool + PrismaPg adapter]
-        PrismaRepos[Prisma Repositories<br/>src/infra/database/prisma/repositories]
-    end
+    Cliente -->|"HTTPS / REST"| Controllers
+    Controllers -->|"valida entrada"| DTOs
+    Controllers -->|"invoca"| UseCases
+    UseCases -->|"usa"| DomainSvc
+    UseCases -->|"depende de contratos"| Repos
+    UseCases -->|"usa"| Mappers
+    UseCases -->|"usa"| Shared
+    DomainSvc -->|"opera sobre"| Entities
 
-    Client --> Controllers
-    Controllers --> DTOs
-    Controllers --> UseCases
-    UseCases --> DomainSvc
-    UseCases --> Repos
-    UseCases --> Mappers
-    UseCases --> Shared
-    DomainSvc --> Entities
-    Repos -.->|implementado por| PrismaRepos
-    Repos -.->|implementado por| Hasher
-    Repos -.->|implementado por| Jwt
-    Repos -.->|implementado por| EmailAdapter
-    PrismaRepos --> PrismaSvc
-    PrismaSvc --> Postgres[(PostgreSQL 17)]
-    EmailAdapter --> SMTP[SMTP Ethereal]
+    PrismaRepos -.->|"implementa"| Repos
+    Bcrypt -.->|"implementa (PasswordHasher)"| Repos
+    Jwt -.->|"implementa (TokenIssuer)"| Repos
+    Mailer -.->|"implementa (EmailSender)"| Repos
+
+    PrismaRepos -->|"usa Prisma Client"| PrismaSvc
+    PrismaSvc -->|"TCP 5432 / pg driver"| DB
+    Mailer -->|"envia email / SMTP 587"| SMTP
+
+    class Cliente person
+    class DB database
+    class SMTP external
+    class Controllers,DTOs,UseCases,Mappers,Shared,Entities,DomainSvc,Repos,Bcrypt,Jwt,Mailer,PrismaSvc,PrismaRepos component
 ```
 
 ### Infraestrutura provisionada
@@ -162,7 +225,7 @@ graph TB
         HPA -.->|escala CPU 70%, mem 80%| Deploy
         SvcApi --> Deploy
         SS --> PVC
-        SS -.->|envFrom| PgSec
+        SS -.->|secretKeyRef| PgSec
         SvcPgCluster --> SS
         SvcPgNode --> SS
         Deploy -.->|envFrom| CM
@@ -187,11 +250,11 @@ graph LR
 
     Dev --> GH
 
-    subgraph CI[ci.yml - Continuous Integration<br/>dispara em push e pull_request]
+    subgraph CI["ci.yml — Continuous Integration (push + PR)"]
         CIJob[Build and Test<br/>npm ci<br/>prisma generate<br/>npm test - 300 unitários<br/>npm run build]
     end
 
-    subgraph CD[cd.yml - Continuous Delivery<br/>dispara apenas em push]
+    subgraph CD["cd.yml — Continuous Delivery (apenas push)"]
         S1[Estágio 1 - Build and Test guard<br/>mesma validação do CI<br/>garante que push quebrado não deploya]
         S2[Estágio 2 - Docker<br/>setup-buildx-action<br/>build multi-stage<br/>fix Prisma .ts imports<br/>cache GHA<br/>push para GHCR - tag sha-xxx + latest na main]
         S3[Estágio 3 - Deploy to Kind<br/>terraform apply provisiona cluster<br/>kind load docker-image<br/>Metrics Server + patch TLS<br/>kubectl apply k8s/postgres + rollout status<br/>Job de migration<br/>kubectl apply k8s/app<br/>Diagnose on failure - dumpa pods/events/logs<br/>Smoke test 16 verificações end-to-end]
