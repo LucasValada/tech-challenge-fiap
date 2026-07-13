@@ -87,7 +87,7 @@ graph TB
     Clientes["<b>Clientes HTTP</b><br/><i>[Person]</i><br/>Consumo autenticado (Swagger UI,<br/>curl, Postman com JWT) ou público<br/>(código da OS + placa via<br/>/public/ordens-servico)"]
 
     subgraph Oficina["Sistema Oficina"]
-        API["<b>Oficina API</b><br/><i>[Container: NestJS 11 / Node 24]</i><br/>Gestão de OS, clientes, veículos,<br/>serviços e itens de estoque"]
+        API["<b>Oficina API</b><br/><i>[Container: NestJS / Node]</i><br/>Gestão de OS, clientes, veículos,<br/>serviços e itens de estoque"]
         DB[("<b>PostgreSQL 17</b><br/><i>[ContainerDb: Banco relacional]</i><br/>Persistência via Prisma 7<br/>com pg driver adapter")]
     end
 
@@ -250,11 +250,11 @@ graph LR
 
     Dev --> GH
 
-    subgraph CI[ci.yml - Continuous Integration<br/>dispara em push e pull_request]
+    subgraph CI["ci.yml — Continuous Integration (push + PR)"]
         CIJob[Build and Test<br/>npm ci<br/>prisma generate<br/>npm test - 300 unitários<br/>npm run build]
     end
 
-    subgraph CD[cd.yml - Continuous Delivery<br/>dispara apenas em push]
+    subgraph CD["cd.yml — Continuous Delivery (apenas push)"]
         S1[Estágio 1 - Build and Test guard<br/>mesma validação do CI<br/>garante que push quebrado não deploya]
         S2[Estágio 2 - Docker<br/>setup-buildx-action<br/>build multi-stage<br/>fix Prisma .ts imports<br/>cache GHA<br/>push para GHCR - tag sha-xxx + latest na main]
         S3[Estágio 3 - Deploy to Kind<br/>terraform apply provisiona cluster<br/>kind load docker-image<br/>Metrics Server + patch TLS<br/>kubectl apply k8s/postgres + rollout status<br/>Job de migration<br/>kubectl apply k8s/app<br/>Diagnose on failure - dumpa pods/events/logs<br/>Smoke test 16 verificações end-to-end]
