@@ -10,12 +10,19 @@ export class UpdateClienteDto {
 
   @IsOptional()
   @IsString()
-  @ApiPropertyOptional({ description: 'Telefone do cliente' })
+  @ApiPropertyOptional({
+    description: 'Telefone do cliente',
+    type: 'string',
+  })
   telefone?: string | null;
 
   @IsOptional()
   @IsEmail()
-  @ApiPropertyOptional({ description: 'Email do cliente' })
+  @ApiPropertyOptional({
+    description: 'Email do cliente',
+    type: 'string',
+    format: 'email',
+  })
   email?: string | null;
 
   @IsOptional()
