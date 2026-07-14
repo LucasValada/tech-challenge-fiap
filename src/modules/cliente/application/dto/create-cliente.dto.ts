@@ -22,6 +22,7 @@ export class CreateClienteDto {
   @ApiProperty({
     description: 'Telefone do cliente',
     example: '11999999999',
+    type: 'string',
     required: false,
   })
   telefone?: string | null;
@@ -31,6 +32,8 @@ export class CreateClienteDto {
   @ApiProperty({
     description: 'Email do cliente',
     example: 'joao@example.com',
+    type: 'string',
+    format: 'email',
     required: false,
   })
   email?: string | null;
