@@ -39,9 +39,9 @@ Sistema de gerenciamento de oficina mecânica desenvolvido para o Tech Challenge
 
 ## Vídeo demonstrativo
 
-> _Em breve._ Vídeo (YouTube, não listado, até 15 minutos) cobrindo deploy da aplicação, execução do CI/CD, consumo das APIs e escalabilidade automática do HPA sob carga.
+Vídeo (YouTube, até 15 minutos) cobrindo deploy da aplicação, execução do CI/CD, consumo das APIs e escalabilidade automática do HPA sob carga.
 
-**Link:** _a ser adicionado_
+**Link:** [https://youtu.be/LJf5b5OW0gM](https://youtu.be/LJf5b5OW0gM)
 
 ## Clean Architecture
 
