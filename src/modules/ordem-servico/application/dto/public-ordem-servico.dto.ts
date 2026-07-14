@@ -115,18 +115,34 @@ export class PublicOrdemServicoResponseDto {
   })
   entregueAt!: Date | null;
 
-  @ApiProperty({ type: PublicOrdemServicoClienteDto })
+  @ApiProperty({
+    description: 'Dados do cliente dono do veículo',
+    type: PublicOrdemServicoClienteDto,
+  })
   cliente!: PublicOrdemServicoClienteDto;
 
-  @ApiProperty({ type: PublicOrdemServicoVeiculoDto })
+  @ApiProperty({
+    description: 'Dados do veículo vinculado à OS',
+    type: PublicOrdemServicoVeiculoDto,
+  })
   veiculo!: PublicOrdemServicoVeiculoDto;
 
-  @ApiProperty({ type: [PublicOrdemServicoItemDto] })
+  @ApiProperty({
+    description: 'Serviços incluídos na OS (com snapshot de nome e preço)',
+    type: [PublicOrdemServicoItemDto],
+  })
   servicos!: PublicOrdemServicoItemDto[];
 
-  @ApiProperty({ type: [PublicOrdemServicoItemDto] })
+  @ApiProperty({
+    description:
+      'Peças e insumos incluídos na OS (com snapshot de nome e preço)',
+    type: [PublicOrdemServicoItemDto],
+  })
   itens!: PublicOrdemServicoItemDto[];
 
-  @ApiProperty({ type: [PublicHistoricoStatusDto] })
+  @ApiProperty({
+    description: 'Histórico completo de transições de status da OS',
+    type: [PublicHistoricoStatusDto],
+  })
   historicoStatus!: PublicHistoricoStatusDto[];
 }

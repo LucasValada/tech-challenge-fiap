@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   Query,
@@ -23,14 +24,26 @@ import {
   CreateItemEstoqueDto,
   UpdateItemEstoqueDto,
 } from '../../application/dto';
-import { ItemEstoqueService } from '../../application/use-case/item-estoque.service';
+import { CreateItemEstoqueUseCase } from '../../application/use-case/create-item-estoque.use-case';
+import { GetAllItensEstoqueUseCase } from '../../application/use-case/get-all-itens-estoque.use-case';
+import { GetItemEstoqueByIdUseCase } from '../../application/use-case/get-item-estoque-by-id.use-case';
+import { GetItensBaixoEstoqueUseCase } from '../../application/use-case/get-itens-baixo-estoque.use-case';
+import { UpdateItemEstoqueUseCase } from '../../application/use-case/update-item-estoque.use-case';
+import { DeleteItemEstoqueUseCase } from '../../application/use-case/delete-item-estoque.use-case';
 
 @ApiTags('Itens de Estoque')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('itens-estoque')
 export class ItemEstoqueController {
-  constructor(private readonly itemEstoqueService: ItemEstoqueService) {}
+  constructor(
+    private readonly createItemEstoqueUseCase: CreateItemEstoqueUseCase,
+    private readonly getAllItensEstoqueUseCase: GetAllItensEstoqueUseCase,
+    private readonly getItemEstoqueByIdUseCase: GetItemEstoqueByIdUseCase,
+    private readonly getItensBaixoEstoqueUseCase: GetItensBaixoEstoqueUseCase,
+    private readonly updateItemEstoqueUseCase: UpdateItemEstoqueUseCase,
+    private readonly deleteItemEstoqueUseCase: DeleteItemEstoqueUseCase,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -39,8 +52,9 @@ export class ItemEstoqueController {
     status: 201,
     description: 'Item de estoque criado com sucesso',
   })
-  async create(@Body() dto: CreateItemEstoqueDto) {
-    return this.itemEstoqueService.create(dto);
+  @ApiResponse({ status: 409, description: 'SKU já cadastrado' })
+  create(@Body() dto: CreateItemEstoqueDto) {
+    return this.createItemEstoqueUseCase.execute(dto);
   }
 
   @Get()
@@ -50,23 +64,23 @@ export class ItemEstoqueController {
     status: 200,
     description: 'Lista de itens de estoque retornada com sucesso',
   })
-  async findAll(@Query('tipo') tipo?: 'PECA' | 'INSUMO') {
-    return this.itemEstoqueService.findAll(tipo);
+  findAll(@Query('tipo') tipo?: 'PECA' | 'INSUMO') {
+    return this.getAllItensEstoqueUseCase.execute(tipo);
   }
 
   @Get('baixo-estoque')
   @ApiOperation({ summary: 'Listar itens com estoque abaixo do mínimo' })
   @ApiResponse({ status: 200, description: 'Lista de itens com baixo estoque' })
-  async findBaixoEstoque() {
-    return this.itemEstoqueService.findBaixoEstoque();
+  findBaixoEstoque() {
+    return this.getItensBaixoEstoqueUseCase.execute();
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Buscar item de estoque por ID' })
   @ApiResponse({ status: 200, description: 'Item de estoque encontrado' })
   @ApiResponse({ status: 404, description: 'Item de estoque não encontrado' })
-  async findById(@Param('id') id: string) {
-    return this.itemEstoqueService.findById(id);
+  findById(@Param('id', ParseUUIDPipe) id: string) {
+    return this.getItemEstoqueByIdUseCase.execute(id);
   }
 
   @Put(':id')
@@ -76,8 +90,12 @@ export class ItemEstoqueController {
     description: 'Item de estoque atualizado com sucesso',
   })
   @ApiResponse({ status: 404, description: 'Item de estoque não encontrado' })
-  async update(@Param('id') id: string, @Body() dto: UpdateItemEstoqueDto) {
-    return this.itemEstoqueService.update(id, dto);
+  @ApiResponse({ status: 409, description: 'SKU já cadastrado por outro item' })
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateItemEstoqueDto,
+  ) {
+    return this.updateItemEstoqueUseCase.execute(id, dto);
   }
 
   @Delete(':id')
@@ -88,7 +106,7 @@ export class ItemEstoqueController {
     description: 'Item de estoque deletado com sucesso',
   })
   @ApiResponse({ status: 404, description: 'Item de estoque não encontrado' })
-  async delete(@Param('id') id: string) {
-    await this.itemEstoqueService.delete(id);
+  async delete(@Param('id', ParseUUIDPipe) id: string) {
+    await this.deleteItemEstoqueUseCase.execute(id);
   }
 }

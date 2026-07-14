@@ -1,9 +1,4 @@
-import {
-  E2eContext,
-  setupE2e,
-  authRequest,
-  publicRequest,
-} from './setup-e2e';
+import { E2eContext, setupE2e, authRequest, publicRequest } from './setup-e2e';
 
 describe('Ordem de Serviço — fluxo completo (e2e)', () => {
   let ctx: E2eContext;
@@ -22,7 +17,7 @@ describe('Ordem de Serviço — fluxo completo (e2e)', () => {
       nome: 'E2E OS Cliente',
       telefone: '(11)999999999',
       email: 'e2e-os@teste.com',
-      cpfCnpj: '999.888.777-66',
+      cpfCnpj: '687.334.729-98',
       tipoPessoa: 'FISICA',
     });
     if (clienteRes.status !== 201) {
@@ -81,7 +76,7 @@ describe('Ordem de Serviço — fluxo completo (e2e)', () => {
   it('POST /ordens-servico — cria OS por CPF + placa', async () => {
     const res = await authRequest(ctx, 'post', '/ordens-servico')
       .send({
-        cpfCnpj: '999.888.777-66',
+        cpfCnpj: '687.334.729-98',
         placa: 'TST1A99',
         observacoes: 'Teste e2e',
       })
@@ -100,11 +95,9 @@ describe('Ordem de Serviço — fluxo completo (e2e)', () => {
   });
 
   it('GET /ordens-servico/:id — detalhes da OS', async () => {
-    const res = await authRequest(
-      ctx,
-      'get',
-      `/ordens-servico/${osId}`,
-    ).expect(200);
+    const res = await authRequest(ctx, 'get', `/ordens-servico/${osId}`).expect(
+      200,
+    );
 
     expect(res.body.id).toBe(osId);
     expect(res.body.cliente).toBeDefined();
@@ -239,11 +232,7 @@ describe('Ordem de Serviço — fluxo completo (e2e)', () => {
   });
 
   it('POST transicao-status — rejeita transição inválida em status terminal', async () => {
-    await authRequest(
-      ctx,
-      'post',
-      `/ordens-servico/${osId}/transicao-status`,
-    )
+    await authRequest(ctx, 'post', `/ordens-servico/${osId}/transicao-status`)
       .send({ status: 'RECEBIDA' })
       .expect(409);
   });

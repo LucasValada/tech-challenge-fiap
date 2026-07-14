@@ -4,10 +4,10 @@ import { PrismaModule } from './modules/prisma/prisma.module';
 import { UserModule } from './modules/user/user.module';
 import { AuthModule } from './modules/auth';
 import { VeiculoModule } from './modules/veiculo';
-import { ItemEstoqueModule } from './modules/item-estoque';
-import { ServicoModule } from './modules/servico';
-import { ClientModule } from './modules/cliente/client.module';
+import { ItemEstoqueModule } from './modules/item-estoque/item-estoque.module';
+import { ClienteModule } from './modules/cliente/cliente.module';
 import { OrdemServicoModule } from './modules/ordem-servico';
+import { ServicoModule } from './modules/servico/servico.module';
 
 @Module({
   imports: [
@@ -20,7 +20,7 @@ import { OrdemServicoModule } from './modules/ordem-servico';
     VeiculoModule,
     ItemEstoqueModule,
     ServicoModule,
-    ClientModule,
+    ClienteModule,
     OrdemServicoModule,
   ],
   controllers: [],

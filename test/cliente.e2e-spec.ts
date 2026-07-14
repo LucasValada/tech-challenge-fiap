@@ -16,7 +16,7 @@ describe('Clientes (e2e)', () => {
 
   afterAll(async () => {
     if (clienteId) {
-      await authRequest(ctx, 'delete', `/cliente/delete/${clienteId}`);
+      await authRequest(ctx, 'delete', `/cliente/${clienteId}`);
     }
     await ctx.app.close();
   });
@@ -27,7 +27,7 @@ describe('Clientes (e2e)', () => {
         nome: 'E2E Cliente Teste',
         telefone: '(11)999999999',
         email: 'e2e-cliente@teste.com',
-        cpfCnpj: '111.222.333-44',
+        cpfCnpj: '529.982.247-25',
         tipoPessoa: 'FISICA',
       })
       .expect(201);
@@ -40,7 +40,7 @@ describe('Clientes (e2e)', () => {
   it('GET /cliente — lista clientes', async () => {
     const res = await authRequest(ctx, 'get', '/cliente').expect(200);
 
-    expect(res.body.client).toBeInstanceOf(Array);
+    expect(res.body.cliente).toBeInstanceOf(Array);
     expect(res.body.count).toBeGreaterThanOrEqual(1);
   });
 
@@ -52,19 +52,9 @@ describe('Clientes (e2e)', () => {
     expect(res.body.id).toBe(clienteId);
   });
 
-  it('PUT /cliente/update/:id — atualiza cliente', async () => {
-    const res = await authRequest(
-      ctx,
-      'put',
-      `/cliente/update/${clienteId}`,
-    )
-      .send({
-        nome: 'E2E Cliente Atualizado',
-        telefone: '(11)888888888',
-        email: 'e2e-cliente@teste.com',
-        cpfCnpj: '111.222.333-44',
-        tipoPessoa: 'FISICA',
-      })
+  it('PUT /cliente/:id — atualiza cliente (parcial)', async () => {
+    const res = await authRequest(ctx, 'put', `/cliente/${clienteId}`)
+      .send({ nome: 'E2E Cliente Atualizado' })
       .expect(200);
 
     expect(res.body.nome).toBe('E2E Cliente Atualizado');
@@ -75,11 +65,11 @@ describe('Clientes (e2e)', () => {
       nome: 'Outro',
       telefone: '(11)999999999',
       email: 'outro-e2e@teste.com',
-      cpfCnpj: '111.222.333-44',
+      cpfCnpj: '529.982.247-25',
       tipoPessoa: 'FISICA',
     });
 
-    expect([400, 409]).toContain(res.status);
+    expect(res.status).toBe(409);
   });
 
   it('GET /cliente/:id — 404 para ID inexistente', async () => {
@@ -90,10 +80,8 @@ describe('Clientes (e2e)', () => {
     await expectUnauthorized(ctx, '/cliente');
   });
 
-  it('DELETE /cliente/delete/:id — deleta cliente', async () => {
-    await authRequest(ctx, 'delete', `/cliente/delete/${clienteId}`).expect(
-      200,
-    );
+  it('DELETE /cliente/:id — deleta cliente', async () => {
+    await authRequest(ctx, 'delete', `/cliente/${clienteId}`).expect(204);
 
     clienteId = undefined;
   });

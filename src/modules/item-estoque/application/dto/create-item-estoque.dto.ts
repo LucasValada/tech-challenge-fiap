@@ -15,23 +15,36 @@ enum TipoItemEstoque {
 }
 
 export class CreateItemEstoqueDto {
-  @ApiProperty({ example: 'Filtro de óleo' })
+  @ApiProperty({
+    description: 'Nome do item (peça ou insumo)',
+    example: 'Filtro de óleo',
+  })
   @IsString()
   @IsNotEmpty()
   nome!: string;
 
-  @ApiProperty({ enum: TipoItemEstoque, example: 'PECA' })
+  @ApiProperty({
+    description:
+      'Tipo do item: PECA (peça de reposição) ou INSUMO (consumível como óleo, fluidos)',
+    enum: TipoItemEstoque,
+    example: 'PECA',
+  })
   @IsEnum(TipoItemEstoque, {
     message: 'tipo must be PECA or INSUMO',
   })
   tipo!: TipoItemEstoque;
 
-  @ApiProperty({ example: 'FLT-OLEO-001' })
+  @ApiProperty({
+    description:
+      'SKU único do item (identificador de catálogo); único no sistema',
+    example: 'FLT-OLEO-001',
+  })
   @IsString()
   @IsNotEmpty()
   sku!: string;
 
   @ApiProperty({
+    description: 'Descrição detalhada do item (opcional)',
     example: 'Filtro de óleo para motores 1.0 a 2.0',
     required: false,
   })
@@ -39,17 +52,30 @@ export class CreateItemEstoqueDto {
   @IsOptional()
   descricao?: string;
 
-  @ApiProperty({ example: 45.9 })
+  @ApiProperty({
+    description: 'Preço unitário em BRL (até 2 casas decimais)',
+    example: 45.9,
+    minimum: 0,
+  })
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   precoUnitario!: number;
 
-  @ApiProperty({ example: 50 })
+  @ApiProperty({
+    description: 'Quantidade atual em estoque',
+    example: 50,
+    minimum: 0,
+  })
   @IsInt()
   @Min(0)
   quantidadeEstoque!: number;
 
-  @ApiProperty({ example: 10 })
+  @ApiProperty({
+    description:
+      'Nível mínimo de estoque; itens abaixo desse limite aparecem em GET /itens-estoque/baixo-estoque',
+    example: 10,
+    minimum: 0,
+  })
   @IsInt()
   @Min(0)
   estoqueMinimo!: number;

@@ -1,24 +1,33 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MailerModule } from '@nestjs-modules/mailer';
-import { MailService } from './mail.service';
+import { NestMailerEmailSender } from './infra/nest-mailer.email-sender';
 
 @Module({
   imports: [
-    MailerModule.forRoot({
-      transport: {
-        host: process.env.MAIL_HOST || 'smtp.ethereal.email',
-        port: Number(process.env.MAIL_PORT) || 587,
-        auth: {
-          user: process.env.MAIL_USER || '',
-          pass: process.env.MAIL_PASS || '',
+    MailerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        transport: {
+          host: config.get<string>('MAIL_HOST') ?? 'smtp.ethereal.email',
+          port: Number(config.get<string>('MAIL_PORT')) || 587,
+          auth: {
+            user: config.get<string>('MAIL_USER') ?? '',
+            pass: config.get<string>('MAIL_PASS') ?? '',
+          },
         },
-      },
-      defaults: {
-        from: process.env.MAIL_FROM || '"Oficina SOAT" <noreply@oficina.com>',
-      },
+        defaults: {
+          from:
+            config.get<string>('MAIL_FROM') ??
+            '"Oficina SOAT" <noreply@oficina.com>',
+        },
+      }),
     }),
   ],
-  providers: [MailService],
-  exports: [MailService],
+  providers: [
+    { provide: 'EMAIL_SENDER', useClass: NestMailerEmailSender },
+  ],
+  exports: ['EMAIL_SENDER'],
 })
 export class MailModule {}

@@ -28,6 +28,10 @@ import {
 } from '../../../../modules/ordem-servico/domain/errors';
 import { calcularSubtotal } from '../../../../modules/ordem-servico/domain/services/calcularTotaisOS';
 import { gerarCodigoOSSequencial } from '../../../../modules/ordem-servico/domain/services/gerarCodigoOSSequencial';
+import {
+  STATUS_EXCLUIDOS_DA_LISTAGEM,
+  prioridadeStatusListagem,
+} from '../../../../modules/ordem-servico/domain/services/prioridadeStatusOS';
 
 type Tx = Prisma.TransactionClient;
 
@@ -35,13 +39,27 @@ type Tx = Prisma.TransactionClient;
 export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Lista as OS ativas (exclui FINALIZADA e ENTREGUE) ordenadas por prioridade
+   * de status (EM_EXECUCAO > AGUARDANDO_APROVACAO > EM_DIAGNOSTICO > RECEBIDA)
+   * e, dentro do mesmo status, as mais antigas primeiro (createdAt ASC).
+   */
   async findAll(): Promise<{ ordens: OrdemServico[]; count: number }> {
     const ordens = await this.prisma.ordemServico.findMany({
-      orderBy: { createdAt: 'desc' },
+      where: { status: { notIn: STATUS_EXCLUIDOS_DA_LISTAGEM } },
+      orderBy: { createdAt: 'asc' },
     });
+
+    const ordenadas = [...ordens].sort((a, b) => {
+      const prioA = prioridadeStatusListagem(a.status as StatusOrdemServico);
+      const prioB = prioridadeStatusListagem(b.status as StatusOrdemServico);
+      if (prioA !== prioB) return prioA - prioB;
+      return a.createdAt.getTime() - b.createdAt.getTime();
+    });
+
     return {
-      ordens: ordens.map((o) => this.toEntity(o)),
-      count: ordens.length,
+      ordens: ordenadas.map((o) => this.toEntity(o)),
+      count: ordenadas.length,
     };
   }
 

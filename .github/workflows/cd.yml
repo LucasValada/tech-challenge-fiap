@@ -1,0 +1,309 @@
+name: CD
+
+on:
+  push:
+    branches: [main, develop]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Stage 1: Test guard ──────────────────────────────────────────────────
+  # Repete a validação do CI antes de empacotar/deployar, garantindo que um
+  # push com testes quebrados nunca produza imagem publicada nem deploy.
+  test:
+    name: Build & Test (guard)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run unit tests
+        run: npm test -- --passWithNoTests
+
+      - name: Compile TypeScript
+        run: npm run build
+
+  # ─── Stage 2: Docker Image ────────────────────────────────────────────────
+  docker:
+    name: Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─── Stage 3: Deploy to Kind ──────────────────────────────────────────────
+  deploy:
+    name: Deploy to Kind
+    runs-on: ubuntu-latest
+    needs: docker
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install Kind v0.27.0
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64
+          chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@829323503d1be3d00ca8346e5391ca0b07a9ab0d # v5.1.0
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "~> 1.6"
+
+      - name: Terraform — provision Kind cluster
+        working-directory: infra
+        run: |
+          terraform init
+          terraform apply -auto-approve
+
+      - name: Load Docker image into Kind
+        run: |
+          IMAGE="${{ needs.docker.outputs.image_tag }}"
+          SHA_TAG=$(echo "$IMAGE" | tr '\n' ' ' | grep -oP 'sha-\w+' | head -1)
+          FULL_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHA_TAG}"
+          FULL_TAG="${FULL_TAG,,}"
+          docker pull "$FULL_TAG"
+          kind load docker-image "$FULL_TAG" --name oficina-cluster
+
+      - name: Deploy Metrics Server (required for HPA)
+        run: |
+          kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+          # Patch to allow insecure TLS against Kind's kubelet
+          kubectl patch deployment metrics-server -n kube-system \
+            --type='json' \
+            -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+
+      - name: Apply namespace and PostgreSQL manifests
+        run: |
+          kubectl apply -f k8s/00-namespace.yaml
+          kubectl apply -f k8s/postgres/
+          kubectl rollout status statefulset/postgres -n oficina --timeout=180s
+
+      - name: Apply app config and secrets
+        run: |
+          kubectl apply -f k8s/app/01-configmap.yaml
+          kubectl apply -f k8s/app/02-secret.yaml
+
+      - name: Run database migrations
+        run: |
+          IMAGE="${{ needs.docker.outputs.image_tag }}"
+          SHA_TAG=$(echo "$IMAGE" | tr '\n' ' ' | grep -oP 'sha-\w+' | head -1)
+          FULL_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHA_TAG}"
+          FULL_TAG="${FULL_TAG,,}"
+          sed "s|IMAGE_PLACEHOLDER|${FULL_TAG}|g" k8s/app/03-migration-job.yaml | kubectl apply -f -
+          kubectl wait --for=condition=complete job/db-migration -n oficina --timeout=120s
+
+      - name: Deploy application
+        run: |
+          IMAGE="${{ needs.docker.outputs.image_tag }}"
+          SHA_TAG=$(echo "$IMAGE" | tr '\n' ' ' | grep -oP 'sha-\w+' | head -1)
+          FULL_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${SHA_TAG}"
+          FULL_TAG="${FULL_TAG,,}"
+          sed "s|IMAGE_PLACEHOLDER|${FULL_TAG}|g" k8s/app/04-deployment.yaml | kubectl apply -f -
+          kubectl apply -f k8s/app/05-service.yaml
+          kubectl apply -f k8s/app/06-hpa.yaml
+          kubectl rollout status deployment/oficina-api -n oficina --timeout=180s
+
+      - name: Diagnose cluster state on failure
+        if: failure()
+        run: |
+          echo "=== Namespaces ==="
+          kubectl get ns
+          echo
+          echo "=== All resources in oficina namespace ==="
+          kubectl get all -n oficina -o wide
+          echo
+          echo "=== Recent events ==="
+          kubectl get events -n oficina --sort-by=.lastTimestamp | tail -40
+          echo
+          echo "=== Pod descriptions ==="
+          kubectl describe pods -n oficina
+          echo
+          echo "=== App container logs (current) ==="
+          for pod in $(kubectl get pods -n oficina -l app=oficina-api -o name); do
+            echo "--- $pod ---"
+            kubectl logs "$pod" -n oficina --tail=200 --all-containers=true || true
+            echo "--- $pod (previous) ---"
+            kubectl logs "$pod" -n oficina --tail=200 --all-containers=true --previous || true
+          done
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          API=http://localhost:3000
+
+          echo "=== 1. Aguarda /api ficar disponível ==="
+          for i in $(seq 1 30); do
+            if curl -sf "$API/api" > /dev/null; then
+              echo "API ready após ${i}s"
+              break
+            fi
+            if [ "$i" = 30 ]; then
+              echo "API não respondeu em 30s"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          echo "=== 2. Login admin ==="
+          TOKEN=$(curl -sf -X POST "$API/auth/login" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"admin@oficina.com","senha":"senha123"}' | jq -er '.accessToken')
+          echo "Token OK (${#TOKEN} chars)"
+          AUTH="Authorization: Bearer $TOKEN"
+
+          echo "=== 3. Cria cliente PF ==="
+          CLIENTE_ID=$(curl -sf -X POST "$API/cliente" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d '{"nome":"Smoke Test","tipoPessoa":"FISICA","cpfCnpj":"52998224725"}' | jq -er '.id')
+          echo "Cliente $CLIENTE_ID"
+
+          echo "=== 4. Cria veículo ==="
+          curl -sf -X POST "$API/veiculos" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d "{\"clienteId\":\"$CLIENTE_ID\",\"placa\":\"ABC1D23\",\"marca\":\"Honda\",\"modelo\":\"Civic\",\"ano\":2020}" | jq -e '.id > ""' > /dev/null
+
+          echo "=== 5. Cria serviço ==="
+          SERVICO_ID=$(curl -sf -X POST "$API/servicos" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d '{"nome":"Troca de óleo","precoBase":150.00,"tempoEstimadoMin":30}' | jq -er '.id')
+          echo "Servico $SERVICO_ID"
+
+          echo "=== 6. Cria item de estoque (INSUMO, 50 unidades) ==="
+          ITEM_ID=$(curl -sf -X POST "$API/itens-estoque" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d '{"nome":"Óleo 5W30","tipo":"INSUMO","sku":"SMOKE-OLE","precoUnitario":45.00,"quantidadeEstoque":50,"estoqueMinimo":10}' | jq -er '.id')
+          echo "Item $ITEM_ID"
+
+          echo "=== 7. Abre OS com 1 serviço + 4 unidades do item ==="
+          OS_JSON=$(curl -sf -X POST "$API/ordens-servico" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d "{\"cpfCnpj\":\"52998224725\",\"placa\":\"ABC1D23\",\"servicos\":[{\"servicoId\":\"$SERVICO_ID\",\"quantidade\":1}],\"itens\":[{\"itemEstoqueId\":\"$ITEM_ID\",\"quantidade\":4}]}")
+          OS_ID=$(echo "$OS_JSON" | jq -er '.id')
+          OS_CODIGO=$(echo "$OS_JSON" | jq -er '.codigo')
+          echo "OS $OS_CODIGO (id=$OS_ID)"
+
+          echo "=== 8. Valida decremento de estoque (50 - 4 = 46) ==="
+          QTD=$(curl -sf "$API/itens-estoque/$ITEM_ID" -H "$AUTH" | jq -er '.quantidadeEstoque')
+          [ "$QTD" = "46" ] || { echo "Estoque esperado 46, veio $QTD"; exit 1; }
+          echo "Estoque decrementou para 46 (transação atômica OK)"
+
+          echo "=== 9. Consulta OS por ID (autenticada) ==="
+          curl -sf "$API/ordens-servico/$OS_ID" -H "$AUTH" | jq -e '.status == "RECEBIDA"' > /dev/null
+          echo "Status RECEBIDA confirmado"
+
+          echo "=== 10. Consulta pública (sem token) ==="
+          curl -sf "$API/public/ordens-servico/$OS_CODIGO?placa=ABC1D23" | jq -e '.status == "RECEBIDA"' > /dev/null
+          echo "Endpoint público OK"
+
+          echo "=== 11. Transiciona OS RECEBIDA → ENTREGUE (5 avanços lineares) ==="
+          for status in EM_DIAGNOSTICO AGUARDANDO_APROVACAO EM_EXECUCAO FINALIZADA ENTREGUE; do
+            resultado=$(curl -sf -X POST "$API/ordens-servico/$OS_ID/transicao-status" \
+              -H "$AUTH" -H "Content-Type: application/json" \
+              -d "{\"status\":\"$status\"}" | jq -er '.status')
+            [ "$resultado" = "$status" ] || { echo "Transição para $status falhou (veio $resultado)"; exit 1; }
+            echo "  → $status"
+          done
+
+          echo "=== 12. Valida filtro Fase 2 — OS ENTREGUE não aparece na listagem ==="
+          COUNT=$(curl -sf "$API/ordens-servico" -H "$AUTH" | jq -er '.count // (.ordens | length)')
+          [ "$COUNT" = "0" ] || { echo "Lista deveria excluir FINALIZADA/ENTREGUE, mas count=$COUNT"; exit 1; }
+          echo "Filtro Fase 2 confirmado (count=0)"
+
+          echo "=== 13. Webhook externo aprova orçamento de uma nova OS ==="
+          OS2_JSON=$(curl -sf -X POST "$API/ordens-servico" \
+            -H "$AUTH" -H "Content-Type: application/json" \
+            -d "{\"cpfCnpj\":\"52998224725\",\"placa\":\"ABC1D23\",\"servicos\":[{\"servicoId\":\"$SERVICO_ID\",\"quantidade\":1}]}")
+          OS2_ID=$(echo "$OS2_JSON" | jq -er '.id')
+          OS2_CODIGO=$(echo "$OS2_JSON" | jq -er '.codigo')
+          for status in EM_DIAGNOSTICO AGUARDANDO_APROVACAO; do
+            curl -sf -X POST "$API/ordens-servico/$OS2_ID/transicao-status" \
+              -H "$AUTH" -H "Content-Type: application/json" \
+              -d "{\"status\":\"$status\"}" > /dev/null
+          done
+          WEBHOOK_TOKEN=$(kubectl get secret app-secret -n oficina -o jsonpath='{.data.WEBHOOK_ORCAMENTO_TOKEN}' | base64 -d)
+          curl -sf -X POST "$API/webhooks/orcamento" \
+            -H "Content-Type: application/json" \
+            -H "X-Webhook-Token: $WEBHOOK_TOKEN" \
+            -d "{\"codigoOS\":\"$OS2_CODIGO\",\"aprovado\":true}" | jq -e '.status == "EM_EXECUCAO"' > /dev/null
+          echo "Webhook transicionou OS $OS2_CODIGO para EM_EXECUCAO"
+
+          echo "=== 14. Auth negado sem token (401 esperado) ==="
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API/cliente")
+          [ "$HTTP_CODE" = "401" ] || { echo "Esperado 401, veio $HTTP_CODE"; exit 1; }
+          echo "401 confirmado"
+
+          echo "=== 15. HPA provisionado ==="
+          kubectl get hpa oficina-api-hpa -n oficina > /dev/null
+          MIN=$(kubectl get hpa oficina-api-hpa -n oficina -o jsonpath='{.spec.minReplicas}')
+          MAX=$(kubectl get hpa oficina-api-hpa -n oficina -o jsonpath='{.spec.maxReplicas}')
+          echo "HPA configurado (min=$MIN, max=$MAX)"
+
+          echo "=== 16. Valida réplicas disponíveis no deployment ==="
+          AVAILABLE=$(kubectl get deployment/oficina-api -n oficina -o jsonpath='{.status.availableReplicas}')
+          [ "$AVAILABLE" = "2" ] || { echo "Esperado 2 réplicas disponíveis, veio $AVAILABLE"; exit 1; }
+          echo "2 pods disponíveis servindo tráfego"
+
+          echo "=== Smoke test OK ==="

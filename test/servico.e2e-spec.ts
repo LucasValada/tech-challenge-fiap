@@ -39,16 +39,14 @@ describe('Serviços (e2e)', () => {
   it('GET /servicos — lista serviços', async () => {
     const res = await authRequest(ctx, 'get', '/servicos').expect(200);
 
-    expect(res.body).toBeInstanceOf(Array);
-    expect(res.body.length).toBeGreaterThanOrEqual(1);
+    expect(res.body.servico).toBeInstanceOf(Array);
+    expect(res.body.count).toBeGreaterThanOrEqual(1);
   });
 
   it('GET /servicos/:id — busca por ID', async () => {
-    const res = await authRequest(
-      ctx,
-      'get',
-      `/servicos/${servicoId}`,
-    ).expect(200);
+    const res = await authRequest(ctx, 'get', `/servicos/${servicoId}`).expect(
+      200,
+    );
 
     expect(res.body.id).toBe(servicoId);
   });
