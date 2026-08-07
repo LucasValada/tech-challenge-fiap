@@ -5,6 +5,7 @@ export class Cliente {
     public email: string | null,
     public cpfCnpj: string,
     public tipoPessoa: 'FISICA' | 'JURIDICA',
+    public status: 'ATIVO' | 'INATIVO' = 'ATIVO',
     public id?: string,
     public createdAt?: Date,
     public updatedAt?: Date,

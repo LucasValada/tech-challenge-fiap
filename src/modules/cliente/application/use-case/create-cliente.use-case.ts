@@ -21,6 +21,7 @@ export class CreateClienteUseCase {
       email: data.email ?? null,
       cpfCnpj: data.cpfCnpj,
       tipoPessoa: data.tipoPessoa,
+      status: data.status,
     });
   }
 }

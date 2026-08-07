@@ -6,6 +6,7 @@ export interface CreateClienteData {
   email?: string | null;
   cpfCnpj: string;
   tipoPessoa: 'FISICA' | 'JURIDICA';
+  status?: 'ATIVO' | 'INATIVO';
 }
 
 export interface UpdateClienteData {
@@ -14,6 +15,7 @@ export interface UpdateClienteData {
   email?: string | null;
   cpfCnpj?: string;
   tipoPessoa?: 'FISICA' | 'JURIDICA';
+  status?: 'ATIVO' | 'INATIVO';
 }
 
 export interface ClienteRepository {
