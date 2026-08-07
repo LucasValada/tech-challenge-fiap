@@ -20,6 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../../../../common/guards';
+import { Roles } from '../../../../common/decorators';
 import { AuthenticatedUser } from '../../../auth/domain/types';
 import {
   CreateOrdemServicoDto,
@@ -30,6 +31,7 @@ import { AdicionarItemEstoqueOSDto } from '../../application/dto/adicionar-item-
 import { AtualizarQuantidadeOSDto } from '../../application/dto/atualizar-quantidade-os.dto';
 import { TransicionarStatusDto } from '../../application/dto/transicionar-status.dto';
 import { GetAllOrdensServicoUseCase } from '../../application/use-case/get-all-ordens-servico.use-case';
+import { GetMinhasOrdensServicoUseCase } from '../../application/use-case/get-minhas-ordens-servico.use-case';
 import { GetOrdemServicoByIdUseCase } from '../../application/use-case/get-ordem-servico-by-id.use-case';
 import { CreateOrdemServicoUseCase } from '../../application/use-case/create-ordem-servico.use-case';
 import { UpdateOrdemServicoUseCase } from '../../application/use-case/update-ordem-servico.use-case';
@@ -50,6 +52,7 @@ import { TransicionarStatusUseCase } from '../../application/use-case/transicion
 export class OrdemServicoController {
   constructor(
     private readonly getAllOrdensServicoUseCase: GetAllOrdensServicoUseCase,
+    private readonly getMinhasOrdensServicoUseCase: GetMinhasOrdensServicoUseCase,
     private readonly getOrdemServicoByIdUseCase: GetOrdemServicoByIdUseCase,
     private readonly createOrdemServicoUseCase: CreateOrdemServicoUseCase,
     private readonly updateOrdemServicoUseCase: UpdateOrdemServicoUseCase,
@@ -79,6 +82,24 @@ export class OrdemServicoController {
   })
   async findAll() {
     return this.getAllOrdensServicoUseCase.execute();
+  }
+
+  @Get('minhas')
+  @Roles('cliente')
+  @ApiOperation({
+    summary: 'Listar as ordens de serviço do cliente autenticado (auth por CPF)',
+    description:
+      'Rota protegida por autenticação via CPF. Retorna todas as OS do cliente ' +
+      'dono do token (emitido pela Lambda), das mais recentes às mais antigas. ' +
+      'Exige token de cliente — tokens administrativos recebem 403.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Ordens de serviço do cliente autenticado',
+  })
+  @ApiResponse({ status: 403, description: 'Token não autorizado para este recurso' })
+  async findMinhas(@Req() req: Request & { user: AuthenticatedUser }) {
+    return this.getMinhasOrdensServicoUseCase.execute(req.user.id);
   }
 
   @Get(':id')
