@@ -1,6 +1,6 @@
 # Tech Challenge FIAP - SOAT Oficina
 
-Sistema de gerenciamento de oficina mecânica desenvolvido para o Tech Challenge FIAP SOAT. API back-end para gestão de clientes, veículos, serviços, peças/insumos e ordens de serviço, com autenticação JWT, envio de orçamento por email, acompanhamento público de OS e infraestrutura provisionada via Terraform + Kubernetes.
+Sistema de gerenciamento de oficina mecânica desenvolvido para o Tech Challenge FIAP SOAT. API back-end para gestão de clientes, veículos, serviços, peças/insumos e ordens de serviço, com **autenticação dupla** (JWT de funcionário por email/senha e de cliente por **CPF via função serverless**), envio de orçamento por email, acompanhamento público de OS e infraestrutura provisionada via Terraform + Kubernetes.
 
 ## Índice
 
@@ -20,6 +20,7 @@ Sistema de gerenciamento de oficina mecânica desenvolvido para o Tech Challenge
 - [Configuração de email (Ethereal)](#configuração-de-email-ethereal)
 - [Autenticação](#autenticação)
 - [Documentação da API](#documentação-da-api)
+- [Documentação de arquitetura (RFC e ADR)](#documentação-de-arquitetura-rfc-e-adr)
 - [Endpoints da API](#endpoints-da-api)
 - [Fluxo da Ordem de Serviço](#fluxo-da-ordem-de-serviço)
 - [Testes](#testes)
@@ -415,7 +416,11 @@ Abra a URL no navegador para ver o email exatamente como o cliente receberia (as
 
 ## Autenticação
 
-A API usa **JWT (JSON Web Token)** para proteger os endpoints administrativos.
+A API usa **JWT assinado em HS256** e suporta **dois fluxos de autenticação que coexistem**, distinguidos por uma _claim_ de tipo no token e aplicados por um único guard com controle de papel (`@Roles`). Ambos enviam o token no header `Authorization: Bearer <token>`.
+
+### 1. Funcionários (admin) — email + senha
+
+Usuários internos (atendentes, mecânicos, administradores) autenticam pela própria aplicação:
 
 ```bash
 # Login (retorna accessToken)
@@ -426,9 +431,97 @@ POST /auth/login
 }
 ```
 
-Use o token retornado no header `Authorization: Bearer <token>` nas demais requisições.
+O token administrativo carrega `{ sub, email }` e é resolvido como `tipo: "admin"`. O usuário admin padrão é criado automaticamente pela migration `seed_admin_user` ao aplicar as migrations.
 
-O usuário admin padrão é criado automaticamente pela migration `seed_admin_user` ao aplicar as migrations.
+### 2. Clientes — CPF (função serverless)
+
+O cliente da oficina autentica **pelo CPF**, através de uma **função serverless (AWS Lambda)** exposta no API Gateway — repositório separado (`fase3-lambda-auth-cpf`). O fluxo:
+
+1. Cliente envia o CPF → `POST /auth` (API Gateway → Lambda)
+2. A Lambda valida os dígitos do CPF, consulta o cliente no banco e verifica se está **ATIVO**
+3. A Lambda assina um JWT **HS256** com o **mesmo segredo** que a aplicação usa para validar (compartilhado via AWS SSM Parameter Store) e devolve o token
+4. O cliente usa esse token nas rotas protegidas por CPF
+
+O token de cliente carrega `{ sub: <clienteId>, tipo: "cliente", cpf, nome }` e é resolvido como `tipo: "cliente"`. A aplicação **não emite** esse token — apenas o valida; a emissão é responsabilidade da Lambda.
+
+### Modelo de papéis e propriedade (roles + ownership)
+
+- O `JwtAuthGuard` valida o token e aplica o papel. **Sem `@Roles(...)` na rota, exige `admin`** — toda rota administrativa continua fechada ao cliente por padrão.
+- `@Roles('cliente')` libera as rotas de cliente. Um token admin numa rota de cliente recebe **403**, e um token de cliente numa rota admin também recebe **403**.
+- Nas rotas de cliente, além do papel, a aplicação valida **propriedade (ownership)**: o cliente só acessa as **próprias** OS (comparando o `clienteId` do token). OS de terceiros retornam **404** — sem revelar a existência do recurso.
+
+### Fluxo de autenticação (diagrama de sequência)
+
+Duas fases: a **emissão** do token pelo cliente (via função serverless) e o **consumo** de uma rota protegida na aplicação.
+
+```mermaid
+sequenceDiagram
+    actor C as Cliente
+    participant GW as API Gateway
+    participant L as Lambda (auth CPF)
+    participant DB as Banco (RDS)
+    participant APP as Aplicação (NestJS)
+
+    Note over L,APP: Lambda e aplicação compartilham o mesmo<br/>JWT_SECRET (HS256) via SSM Parameter Store
+
+    rect rgb(240, 245, 255)
+    Note over C,DB: Fase 1 — Emissão do token (por CPF)
+    C->>GW: POST /auth { cpf }
+    GW->>L: encaminha
+    L->>L: valida dígitos do CPF
+    L->>DB: SELECT id, nome, status FROM Cliente WHERE cpfCnpj = ?
+    alt CPF inválido
+        L-->>C: 400 CPF inválido
+    else Cliente não encontrado
+        L-->>C: 404 não encontrado
+    else status != ATIVO
+        L-->>C: 403 inativo
+    else Cliente ativo
+        L->>L: assina JWT HS256 { sub, tipo:"cliente", cpf, nome }
+        L-->>C: 200 { token, expiresIn, cliente }
+    end
+    end
+
+    rect rgb(240, 255, 245)
+    Note over C,DB: Fase 2 — Consumo de rota protegida
+    C->>GW: POST /ordens-servico/minhas/:id/aprovar (Bearer token)
+    GW->>APP: encaminha (proxy)
+    APP->>APP: JwtStrategy valida assinatura/expiração e resolve tipo=cliente
+    APP->>APP: JwtAuthGuard (@Roles 'cliente') + ownership (ordem.clienteId == sub)
+    alt token ausente ou inválido
+        APP-->>C: 401
+    else papel divergente (ex.: admin)
+        APP-->>C: 403
+    else OS de outro cliente
+        APP-->>C: 404
+    else autorizado
+        APP->>DB: transiciona AGUARDANDO_APROVACAO → EM_EXECUCAO
+        APP-->>C: 200 OS atualizada
+    end
+    end
+```
+
+### Exemplo de uso (cliente por CPF)
+
+```bash
+# 1. Obter o token pelo CPF (API Gateway → função serverless)
+curl -X POST https://<api-gateway>/auth \
+  -H 'Content-Type: application/json' \
+  -d '{ "cpf": "529.982.247-25" }'
+# → 200 { "token": "<jwt-cliente>", "expiresIn": "1h", "cliente": { "id", "nome" } }
+#   (400 CPF inválido | 404 não encontrado | 403 cliente inativo | 500 erro no banco)
+
+# 2. Listar as próprias OS
+curl https://<api-gateway>/ordens-servico/minhas \
+  -H 'Authorization: Bearer <jwt-cliente>'
+
+# 3. Aprovar o orçamento da própria OS (AGUARDANDO_APROVACAO → EM_EXECUCAO)
+curl -X POST https://<api-gateway>/ordens-servico/minhas/<osId>/aprovar \
+  -H 'Authorization: Bearer <jwt-cliente>'
+# → 200 (OS em EM_EXECUCAO) | 403 token admin | 404 OS de outro cliente
+```
+
+> A distinção admin/cliente é feita na `JwtStrategy` (pela presença de `tipo: "cliente"` vs `email` no payload) e o controle de acesso no `JwtAuthGuard` + decorator `@Roles`. Ver a [RFC-001](docs/rfc/RFC-001-estrategia-autenticacao.md) para a estratégia completa — alternativas consideradas, consequências e riscos.
 
 ## Documentação da API
 
@@ -436,6 +529,13 @@ O Swagger UI serve como collection interativa completa das APIs, com todos os DT
 
 - **Swagger UI (interativo):** `http://localhost:3000/api` — permite executar cada endpoint direto do browser após autenticar via `Authorize` com o `accessToken` do login
 - **OpenAPI JSON (para importar em Postman/Insomnia):** `http://localhost:3000/api-json`
+
+## Documentação de arquitetura (RFC e ADR)
+
+Decisões técnicas e arquiteturais relevantes da Fase 3 são registradas em Markdown:
+
+- **[RFC-001 — Estratégia de autenticação](docs/rfc/RFC-001-estrategia-autenticacao.md):** modelo de autenticação dupla (funcionário por email/senha e cliente por CPF via função serverless), formato dos tokens, papéis/propriedade e integração com a Lambda e o SSM.
+- **[ADR-001 — Ator da trilha de auditoria em ações de cliente](docs/adr/ADR-001-ator-trilha-auditoria.md):** por que o histórico de status registra o `usuarioCriadorId` (funcionário) quando a ação é do cliente, e o caminho de evolução.
 
 ## Endpoints da API
 
@@ -490,7 +590,9 @@ O Swagger UI serve como collection interativa completa das APIs, com todos os DT
 | PUT | `/itens-estoque/:id` | Atualizar (parcial; 409 se novo SKU pertencer a outro item) |
 | DELETE | `/itens-estoque/:id` | Deletar (soft delete via `ativo: false`) |
 
-### Ordens de Serviço (JWT)
+### Ordens de Serviço — Funcionários (JWT admin)
+Rotas administrativas (papel `admin` por padrão; token de cliente recebe **403**).
+
 | Método | Rota | Descrição |
 |---|---|---|
 | GET | `/ordens-servico` | Listar OS ativas: ordenadas por prioridade de status (`EM_EXECUCAO > AGUARDANDO_APROVACAO > EM_DIAGNOSTICO > RECEBIDA`) e mais antigas primeiro dentro do mesmo status. Excluí OS `FINALIZADA` e `ENTREGUE`. |
@@ -507,11 +609,20 @@ O Swagger UI serve como collection interativa completa das APIs, com todos os DT
 | POST | `/ordens-servico/:id/enviar-orcamento` | Enviar orçamento ao cliente por email (transiciona `EM_DIAGNOSTICO` → `AGUARDANDO_APROVACAO`) |
 | POST | `/ordens-servico/:id/transicao-status` | Transicionar status (avanço linear ou rollback de 1 passo, com validação de máquina de estados) |
 
+### Ordens de Serviço — Cliente (autenticação por CPF)
+Rotas protegidas por token de cliente (`@Roles('cliente')`) **e** por propriedade: o cliente só opera as próprias OS. Token admin recebe **403**; OS de outro cliente retorna **404**.
+
+| Método | Rota | Descrição |
+|---|---|---|
+| GET | `/ordens-servico/minhas` | Listar as próprias OS (filtradas pelo `clienteId` do token), das mais recentes às mais antigas |
+| GET | `/ordens-servico/minhas/:id` | Detalhar uma OS própria (linhas, totais e histórico de status) |
+| POST | `/ordens-servico/minhas/:id/aprovar` | Aprovar o orçamento da própria OS (transiciona `AGUARDANDO_APROVACAO` → `EM_EXECUCAO`) |
+| POST | `/ordens-servico/minhas/:id/rejeitar` | Rejeitar o orçamento da própria OS (rollback `AGUARDANDO_APROVACAO` → `EM_DIAGNOSTICO`) |
+
 ### Acompanhamento Público (sem JWT)
 | Método | Rota | Descrição |
 |---|---|---|
-| GET | `/public/ordens-servico/:codigo?placa=` | Consultar OS pelo código e placa (dupla checagem) |
-| POST | `/public/ordens-servico/:codigo/aprovar` | Cliente aprova o orçamento (transiciona `AGUARDANDO_APROVACAO` → `EM_EXECUCAO`) |
+| GET | `/public/ordens-servico/:codigo?placa=` | Consultar OS pelo código e placa (dupla checagem, sem dados sensíveis de terceiros) |
 
 ### Webhook Externo
 | Método | Rota | Descrição |
@@ -531,8 +642,8 @@ RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → EM_EXECUCAO → FINALIZ
 
 1. **RECEBIDA:** OS criada com cliente (CPF/CNPJ) e veículo (placa)
 2. **EM_DIAGNOSTICO:** mecânico avalia e adiciona serviços/peças necessários
-3. **AGUARDANDO_APROVACAO:** orçamento enviado ao cliente por email (endpoint `enviar-orcamento`) ou aguardando decisão via webhook externo
-4. **EM_EXECUCAO:** cliente aprova o orçamento (endpoint público `aprovar`, webhook externo com `aprovado: true`, ou avanço manual pelo admin)
+3. **AGUARDANDO_APROVACAO:** orçamento enviado ao cliente por email (endpoint `enviar-orcamento`), aguardando a decisão do cliente. O cliente pode **rejeitar** (autenticado por CPF, `POST /ordens-servico/minhas/:id/rejeitar`), fazendo rollback para `EM_DIAGNOSTICO` para ajuste e reenvio
+4. **EM_EXECUCAO:** cliente **aprova** o orçamento autenticado por CPF (`POST /ordens-servico/minhas/:id/aprovar`). Alternativas: webhook externo (`aprovado: true`, integração máquina-a-máquina) ou avanço manual pelo admin
 5. **FINALIZADA:** serviço concluído (email automático ao cliente com `finalizadaAt`)
 6. **ENTREGUE:** veículo devolvido ao cliente (email automático de confirmação com `entregueAt`)
 
@@ -540,7 +651,7 @@ Cada transição registra um `HistoricoStatusOS` com data, usuário e observaç�
 
 ## Testes
 
-Cobertura atual: **300 testes unitários** (82 suites) + **56 testes end-to-end** (8 suites, com Postgres real via Testcontainers).
+Cobertura atual: **313 testes unitários** (84 suites) + **59 testes end-to-end** (8 suites, com Postgres real via Testcontainers).
 
 - Statements: **69.61%**
 - Branches: **59.39%**
