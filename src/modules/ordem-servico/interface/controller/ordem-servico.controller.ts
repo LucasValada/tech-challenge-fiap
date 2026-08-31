@@ -32,6 +32,8 @@ import { AtualizarQuantidadeOSDto } from '../../application/dto/atualizar-quanti
 import { TransicionarStatusDto } from '../../application/dto/transicionar-status.dto';
 import { GetAllOrdensServicoUseCase } from '../../application/use-case/get-all-ordens-servico.use-case';
 import { GetMinhasOrdensServicoUseCase } from '../../application/use-case/get-minhas-ordens-servico.use-case';
+import { GetMinhaOrdemServicoUseCase } from '../../application/use-case/get-minha-ordem-servico.use-case';
+import { DecidirOrcamentoClienteUseCase } from '../../application/use-case/decidir-orcamento-cliente.use-case';
 import { GetOrdemServicoByIdUseCase } from '../../application/use-case/get-ordem-servico-by-id.use-case';
 import { CreateOrdemServicoUseCase } from '../../application/use-case/create-ordem-servico.use-case';
 import { UpdateOrdemServicoUseCase } from '../../application/use-case/update-ordem-servico.use-case';
@@ -53,6 +55,8 @@ export class OrdemServicoController {
   constructor(
     private readonly getAllOrdensServicoUseCase: GetAllOrdensServicoUseCase,
     private readonly getMinhasOrdensServicoUseCase: GetMinhasOrdensServicoUseCase,
+    private readonly getMinhaOrdemServicoUseCase: GetMinhaOrdemServicoUseCase,
+    private readonly decidirOrcamentoClienteUseCase: DecidirOrcamentoClienteUseCase,
     private readonly getOrdemServicoByIdUseCase: GetOrdemServicoByIdUseCase,
     private readonly createOrdemServicoUseCase: CreateOrdemServicoUseCase,
     private readonly updateOrdemServicoUseCase: UpdateOrdemServicoUseCase,
@@ -100,6 +104,91 @@ export class OrdemServicoController {
   @ApiResponse({ status: 403, description: 'Token não autorizado para este recurso' })
   async findMinhas(@Req() req: Request & { user: AuthenticatedUser }) {
     return this.getMinhasOrdensServicoUseCase.execute(req.user.id);
+  }
+
+  @Get('minhas/:id')
+  @Roles('cliente')
+  @ApiOperation({
+    summary:
+      'Detalhar uma OS do cliente autenticado (auth por CPF), com linhas, ' +
+      'totais e histórico de status',
+    description:
+      'Rota protegida por autenticação via CPF. Retorna o detalhe apenas se a ' +
+      'OS pertencer ao cliente dono do token; tokens administrativos recebem 403.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'OS detalhada do cliente autenticado',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Token não autorizado para este recurso',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'OS não encontrada ou não pertence ao cliente',
+  })
+  async findMinhaById(
+    @Req() req: Request & { user: AuthenticatedUser },
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.getMinhaOrdemServicoUseCase.execute(req.user.id, id);
+  }
+
+  @Post('minhas/:id/aprovar')
+  @Roles('cliente')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Cliente aprova o orçamento da própria OS (auth por CPF; ' +
+      'AGUARDANDO_APROVACAO → EM_EXECUCAO)',
+    description:
+      'Rota protegida por autenticação via CPF. Apenas o cliente dono da OS ' +
+      '(token emitido pela Lambda) pode aprovar; tokens administrativos recebem 403.',
+  })
+  @ApiResponse({ status: 200, description: 'Orçamento aprovado, OS atualizada' })
+  @ApiResponse({
+    status: 403,
+    description: 'Token não autorizado para este recurso',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'OS não encontrada ou não pertence ao cliente',
+  })
+  @ApiResponse({ status: 409, description: 'OS não está em AGUARDANDO_APROVACAO' })
+  async aprovarMinhaOrdem(
+    @Req() req: Request & { user: AuthenticatedUser },
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.decidirOrcamentoClienteUseCase.execute(req.user.id, id, true);
+  }
+
+  @Post('minhas/:id/rejeitar')
+  @Roles('cliente')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Cliente rejeita o orçamento da própria OS (auth por CPF; ' +
+      'AGUARDANDO_APROVACAO → EM_DIAGNOSTICO)',
+    description:
+      'Rota protegida por autenticação via CPF. Apenas o cliente dono da OS ' +
+      'pode rejeitar; a OS volta para EM_DIAGNOSTICO. Tokens administrativos recebem 403.',
+  })
+  @ApiResponse({ status: 200, description: 'Orçamento recusado, OS atualizada' })
+  @ApiResponse({
+    status: 403,
+    description: 'Token não autorizado para este recurso',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'OS não encontrada ou não pertence ao cliente',
+  })
+  @ApiResponse({ status: 409, description: 'OS não está em AGUARDANDO_APROVACAO' })
+  async rejeitarMinhaOrdem(
+    @Req() req: Request & { user: AuthenticatedUser },
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.decidirOrcamentoClienteUseCase.execute(req.user.id, id, false);
   }
 
   @Get(':id')

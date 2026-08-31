@@ -3,6 +3,8 @@ import { Request } from 'express';
 import { OrdemServicoController } from './ordem-servico.controller';
 import { GetAllOrdensServicoUseCase } from '../../application/use-case/get-all-ordens-servico.use-case';
 import { GetMinhasOrdensServicoUseCase } from '../../application/use-case/get-minhas-ordens-servico.use-case';
+import { GetMinhaOrdemServicoUseCase } from '../../application/use-case/get-minha-ordem-servico.use-case';
+import { DecidirOrcamentoClienteUseCase } from '../../application/use-case/decidir-orcamento-cliente.use-case';
 import { GetOrdemServicoByIdUseCase } from '../../application/use-case/get-ordem-servico-by-id.use-case';
 import { CreateOrdemServicoUseCase } from '../../application/use-case/create-ordem-servico.use-case';
 import { UpdateOrdemServicoUseCase } from '../../application/use-case/update-ordem-servico.use-case';
@@ -21,6 +23,8 @@ const mock = () => ({ execute: jest.fn() });
 
 const getAll = mock();
 const getMinhas = mock();
+const getMinha = mock();
+const decidirOrcamento = mock();
 const getById = mock();
 const create = mock();
 const update = mock();
@@ -50,6 +54,11 @@ describe('OrdemServicoController', () => {
       providers: [
         { provide: GetAllOrdensServicoUseCase, useValue: getAll },
         { provide: GetMinhasOrdensServicoUseCase, useValue: getMinhas },
+        { provide: GetMinhaOrdemServicoUseCase, useValue: getMinha },
+        {
+          provide: DecidirOrcamentoClienteUseCase,
+          useValue: decidirOrcamento,
+        },
         { provide: GetOrdemServicoByIdUseCase, useValue: getById },
         { provide: CreateOrdemServicoUseCase, useValue: create },
         { provide: UpdateOrdemServicoUseCase, useValue: update },
@@ -90,6 +99,50 @@ describe('OrdemServicoController', () => {
 
     expect(result).toBe(minhas);
     expect(getMinhas.execute).toHaveBeenCalledWith('cliente-1');
+  });
+
+  it('GET /ordens-servico/minhas/:id → GetMinhaOrdemServicoUseCase com o clienteId do token', async () => {
+    const detalhe = { id: 'os-1', codigo: 'OS-2026-000001' };
+    getMinha.execute.mockResolvedValue(detalhe);
+
+    const result = await controller.findMinhaById(fakeRequest('cliente-1'), 'os-1');
+
+    expect(result).toBe(detalhe);
+    expect(getMinha.execute).toHaveBeenCalledWith('cliente-1', 'os-1');
+  });
+
+  it('POST /ordens-servico/minhas/:id/aprovar → decidir(aprovado=true) com o clienteId do token', async () => {
+    const os = { id: 'os-1', status: 'EM_EXECUCAO' };
+    decidirOrcamento.execute.mockResolvedValue(os);
+
+    const result = await controller.aprovarMinhaOrdem(
+      fakeRequest('cliente-1'),
+      'os-1',
+    );
+
+    expect(result).toBe(os);
+    expect(decidirOrcamento.execute).toHaveBeenCalledWith(
+      'cliente-1',
+      'os-1',
+      true,
+    );
+  });
+
+  it('POST /ordens-servico/minhas/:id/rejeitar → decidir(aprovado=false) com o clienteId do token', async () => {
+    const os = { id: 'os-1', status: 'EM_DIAGNOSTICO' };
+    decidirOrcamento.execute.mockResolvedValue(os);
+
+    const result = await controller.rejeitarMinhaOrdem(
+      fakeRequest('cliente-1'),
+      'os-1',
+    );
+
+    expect(result).toBe(os);
+    expect(decidirOrcamento.execute).toHaveBeenCalledWith(
+      'cliente-1',
+      'os-1',
+      false,
+    );
   });
 
   it('GET /ordens-servico/:id → GetOrdemServicoByIdUseCase', async () => {
