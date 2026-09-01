@@ -41,4 +41,14 @@ export class UpdateClienteDto {
     enum: ['FISICA', 'JURIDICA'],
   })
   tipoPessoa?: 'FISICA' | 'JURIDICA';
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['ATIVO', 'INATIVO'])
+  @ApiPropertyOptional({
+    description:
+      'Status do cliente. INATIVO impede a autenticação por CPF (a Lambda retorna 403).',
+    enum: ['ATIVO', 'INATIVO'],
+  })
+  status?: 'ATIVO' | 'INATIVO';
 }

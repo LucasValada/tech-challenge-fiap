@@ -55,6 +55,17 @@ describe('CreateClienteUseCase', () => {
     expect(mockRepo.create).not.toHaveBeenCalled();
   });
 
+  it('repassa o status quando informado', async () => {
+    mockRepo.findByCpfCnpj.mockResolvedValue(null);
+    mockRepo.create.mockResolvedValue(clienteMock);
+
+    await useCase.execute({ ...dto, status: 'INATIVO' });
+
+    expect(mockRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'INATIVO' }),
+    );
+  });
+
   it('normaliza telefone e email null quando ausentes', async () => {
     mockRepo.findByCpfCnpj.mockResolvedValue(null);
     mockRepo.create.mockResolvedValue(clienteMock);
