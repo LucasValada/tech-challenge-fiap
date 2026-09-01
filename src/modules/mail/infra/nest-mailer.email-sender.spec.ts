@@ -68,9 +68,8 @@ describe('NestMailerEmailSender', () => {
       expect(payload.text).toContain('Filtro');
       expect(payload.text).toContain('Total: R$ 230.00');
       expect(payload.text).toContain(orcamentoData.placa);
-      expect(payload.text).toContain(
-        `/public/ordens-servico/${orcamentoData.codigoOS}/aprovar`,
-      );
+      expect(payload.text).toContain('/ordens-servico/minhas/{id}/aprovar');
+      expect(payload.text).toContain('/ordens-servico/minhas/{id}/rejeitar');
     });
 
     it('funciona quando não há serviços nem itens (linhas condicionais)', async () => {

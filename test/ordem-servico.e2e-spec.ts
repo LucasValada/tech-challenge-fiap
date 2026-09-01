@@ -1,4 +1,11 @@
-import { E2eContext, setupE2e, authRequest, publicRequest } from './setup-e2e';
+import {
+  E2eContext,
+  setupE2e,
+  authRequest,
+  publicRequest,
+  clienteToken,
+  clienteRequest,
+} from './setup-e2e';
 
 describe('Ordem de Serviço — fluxo completo (e2e)', () => {
   let ctx: E2eContext;
@@ -195,16 +202,53 @@ describe('Ordem de Serviço — fluxo completo (e2e)', () => {
     expect(res.body.codigo).toBe(osCodigo);
   });
 
-  it('POST /public/ordens-servico/:codigo/aprovar — cliente aprova orçamento', async () => {
-    const res = await publicRequest(
+  it('GET /ordens-servico/minhas/:id — cliente consulta o detalhe da própria OS via CPF', async () => {
+    const token = clienteToken(ctx, {
+      id: clienteId,
+      cpf: '687.334.729-98',
+      nome: 'E2E OS Cliente',
+    });
+
+    const res = await clienteRequest(
+      ctx,
+      'get',
+      `/ordens-servico/minhas/${osId}`,
+      token,
+    ).expect(200);
+
+    expect(res.body.id).toBe(osId);
+    expect(res.body.status).toBe('AGUARDANDO_APROVACAO');
+    expect(res.body.cliente.id).toBe(clienteId);
+    expect(Array.isArray(res.body.servicos)).toBe(true);
+  });
+
+  it('GET /ordens-servico/minhas/:id — token admin recebe 403', async () => {
+    await authRequest(ctx, 'get', `/ordens-servico/minhas/${osId}`).expect(403);
+  });
+
+  it('POST /ordens-servico/minhas/:id/aprovar — cliente aprova via CPF (token da Lambda)', async () => {
+    const token = clienteToken(ctx, {
+      id: clienteId,
+      cpf: '687.334.729-98',
+      nome: 'E2E OS Cliente',
+    });
+
+    const res = await clienteRequest(
       ctx,
       'post',
-      `/public/ordens-servico/${osCodigo}/aprovar`,
-    )
-      .send({ placa: 'TST1A99' })
-      .expect(200);
+      `/ordens-servico/minhas/${osId}/aprovar`,
+      token,
+    ).expect(200);
 
     expect(res.body.status).toBe('EM_EXECUCAO');
+  });
+
+  it('POST /ordens-servico/minhas/:id/aprovar — token admin recebe 403', async () => {
+    await authRequest(
+      ctx,
+      'post',
+      `/ordens-servico/minhas/${osId}/aprovar`,
+    ).expect(403);
   });
 
   it('POST transicao-status — EM_EXECUCAO → FINALIZADA', async () => {

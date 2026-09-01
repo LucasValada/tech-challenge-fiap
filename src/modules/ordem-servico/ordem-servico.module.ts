@@ -7,6 +7,7 @@ import { ItemEstoqueModule } from '../item-estoque/item-estoque.module';
 import { MailModule } from '../mail/mail.module';
 import { GetAllOrdensServicoUseCase } from './application/use-case/get-all-ordens-servico.use-case';
 import { GetMinhasOrdensServicoUseCase } from './application/use-case/get-minhas-ordens-servico.use-case';
+import { GetMinhaOrdemServicoUseCase } from './application/use-case/get-minha-ordem-servico.use-case';
 import { GetOrdemServicoByIdUseCase } from './application/use-case/get-ordem-servico-by-id.use-case';
 import { CreateOrdemServicoUseCase } from './application/use-case/create-ordem-servico.use-case';
 import { UpdateOrdemServicoUseCase } from './application/use-case/update-ordem-servico.use-case';
@@ -20,7 +21,7 @@ import { RemoverItemEstoqueOSUseCase } from './application/use-case/remover-item
 import { EnviarOrcamentoUseCase } from './application/use-case/enviar-orcamento.use-case';
 import { TransicionarStatusUseCase } from './application/use-case/transicionar-status.use-case';
 import { ConsultarOrdemServicoPublicaUseCase } from './application/use-case/consultar-ordem-servico-publica.use-case';
-import { AprovarOrcamentoPublicoUseCase } from './application/use-case/aprovar-orcamento-publico.use-case';
+import { DecidirOrcamentoClienteUseCase } from './application/use-case/decidir-orcamento-cliente.use-case';
 import { RelatorioTempoMedioUseCase } from './application/use-case/relatorio-tempo-medio.use-case';
 import { ProcessarWebhookOrcamentoUseCase } from './application/use-case/processar-webhook-orcamento.use-case';
 import { OrdemServicoController } from './interface/controller/ordem-servico.controller';
@@ -47,6 +48,8 @@ import { PrismaOrdemServicoRepository } from '../../infra/database/prisma/reposi
   providers: [
     GetAllOrdensServicoUseCase,
     GetMinhasOrdensServicoUseCase,
+    GetMinhaOrdemServicoUseCase,
+    DecidirOrcamentoClienteUseCase,
     GetOrdemServicoByIdUseCase,
     CreateOrdemServicoUseCase,
     UpdateOrdemServicoUseCase,
@@ -60,7 +63,6 @@ import { PrismaOrdemServicoRepository } from '../../infra/database/prisma/reposi
     EnviarOrcamentoUseCase,
     TransicionarStatusUseCase,
     ConsultarOrdemServicoPublicaUseCase,
-    AprovarOrcamentoPublicoUseCase,
     RelatorioTempoMedioUseCase,
     ProcessarWebhookOrcamentoUseCase,
     {
