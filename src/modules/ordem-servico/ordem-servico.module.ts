@@ -6,6 +6,7 @@ import { ServicoModule } from '../servico/servico.module';
 import { ItemEstoqueModule } from '../item-estoque/item-estoque.module';
 import { MailModule } from '../mail/mail.module';
 import { GetAllOrdensServicoUseCase } from './application/use-case/get-all-ordens-servico.use-case';
+import { GetMinhasOrdensServicoUseCase } from './application/use-case/get-minhas-ordens-servico.use-case';
 import { GetOrdemServicoByIdUseCase } from './application/use-case/get-ordem-servico-by-id.use-case';
 import { CreateOrdemServicoUseCase } from './application/use-case/create-ordem-servico.use-case';
 import { UpdateOrdemServicoUseCase } from './application/use-case/update-ordem-servico.use-case';
@@ -45,6 +46,7 @@ import { PrismaOrdemServicoRepository } from '../../infra/database/prisma/reposi
   ],
   providers: [
     GetAllOrdensServicoUseCase,
+    GetMinhasOrdensServicoUseCase,
     GetOrdemServicoByIdUseCase,
     CreateOrdemServicoUseCase,
     UpdateOrdemServicoUseCase,

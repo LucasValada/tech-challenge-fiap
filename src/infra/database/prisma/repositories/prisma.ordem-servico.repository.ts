@@ -63,6 +63,24 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
     };
   }
 
+  /**
+   * Lista todas as OS de um cliente (inclusive FINALIZADA e ENTREGUE, para o
+   * cliente acompanhar o histórico completo), das mais recentes às mais antigas.
+   */
+  async findByClienteId(
+    clienteId: string,
+  ): Promise<{ ordens: OrdemServico[]; count: number }> {
+    const ordens = await this.prisma.ordemServico.findMany({
+      where: { clienteId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      ordens: ordens.map((o) => this.toEntity(o)),
+      count: ordens.length,
+    };
+  }
+
   async findById(id: string): Promise<OrdemServico | null> {
     const ordem = await this.prisma.ordemServico.findUnique({ where: { id } });
     return ordem ? this.toEntity(ordem) : null;

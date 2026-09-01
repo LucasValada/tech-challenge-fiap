@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { Request } from 'express';
 import { OrdemServicoController } from './ordem-servico.controller';
 import { GetAllOrdensServicoUseCase } from '../../application/use-case/get-all-ordens-servico.use-case';
+import { GetMinhasOrdensServicoUseCase } from '../../application/use-case/get-minhas-ordens-servico.use-case';
 import { GetOrdemServicoByIdUseCase } from '../../application/use-case/get-ordem-servico-by-id.use-case';
 import { CreateOrdemServicoUseCase } from '../../application/use-case/create-ordem-servico.use-case';
 import { UpdateOrdemServicoUseCase } from '../../application/use-case/update-ordem-servico.use-case';
@@ -19,6 +20,7 @@ import { AuthenticatedUser } from '../../../auth/domain/types';
 const mock = () => ({ execute: jest.fn() });
 
 const getAll = mock();
+const getMinhas = mock();
 const getById = mock();
 const create = mock();
 const update = mock();
@@ -47,6 +49,7 @@ describe('OrdemServicoController', () => {
       controllers: [OrdemServicoController],
       providers: [
         { provide: GetAllOrdensServicoUseCase, useValue: getAll },
+        { provide: GetMinhasOrdensServicoUseCase, useValue: getMinhas },
         { provide: GetOrdemServicoByIdUseCase, useValue: getById },
         { provide: CreateOrdemServicoUseCase, useValue: create },
         { provide: UpdateOrdemServicoUseCase, useValue: update },
@@ -77,6 +80,16 @@ describe('OrdemServicoController', () => {
     const result = await controller.findAll();
     expect(result).toEqual({ ordens: [], count: 0 });
     expect(getAll.execute).toHaveBeenCalled();
+  });
+
+  it('GET /ordens-servico/minhas → GetMinhasOrdensServicoUseCase com o clienteId do token', async () => {
+    const minhas = { ordens: [{ id: 'os-1' }], count: 1 };
+    getMinhas.execute.mockResolvedValue(minhas);
+
+    const result = await controller.findMinhas(fakeRequest('cliente-1'));
+
+    expect(result).toBe(minhas);
+    expect(getMinhas.execute).toHaveBeenCalledWith('cliente-1');
   });
 
   it('GET /ordens-servico/:id → GetOrdemServicoByIdUseCase', async () => {
