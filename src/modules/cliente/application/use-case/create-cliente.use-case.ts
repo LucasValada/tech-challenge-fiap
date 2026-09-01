@@ -5,6 +5,7 @@ import {
 } from '../../domain/repository/cliente.repository';
 import { Cliente } from '../../domain/entity/Cliente';
 import { garantirCpfCnpjUnico } from '../../domain/services/garantirCpfCnpjUnico';
+import { normalizarCpfCnpj } from '../../domain/services/normalizarCpfCnpj';
 
 @Injectable()
 export class CreateClienteUseCase {
@@ -14,12 +15,13 @@ export class CreateClienteUseCase {
   ) {}
 
   async execute(data: CreateClienteData): Promise<Cliente> {
-    await garantirCpfCnpjUnico(this.clienteRepository, data.cpfCnpj);
+    const cpfCnpj = normalizarCpfCnpj(data.cpfCnpj);
+    await garantirCpfCnpjUnico(this.clienteRepository, cpfCnpj);
     return this.clienteRepository.create({
       nome: data.nome,
       telefone: data.telefone ?? null,
       email: data.email ?? null,
-      cpfCnpj: data.cpfCnpj,
+      cpfCnpj,
       tipoPessoa: data.tipoPessoa,
       status: data.status,
     });
