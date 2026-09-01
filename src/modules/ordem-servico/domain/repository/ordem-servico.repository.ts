@@ -133,6 +133,10 @@ export interface RelatorioTempoMedioView {
 export interface OrdemServicoRepository {
   findAll(): Promise<{ ordens: OrdemServico[]; count: number }>;
 
+  findByClienteId(
+    clienteId: string,
+  ): Promise<{ ordens: OrdemServico[]; count: number }>;
+
   findById(id: string): Promise<OrdemServico | null>;
 
   findByIdComDetalhes(id: string): Promise<OrdemServicoDetalhadaView | null>;
