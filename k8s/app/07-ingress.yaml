@@ -1,0 +1,29 @@
+# Ingress que o AWS Load Balancer Controller materializa como um ALB
+# internet-facing. É o alvo do VPC Link do API Gateway (a Lambda de auth
+# preenche `alb_listener_arn` com o ARN do listener deste ALB).
+#
+# target-type: ip → o ALB registra os IPs dos pods direto (via VPC CNI).
+# healthcheck em /health (liveness raso) — não usar /health/ready aqui para que
+# um blip no banco não derrube todos os targets do ALB.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: oficina-api
+  namespace: oficina
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/success-codes: "200"
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: oficina-api
+                port:
+                  number: 3000
