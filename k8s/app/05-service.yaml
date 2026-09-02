@@ -1,3 +1,6 @@
+# Service ClusterIP da API. Com o ALB usando target-type: ip, o balanceador
+# registra os IPs dos pods diretamente; o Service serve de seletor/DNS interno
+# (e é o alvo do port-forward no smoke test do CD).
 apiVersion: v1
 kind: Service
 metadata:
@@ -6,11 +9,9 @@ metadata:
   labels:
     app: oficina-api
 spec:
+  type: ClusterIP
   selector:
     app: oficina-api
   ports:
-    # NodePort 30080 maps to host port defined in Kind extra_port_mappings (var.app_host_port, default 3000)
     - port: 3000
       targetPort: 3000
-      nodePort: 30080
-  type: NodePort

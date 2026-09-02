@@ -1,5 +1,9 @@
-# Replace IMAGE_PLACEHOLDER with the actual image tag before applying:
-#   sed "s|IMAGE_PLACEHOLDER|ghcr.io/org/repo:sha-abc1234|g" 04-deployment.yaml | kubectl apply -f -
+# Deployment da API no EKS. O CD substitui IMAGE_PLACEHOLDER pela imagem do ECR:
+#   sed "s|IMAGE_PLACEHOLDER|<ecr>/tc3-oficina-<env>-api:<sha>|g" 04-deployment.yaml | kubectl apply -f -
+#
+# Sem initContainer de espera: o banco é o RDS gerenciado (fora do cluster), que
+# já está no ar antes de qualquer pod — não há serviço no cluster para aguardar.
+# As probes usam os endpoints de saúde dedicados (liveness raso, readiness com DB).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,16 +21,6 @@ spec:
       labels:
         app: oficina-api
     spec:
-      initContainers:
-        - name: wait-for-postgres
-          image: busybox:1.36
-          command:
-            - sh
-            - -c
-            - |
-              until nc -z postgres.oficina.svc.cluster.local 5432; do
-                echo "waiting for postgres..."; sleep 3
-              done
       containers:
         - name: oficina-api
           image: IMAGE_PLACEHOLDER
@@ -61,7 +55,7 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: WEBHOOK_ORCAMENTO_TOKEN
-          # Resource limits are required for HPA to compute utilization percentages
+          # Requests/limits são obrigatórios para o HPA calcular a utilização.
           resources:
             requests:
               cpu: "100m"
@@ -71,14 +65,14 @@ spec:
               memory: "512Mi"
           readinessProbe:
             httpGet:
-              path: /api
+              path: /health/ready
               port: 3000
             initialDelaySeconds: 15
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
             httpGet:
-              path: /api
+              path: /health
               port: 3000
             initialDelaySeconds: 30
             periodSeconds: 20
