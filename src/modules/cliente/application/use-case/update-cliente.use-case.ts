@@ -6,6 +6,7 @@ import {
 import { Cliente } from '../../domain/entity/Cliente';
 import { buscarClienteOuFalhar } from '../../domain/services/buscarClienteOuFalhar';
 import { garantirCpfCnpjUnico } from '../../domain/services/garantirCpfCnpjUnico';
+import { normalizarCpfCnpj } from '../../domain/services/normalizarCpfCnpj';
 
 @Injectable()
 export class UpdateClienteUseCase {
@@ -16,9 +17,12 @@ export class UpdateClienteUseCase {
 
   async execute(id: string, data: UpdateClienteData): Promise<Cliente> {
     await buscarClienteOuFalhar(this.clienteRepository, id);
-    if (data.cpfCnpj) {
-      await garantirCpfCnpjUnico(this.clienteRepository, data.cpfCnpj, id);
+    const dados = data.cpfCnpj
+      ? { ...data, cpfCnpj: normalizarCpfCnpj(data.cpfCnpj) }
+      : data;
+    if (dados.cpfCnpj) {
+      await garantirCpfCnpjUnico(this.clienteRepository, dados.cpfCnpj, id);
     }
-    return this.clienteRepository.update(id, data);
+    return this.clienteRepository.update(id, dados);
   }
 }

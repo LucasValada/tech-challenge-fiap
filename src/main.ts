@@ -1,13 +1,17 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { Logger } from 'nestjs-pino';
 import { validateEnv } from './core/config/env';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters';
 
 async function bootstrap() {
   validateEnv();
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+  // Roteia os logs internos do Nest pelo pino (JSON estruturado + correlationId).
+  app.useLogger(app.get(Logger));
 
   app.useGlobalFilters(new AllExceptionsFilter());
 
