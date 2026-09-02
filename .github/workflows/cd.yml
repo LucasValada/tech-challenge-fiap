@@ -1,5 +1,7 @@
 name: CD
 
+# Um único ambiente na AWS: as duas branches (develop e main) deployam no mesmo
+# cluster/RDS/ECR/SSM de homolog.
 on:
   push:
     branches: [main, develop]
@@ -9,13 +11,12 @@ permissions:
   contents: read
   id-token: write
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false # nunca cancelar um deploy em andamento
-
 env:
   AWS_REGION: us-east-1
-  PROJECT: tc3-oficina
+  ENVIRONMENT: homolog
+  EKS_CLUSTER: tc3-oficina-homolog
+  ECR_REPOSITORY: tc3-oficina-homolog-api
+  SSM_PREFIX: /tc3-oficina/homolog
   NAMESPACE: oficina
 
 jobs:
@@ -25,6 +26,9 @@ jobs:
   test:
     name: Build & Test (guard)
     runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-test-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -42,32 +46,11 @@ jobs:
       - name: Compile TypeScript
         run: npm run build
 
-  # ─── Stage 2: Ambiente-alvo ───────────────────────────────────────────────
-  # develop → homolog, main → prod. Deriva cluster, repositório ECR e prefixo
-  # do SSM a partir do ambiente, para o mesmo pipeline servir os dois.
-  prepare:
-    name: Resolve environment
-    runs-on: ubuntu-latest
-    needs: test
-    outputs:
-      environment: ${{ steps.d.outputs.environment }}
-      cluster: ${{ steps.d.outputs.cluster }}
-      ecr_repository: ${{ steps.d.outputs.ecr_repository }}
-      ssm_prefix: ${{ steps.d.outputs.ssm_prefix }}
-    steps:
-      - id: d
-        run: |
-          if [ "${{ github.ref_name }}" = "main" ]; then ENV=prod; else ENV=homolog; fi
-          echo "environment=$ENV" >> "$GITHUB_OUTPUT"
-          echo "cluster=${PROJECT}-$ENV" >> "$GITHUB_OUTPUT"
-          echo "ecr_repository=${PROJECT}-$ENV-api" >> "$GITHUB_OUTPUT"
-          echo "ssm_prefix=/${PROJECT}/$ENV" >> "$GITHUB_OUTPUT"
-
-  # ─── Stage 3: Build & push da imagem no ECR ───────────────────────────────
+  # ─── Stage 2: Build & push da imagem no ECR ───────────────────────────────
   build:
     name: Build & Push (ECR)
     runs-on: ubuntu-latest
-    needs: prepare
+    needs: test
     outputs:
       image: ${{ steps.meta.outputs.image_sha }}
     steps:
@@ -86,13 +69,10 @@ jobs:
 
       - name: Compute image references
         id: meta
-        env:
-          ECR_REPOSITORY: ${{ needs.prepare.outputs.ecr_repository }}
-          ENVIRONMENT: ${{ needs.prepare.outputs.environment }}
         run: |
           REG="${{ steps.ecr.outputs.registry }}"
           echo "image_sha=${REG}/${ECR_REPOSITORY}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
-          echo "image_env=${REG}/${ECR_REPOSITORY}:${ENVIRONMENT}" >> "$GITHUB_OUTPUT"
+          echo "image_branch=${REG}/${ECR_REPOSITORY}:${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
@@ -106,19 +86,23 @@ jobs:
           platforms: linux/amd64
           tags: |
             ${{ steps.meta.outputs.image_sha }}
-            ${{ steps.meta.outputs.image_env }}
+            ${{ steps.meta.outputs.image_branch }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # ─── Stage 4: Deploy no EKS ───────────────────────────────────────────────
+  # ─── Stage 3: Deploy no EKS ───────────────────────────────────────────────
   deploy:
     name: Deploy (EKS)
     runs-on: ubuntu-latest
-    needs: [prepare, build]
-    environment: ${{ needs.prepare.outputs.environment }}
+    needs: build
+    environment: homolog
+    # Serializa deploys: as duas branches miram o MESMO cluster, então nunca
+    # dois deploys ao mesmo tempo (sem cancelar um deploy em andamento).
+    concurrency:
+      group: deploy-homolog
+      cancel-in-progress: false
     env:
       IMAGE: ${{ needs.build.outputs.image }}
-      SSM_PREFIX: ${{ needs.prepare.outputs.ssm_prefix }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -133,7 +117,7 @@ jobs:
         uses: azure/setup-kubectl@829323503d1be3d00ca8346e5391ca0b07a9ab0d # v5.1.0
 
       - name: Update kubeconfig
-        run: aws eks update-kubeconfig --region "$AWS_REGION" --name "${{ needs.prepare.outputs.cluster }}"
+        run: aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER"
 
       - name: Namespace
         run: kubectl apply -f k8s/00-namespace.yaml
