@@ -185,8 +185,27 @@ jobs:
           set -euo pipefail
           kubectl port-forward -n "$NAMESPACE" svc/oficina-api 3000:3000 >/tmp/pf.log 2>&1 &
           PF_PID=$!
-          trap 'kill $PF_PID 2>/dev/null || true' EXIT
           API=http://localhost:3000
+
+          # A RDS é persistente: dados fixos se acumulam e quebram os próximos
+          # runs (409 de CPF/placa/SKU). Então cada run usa dados ÚNICOS e limpa
+          # o que criou ao sair — best-effort, mesmo em falha, em ordem de FK.
+          cleanup() {
+            set +e
+            [ -n "${OS_ID:-}" ] && curl -s -o /dev/null -X DELETE "$API/ordens-servico/$OS_ID" -H "${AUTH:-}"
+            [ -n "${ITEM_ID:-}" ] && curl -s -o /dev/null -X DELETE "$API/itens-estoque/$ITEM_ID" -H "${AUTH:-}"
+            [ -n "${SERVICO_ID:-}" ] && curl -s -o /dev/null -X DELETE "$API/servicos/$SERVICO_ID" -H "${AUTH:-}"
+            [ -n "${VEICULO_ID:-}" ] && curl -s -o /dev/null -X DELETE "$API/veiculos/$VEICULO_ID" -H "${AUTH:-}"
+            [ -n "${CLIENTE_ID:-}" ] && curl -s -o /dev/null -X DELETE "$API/cliente/$CLIENTE_ID" -H "${AUTH:-}"
+            kill $PF_PID 2>/dev/null
+          }
+          trap cleanup EXIT
+
+          # Dados únicos por run (CPF válido gerado, placa Mercosul e SKU únicos).
+          CPF_DIGITS=$(python3 -c "import random; n=[random.randint(0,9) for _ in range(9)]; f=lambda a:(lambda s:(0 if (s*10)%11==10 else (s*10)%11))(sum(v*(len(a)+1-i) for i,v in enumerate(a))); d1=f(n); d2=f(n+[d1]); print(''.join(map(str,n+[d1,d2])))")
+          CPF_FMT="${CPF_DIGITS:0:3}.${CPF_DIGITS:3:3}.${CPF_DIGITS:6:3}-${CPF_DIGITS:9:2}"
+          PLACA="SMK$((RANDOM%10))A$(printf '%02d' $((RANDOM%100)))"
+          SKU="SMOKE-${GITHUB_RUN_ID:-x}-${RANDOM}"
 
           echo "=== 1. Aguarda /health ==="
           for i in $(seq 1 30); do
@@ -204,29 +223,29 @@ jobs:
 
           echo "=== 3. Cria cliente (CPF formatado — valida normalização) ==="
           CLIENTE_ID=$(curl -sf -X POST "$API/cliente" -H "$AUTH" -H "Content-Type: application/json" \
-            -d '{"nome":"Smoke Test","tipoPessoa":"FISICA","cpfCnpj":"529.982.247-25"}' | jq -er '.id')
+            -d "{\"nome\":\"Smoke Test\",\"tipoPessoa\":\"FISICA\",\"cpfCnpj\":\"$CPF_FMT\"}" | jq -er '.id')
           STORED=$(curl -sf "$API/cliente/$CLIENTE_ID" -H "$AUTH" | jq -er '.cpfCnpj')
-          [ "$STORED" = "52998224725" ] || { echo "CPF deveria ser normalizado p/ dígitos, veio $STORED"; exit 1; }
+          [ "$STORED" = "$CPF_DIGITS" ] || { echo "CPF deveria ser normalizado p/ dígitos ($CPF_DIGITS), veio $STORED"; exit 1; }
           echo "cliente $CLIENTE_ID (cpf normalizado)"
 
           echo "=== 4. Veículo, serviço, item ==="
-          curl -sf -X POST "$API/veiculos" -H "$AUTH" -H "Content-Type: application/json" \
-            -d "{\"clienteId\":\"$CLIENTE_ID\",\"placa\":\"ABC1D23\",\"marca\":\"Honda\",\"modelo\":\"Civic\",\"ano\":2020}" | jq -e '.id > ""' >/dev/null
+          VEICULO_ID=$(curl -sf -X POST "$API/veiculos" -H "$AUTH" -H "Content-Type: application/json" \
+            -d "{\"clienteId\":\"$CLIENTE_ID\",\"placa\":\"$PLACA\",\"marca\":\"Honda\",\"modelo\":\"Civic\",\"ano\":2020}" | jq -er '.id')
           SERVICO_ID=$(curl -sf -X POST "$API/servicos" -H "$AUTH" -H "Content-Type: application/json" \
             -d '{"nome":"Troca de oleo","precoBase":150.00,"tempoEstimadoMin":30}' | jq -er '.id')
           ITEM_ID=$(curl -sf -X POST "$API/itens-estoque" -H "$AUTH" -H "Content-Type: application/json" \
-            -d '{"nome":"Oleo 5W30","tipo":"INSUMO","sku":"SMOKE-OLE","precoUnitario":45.00,"quantidadeEstoque":50,"estoqueMinimo":10}' | jq -er '.id')
+            -d "{\"nome\":\"Oleo 5W30\",\"tipo\":\"INSUMO\",\"sku\":\"$SKU\",\"precoUnitario\":45.00,\"quantidadeEstoque\":50,\"estoqueMinimo\":10}" | jq -er '.id')
 
           echo "=== 5. Abre OS + valida baixa de estoque (50-4=46) ==="
           OS_JSON=$(curl -sf -X POST "$API/ordens-servico" -H "$AUTH" -H "Content-Type: application/json" \
-            -d "{\"cpfCnpj\":\"52998224725\",\"placa\":\"ABC1D23\",\"servicos\":[{\"servicoId\":\"$SERVICO_ID\",\"quantidade\":1}],\"itens\":[{\"itemEstoqueId\":\"$ITEM_ID\",\"quantidade\":4}]}")
+            -d "{\"cpfCnpj\":\"$CPF_DIGITS\",\"placa\":\"$PLACA\",\"servicos\":[{\"servicoId\":\"$SERVICO_ID\",\"quantidade\":1}],\"itens\":[{\"itemEstoqueId\":\"$ITEM_ID\",\"quantidade\":4}]}")
           OS_ID=$(echo "$OS_JSON" | jq -er '.id'); OS_CODIGO=$(echo "$OS_JSON" | jq -er '.codigo')
           QTD=$(curl -sf "$API/itens-estoque/$ITEM_ID" -H "$AUTH" | jq -er '.quantidadeEstoque')
           [ "$QTD" = "46" ] || { echo "estoque esperado 46, veio $QTD"; exit 1; }
           echo "OS $OS_CODIGO, estoque 46 (baixa atômica OK)"
 
           echo "=== 6. Consulta pública + auth negada (401) ==="
-          curl -sf "$API/public/ordens-servico/$OS_CODIGO?placa=ABC1D23" | jq -e '.status == "RECEBIDA"' >/dev/null
+          curl -sf "$API/public/ordens-servico/$OS_CODIGO?placa=$PLACA" | jq -e '.status == "RECEBIDA"' >/dev/null
           CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API/cliente"); [ "$CODE" = "401" ] || { echo "esperado 401, veio $CODE"; exit 1; }
           echo "público OK / 401 OK"
 
