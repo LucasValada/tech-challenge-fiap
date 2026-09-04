@@ -56,10 +56,13 @@ spec:
                   name: app-secret
                   key: WEBHOOK_ORCAMENTO_TOKEN
           # Requests/limits são obrigatórios para o HPA calcular a utilização.
+          # O request de memória é o denominador dessa conta: com 128Mi, a API
+          # ociosa já batia nos 80% do alvo e o autoscaler subia para 4 réplicas
+          # sem carga alguma.
           resources:
             requests:
               cpu: "100m"
-              memory: "128Mi"
+              memory: "256Mi"
             limits:
               cpu: "500m"
               memory: "512Mi"

@@ -233,7 +233,10 @@ jobs:
           echo "=== 7. HPA e réplicas ==="
           kubectl get hpa oficina-api-hpa -n "$NAMESPACE" >/dev/null
           AVAIL=$(kubectl get deployment/oficina-api -n "$NAMESPACE" -o jsonpath='{.status.availableReplicas}')
-          [ "$AVAIL" = "2" ] || { echo "esperado 2 réplicas, veio $AVAIL"; exit 1; }
-          echo "HPA OK, 2 réplicas servindo"
+          # O HPA existe para variar a contagem, então fixar um número faz o
+          # smoke test falhar justamente quando o autoscaler está certo. O que
+          # precisa valer é o piso: nunca abaixo do minReplicas.
+          [ "${AVAIL:-0}" -ge 2 ] || { echo "esperado ao menos 2 réplicas, veio ${AVAIL:-0}"; exit 1; }
+          echo "HPA OK, $AVAIL réplicas servindo"
 
           echo "=== Smoke test OK ==="
