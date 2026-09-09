@@ -24,6 +24,9 @@ services:
     build:
       context: ./
       dockerfile: ./Dockerfile
+    # A imagem só faz start (migrations ficam no Job no EKS). No local, aplica as
+    # migrations antes de subir, preservando a conveniência de desenvolvimento.
+    command: ["sh", "-c", "npx prisma migrate deploy && npm run start:prod"]
     environment:
       NODE_ENV: ${NODE_ENV}
       APPLICATION_PORT: 3000
@@ -39,7 +42,7 @@ services:
     ports:
       - ${APPLICATION_PORT}:3000
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

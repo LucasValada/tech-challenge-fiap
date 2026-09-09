@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -6,8 +6,8 @@ COPY package*.json ./
 COPY prisma ./prisma
 COPY scripts ./scripts
 
-# Instala TODAS dependências (incluindo dev)
-RUN npm install
+# Instala TODAS dependências (incluindo dev) — npm ci para build determinístico
+RUN npm ci
 
 RUN npx prisma generate
 
@@ -22,14 +22,14 @@ COPY . .
 # Compila TypeScript
 RUN npm run build
 
-FROM node:22-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
 # Copia apenas dependências de produção
 COPY package*.json ./
 
-RUN npm install --omit=dev
+RUN npm ci --omit=dev
 
 # Copia build já compilado
 COPY --from=builder /app/dist ./dist
@@ -39,6 +39,9 @@ COPY --from=builder /app/src/generated ./src/generated
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
+# Bundle da CA do RDS — usado pelo PrismaService para validar o certificado TLS
+COPY certs ./certs
+
 # Roda como usuário não-root (node UID 1000 já existe na imagem oficial)
 RUN chown -R node:node /app
 USER node
@@ -46,5 +49,7 @@ USER node
 # Expõe porta
 EXPOSE 3000
 
-# Aplica migrations e sobe aplicação
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run start:prod"]
+# Sobe a aplicação. As migrations NÃO rodam aqui: no EKS ficam a cargo do Job
+# de migration (executado e aguardado pelo CD antes do rollout); no local, o
+# docker-compose sobrescreve o command para migrar antes de iniciar.
+CMD ["npm", "run", "start:prod"]
