@@ -167,6 +167,7 @@ jobs:
           kubectl apply -f k8s/app/05-service.yaml
           kubectl apply -f k8s/app/06-hpa.yaml
           kubectl apply -f k8s/app/07-ingress.yaml
+          kubectl apply -f k8s/app/08-pdb.yaml
           kubectl rollout status deployment/oficina-api -n "$NAMESPACE" --timeout=180s
 
       - name: Diagnose on failure

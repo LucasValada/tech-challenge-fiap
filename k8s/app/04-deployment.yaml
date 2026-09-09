@@ -21,9 +21,40 @@ spec:
       labels:
         app: oficina-api
     spec:
+      # Hardening: roda sem privilégios (a imagem já usa o usuário node, UID 1000)
+      # e sem montar o token da ServiceAccount (o app não fala com a API do k8s).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
+      # Alta disponibilidade: espalha as réplicas entre AZs e nós. Soft
+      # (ScheduleAnyway) para não deixar pods Pending quando faltar capacidade.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: oficina-api
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: oficina-api
       containers:
         - name: oficina-api
           image: IMAGE_PLACEHOLDER
+          # Sem escalonamento de privilégio e sem capabilities do Linux — a API
+          # é um servidor HTTP na porta 3000, não precisa de nenhuma.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           ports:
             - containerPort: 3000
           envFrom:
