@@ -22,4 +22,6 @@ export function validateEnv(): void {
   must('MAIL_USER');
   must('MAIL_PASS');
   must('MAIL_PORT');
+
+  must('WEBHOOK_ORCAMENTO_TOKEN');
 }
