@@ -6,8 +6,10 @@ COPY package*.json ./
 COPY prisma ./prisma
 COPY scripts ./scripts
 
-# Instala TODAS dependências (incluindo dev) — npm ci para build determinístico
-RUN npm ci
+# Instala TODAS dependências (incluindo dev) — npm ci para build determinístico.
+# --ignore-scripts bloqueia lifecycle scripts de dependências (hardening de
+# supply chain). O prisma generate é rodado explicitamente logo abaixo.
+RUN npm ci --ignore-scripts
 
 RUN npx prisma generate
 
@@ -29,7 +31,10 @@ WORKDIR /app
 # Copia apenas dependências de produção
 COPY package*.json ./
 
-RUN npm ci --omit=dev
+# --ignore-scripts (hardening) e, em seguida, rebuild só do bcrypt — o único
+# módulo nativo de runtime — para garantir o binário sem executar scripts de
+# instalação de terceiros.
+RUN npm ci --omit=dev --ignore-scripts && npm rebuild bcrypt
 
 # Copia build já compilado
 COPY --from=builder /app/dist ./dist
