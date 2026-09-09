@@ -1,31 +1,39 @@
 # Tech Challenge FIAP - SOAT Oficina
 
-Sistema de gerenciamento de oficina mecânica desenvolvido para o Tech Challenge FIAP SOAT. API back-end para gestão de clientes, veículos, serviços, peças/insumos e ordens de serviço, com **autenticação dupla** (JWT de funcionário por email/senha e de cliente por **CPF via função serverless**), envio de orçamento por email, acompanhamento público de OS e infraestrutura provisionada via Terraform + Kubernetes.
+Sistema de gerenciamento de oficina mecânica desenvolvido para o Tech Challenge FIAP SOAT. Este é o **repositório da aplicação principal** (API NestJS que roda em Kubernetes) — um dos **quatro repositórios** da solução (ver [Solução em 4 repositórios](#solução-em-4-repositórios)).
+
+A API cobre a gestão de clientes, veículos, serviços, peças/insumos e ordens de serviço, com **autenticação dupla** (funcionário por email/senha e cliente por **CPF via função serverless**), envio de orçamento por email, acompanhamento público de OS e observabilidade (health, logs JSON com correlação). Roda na **AWS** — **EKS** (Kubernetes gerenciado), **RDS PostgreSQL** (banco gerenciado), imagem no **ECR**, segredos no **SSM**, exposta por um **ALB** e integrada à **Lambda + API Gateway** de autenticação — tudo provisionado via **Terraform** e entregue por **CI/CD com deploy automático**.
+
+> **Deploy ativo (homologação):** a API é exposta pelo ALB em `http://k8s-oficina-oficinaa-5b75d4a62f-802718820.us-east-1.elb.amazonaws.com` — Swagger em `/api`. (Ambiente acadêmico; pode estar desligado para conter custo.)
 
 ## Índice
 
 - [Objetivos](#objetivos)
+- [Solução em 4 repositórios](#solução-em-4-repositórios)
 - [Vídeo demonstrativo](#vídeo-demonstrativo)
-- [Clean Architecture](#clean-architecture)
+- [Clean Architecture (interno da API)](#clean-architecture-interno-da-api)
 - [Arquitetura](#arquitetura)
-  - [Componentes da aplicação](#componentes-da-aplicação)
-  - [Infraestrutura provisionada](#infraestrutura-provisionada)
-  - [Fluxo de deploy](#fluxo-de-deploy)
+  - [Diagrama de Componentes — visão de nuvem](#diagrama-de-componentes--visão-de-nuvem)
+  - [Componentes da aplicação (C4)](#componentes-da-aplicação-c4)
+  - [Infraestrutura provisionada na AWS](#infraestrutura-provisionada-na-aws)
+  - [Fluxo de deploy (CI/CD)](#fluxo-de-deploy-cicd)
 - [Justificativa do banco de dados](#justificativa-do-banco-de-dados)
+- [Modelo de dados (Diagrama ER)](#modelo-de-dados-diagrama-er)
 - [Stack](#stack)
 - [Pré-requisitos](#pré-requisitos)
-- [Execução com Docker](#execução-com-docker-recomendado)
+- [Execução local (Docker Compose)](#execução-local-docker-compose)
 - [Execução local (desenvolvimento)](#execução-local-desenvolvimento)
 - [Variáveis de ambiente](#variáveis-de-ambiente)
 - [Configuração de email (Ethereal)](#configuração-de-email-ethereal)
 - [Autenticação](#autenticação)
+- [Observabilidade](#observabilidade)
 - [Documentação da API](#documentação-da-api)
-- [Documentação de arquitetura (RFC e ADR)](#documentação-de-arquitetura-rfc-e-adr)
+- [Documentação de arquitetura (RFCs e ADRs)](#documentação-de-arquitetura-rfcs-e-adrs)
 - [Endpoints da API](#endpoints-da-api)
 - [Fluxo da Ordem de Serviço](#fluxo-da-ordem-de-serviço)
 - [Testes](#testes)
 - [Scripts disponíveis](#scripts-disponíveis)
-- [Infraestrutura (Fase 2)](#infraestrutura-fase-2)
+- [Infraestrutura e deploy na AWS (EKS)](#infraestrutura-e-deploy-na-aws-eks)
 
 ## Objetivos
 
@@ -38,13 +46,26 @@ Sistema de gerenciamento de oficina mecânica desenvolvido para o Tech Challenge
 - Monitorar tempo médio de execução dos serviços
 - Prover infraestrutura reprodutível via Terraform e Kubernetes, com deploy automatizado por pipeline CI/CD
 
+## Solução em 4 repositórios
+
+A Fase 3 exige a segregação da solução em **quatro repositórios git independentes**, cada um com seu próprio CI/CD e deploy automático para a nuvem. **Este repositório é o nº 4 (aplicação principal).**
+
+| # | Repositório | Papel | Stack |
+|---|---|---|---|
+| 1 | `fase3-lambda-auth-cpf` | Function Serverless de autenticação por CPF **+ API Gateway** (porta de entrada da solução) | AWS Lambda (Node), API Gateway HTTP v2, `pg` |
+| 2 | `fase3-infra-k8s` | Terraform do **cluster EKS** (VPC, EKS, node group, ECR, ALB Controller, OIDC, budget) | Terraform, módulos AWS |
+| 3 | `fase3-infra-database` | Terraform do **RDS PostgreSQL** gerenciado (+ publicação dos segredos no SSM) | Terraform, RDS |
+| 4 | **`fase3-app` (este repo)** | **Aplicação principal** NestJS rodando no EKS | NestJS 11, Prisma 7, PostgreSQL |
+
+Os repositórios se integram por **rede privada (VPC)**, **SSM Parameter Store** (segredos compartilhados, incl. o `JWT_SECRET` que a Lambda e a app usam) e **`terraform_remote_state`**. Por que AWS e como cada peça se encaixa: ver **[RFC-002 — Escolha da nuvem](docs/rfc/RFC-002-escolha-da-nuvem.md)**.
+
 ## Vídeo demonstrativo
 
-Vídeo (YouTube, até 15 minutos) cobrindo deploy da aplicação, execução do CI/CD, consumo das APIs e escalabilidade automática do HPA sob carga.
+Vídeo (YouTube, até 15 minutos) cobrindo autenticação por CPF, execução do CI/CD, deploy automatizado, consumo das APIs protegidas, dashboard de monitoramento e logs/traces em execução.
 
 **Link:** [https://youtu.be/LJf5b5OW0gM](https://youtu.be/LJf5b5OW0gM)
 
-## Clean Architecture
+## Clean Architecture (interno da API)
 
 Todos os módulos de negócio (`auth`, `cliente`, `mail`, `item-estoque`, `ordem-servico`, `servico`, `user`, `veiculo`) seguem o mesmo padrão de Clean Architecture em 4 camadas, garantindo separação de responsabilidades e inversão de dependências:
 
@@ -74,7 +95,49 @@ src/infra/database/prisma/repositories/
 
 ## Arquitetura
 
-### Componentes da aplicação
+### Diagrama de Componentes — visão de nuvem
+
+Visão de alto nível de toda a solução na AWS: o cliente entra pelo **API Gateway**, que roteia a autenticação para a **Lambda** e as rotas protegidas para o **ALB → pods no EKS**; a aplicação e a Lambda usam o **RDS** (banco gerenciado) e compartilham segredos pelo **SSM**; a imagem vem do **ECR**; e a observabilidade coleta métricas, logs e traces.
+
+```mermaid
+graph TB
+    Cliente["Cliente / Funcionário<br/>browser · curl · Postman"]
+    Webhook["Sistema externo<br/>aprovação de orçamento"]
+    SMTP["SMTP<br/>Ethereal / SES"]
+    Obs["Observabilidade<br/>New Relic — métricas, APM, dashboards,<br/>alertas (em implementação) + logs JSON"]
+
+    subgraph AWS["AWS · us-east-1"]
+        GW["<b>API Gateway</b> (HTTP v2)<br/>POST /auth → Lambda<br/>ANY /&#123;proxy+&#125; → ALB (VPC Link)"]
+        ECR["<b>ECR</b><br/>imagem da API"]
+        SSM["<b>SSM Parameter Store</b><br/>JWT_SECRET, DATABASE_URL<br/>(SecureString)"]
+
+        subgraph VPC["VPC — subnets privadas"]
+            Lambda["<b>Lambda</b> — auth por CPF<br/>valida CPF · checa status · emite JWT"]
+            ALB["<b>ALB</b> internet-facing<br/>Ingress via ALB Controller"]
+
+            subgraph EKS["<b>EKS</b> — cluster Kubernetes"]
+                Pods["Deployment oficina-api<br/>2–10 pods (HPA) em 2 AZs<br/>NestJS · /health · logs JSON"]
+            end
+
+            RDS[("<b>RDS PostgreSQL</b><br/>gerenciado · TLS · subnet privada")]
+        end
+    end
+
+    Cliente -->|"HTTPS/REST + JWT"| GW
+    GW -->|"POST /auth"| Lambda
+    GW -->|"rotas protegidas (VPC Link)"| ALB
+    ALB --> Pods
+    Lambda -->|"SELECT cliente (TLS)"| RDS
+    Pods -->|"SQL/TLS 5432"| RDS
+    Pods -->|"pull imagem"| ECR
+    Pods -->|"lê segredos"| SSM
+    Lambda -->|"mesmo JWT_SECRET"| SSM
+    Pods -->|"email best-effort"| SMTP
+    Webhook -->|"POST /webhooks/orcamento"| ALB
+    Pods -.->|"métricas · logs · traces"| Obs
+```
+
+### Componentes da aplicação (C4)
 
 #### Nível Container
 
@@ -188,85 +251,68 @@ graph TB
     class Controllers,DTOs,UseCases,Mappers,Shared,Entities,DomainSvc,Repos,Bcrypt,Jwt,Mailer,PrismaSvc,PrismaRepos component
 ```
 
-### Infraestrutura provisionada
+### Infraestrutura provisionada na AWS
+
+Recursos do cluster (namespace `oficina`) e as dependências gerenciadas. Tudo declarado em Terraform (repos de infra) e nos manifestos `k8s/` deste repo; o Secret é montado do SSM pelo pipeline no deploy.
 
 ```mermaid
 graph TB
-    HostApp[Host localhost:3000]
-    HostDb[Host localhost:5432]
-
-    subgraph KindCluster[Kind Cluster provisionado por Terraform]
-        subgraph ControlPlane[Control Plane]
-            CP[oficina-cluster-control-plane<br/>extra_port_mappings:<br/>host 3000 ↔ NodePort 30080<br/>host 5432 ↔ NodePort 30432]
+    subgraph AWS["AWS · us-east-1 · Terraform"]
+        subgraph VPC["VPC — 2 AZs (us-east-1a / 1b)"]
+            subgraph EKS["EKS — namespace oficina"]
+                Ingress["Ingress → ALB Controller<br/>ALB internet-facing, target-type ip"]
+                Svc["Service ClusterIP :3000"]
+                Deploy["Deployment oficina-api<br/>2–10 réplicas · topologySpread por AZ<br/>securityContext: non-root, drop ALL caps"]
+                HPA["HPA min 2 / max 10<br/>CPU 70% · memória 80%"]
+                PDB["PodDisruptionBudget<br/>minAvailable 1"]
+                CM["ConfigMap app-config"]
+                Sec["Secret app-secret"]
+                Job["Job db-migration<br/>prisma migrate deploy"]
+                MS["metrics-server (HPA)"]
+            end
+            RDS[("RDS PostgreSQL<br/>db.t4g.micro · subnet privada · TLS")]
         end
-
-        subgraph Workers[Workers]
-            W1[oficina-cluster-worker]
-            W2[oficina-cluster-worker2]
-        end
-
-        subgraph NamespaceOficina[Namespace oficina]
-            HPA[HorizontalPodAutoscaler<br/>min 2, max 10<br/>CPU 70%, Memória 80%]
-            Deploy[Deployment oficina-api<br/>2 réplicas com readiness/liveness]
-            SvcApi[Service oficina-api<br/>NodePort 30080 → containerPort 3000]
-            SS[StatefulSet postgres<br/>1 réplica]
-            PVC[PVC 5Gi<br/>volumeClaimTemplates]
-            PgSec[Secret postgres-secret<br/>POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB]
-            SvcPgCluster[Service postgres<br/>ClusterIP :5432<br/>consumido pelos pods da API]
-            SvcPgNode[Service postgres-nodeport<br/>NodePort 30432 → 5432<br/>acesso opcional externo]
-            CM[ConfigMap app-config<br/>APPLICATION_PORT, MAIL_HOST etc]
-            Sec[Secret app-secret<br/>DATABASE_URL, JWT_SECRET, MAIL_PASS etc]
-            Job[Job db-migration<br/>prisma migrate deploy]
-        end
-
-        subgraph KubeSystem[Namespace kube-system]
-            MS[Metrics Server<br/>--kubelet-insecure-tls]
-        end
-
-        HPA -.->|escala CPU 70%, mem 80%| Deploy
-        SvcApi --> Deploy
-        SS --> PVC
-        SS -.->|secretKeyRef| PgSec
-        SvcPgCluster --> SS
-        SvcPgNode --> SS
-        Deploy -.->|envFrom| CM
-        Deploy -.->|envFrom| Sec
-        Deploy -.->|DATABASE_URL| SvcPgCluster
-        Job --> SvcPgCluster
-        MS -.->|coleta métricas| Deploy
+        ECR["ECR — imagem da API"]
+        SSM["SSM /tc3-oficina/homolog/*<br/>DATABASE_URL · JWT_SECRET (SecureString)"]
     end
 
-    HostApp -.->|host_port 3000| CP
-    HostDb -.->|host_port 5432| CP
-    CP --- W1
-    CP --- W2
+    Ingress --> Svc --> Deploy
+    HPA -.->|escala| Deploy
+    PDB -.->|protege| Deploy
+    Deploy -.->|envFrom| CM
+    Deploy -.->|secretKeyRef| Sec
+    Deploy -->|"SQL/TLS 5432"| RDS
+    Deploy -->|pull imagem| ECR
+    Sec -.->|sincronizado de| SSM
+    Job -->|aplica migrations| RDS
+    MS -.->|coleta métricas| Deploy
 ```
 
-### Fluxo de deploy
+### Fluxo de deploy (CI/CD)
+
+Dois workflows em `.github/workflows/`. `ci.yml` valida cada mudança; `cd.yml` empacota e faz o **deploy automático no EKS** a cada push em `develop`/`main` (ambas apontam para o ambiente homolog). Autenticação na AWS por **OIDC** (sem chave estática); actions pinadas por SHA.
 
 ```mermaid
 graph LR
-    Dev[Developer<br/>push ou PR em main ou develop]
-    GH[GitHub Actions<br/>concurrency cancela runs obsoletos<br/>actions com SHA pinning e node24]
+    Dev["Push/merge em<br/>develop ou main"]
 
-    Dev --> GH
-
-    subgraph CI["ci.yml — Continuous Integration (push + PR)"]
-        CIJob[Build and Test<br/>npm ci<br/>prisma generate<br/>npm test - 300 unitários<br/>npm run build]
+    subgraph CI["ci.yml — Integration (push + PR)"]
+        CIJob["Build & Test<br/>npm ci · prisma generate<br/>testes unitários · build"]
     end
 
-    subgraph CD["cd.yml — Continuous Delivery (apenas push)"]
-        S1[Estágio 1 - Build and Test guard<br/>mesma validação do CI<br/>garante que push quebrado não deploya]
-        S2[Estágio 2 - Docker<br/>setup-buildx-action<br/>build multi-stage<br/>fix Prisma .ts imports<br/>cache GHA<br/>push para GHCR - tag sha-xxx + latest na main]
-        S3[Estágio 3 - Deploy to Kind<br/>terraform apply provisiona cluster<br/>kind load docker-image<br/>Metrics Server + patch TLS<br/>kubectl apply k8s/postgres + rollout status<br/>Job de migration<br/>kubectl apply k8s/app<br/>Diagnose on failure - dumpa pods/events/logs<br/>Smoke test 16 verificações end-to-end]
-
-        S1 --> S2 --> S3
+    subgraph CD["cd.yml — Delivery (só push)"]
+        Guard["1 · Test guard<br/>repete os testes"]
+        Build["2 · Build & Push (ECR)<br/>OIDC · docker build linux/amd64<br/>push no ECR (tag = SHA)"]
+        Deploy["3 · Deploy (EKS)<br/>update-kubeconfig<br/>Secret montado do SSM · configmap<br/>Job de migration (aguarda concluir)<br/>apply deployment/service/hpa/ingress/pdb<br/>rollout status + smoke test"]
+        Guard --> Build --> Deploy
     end
 
-    GH --> CIJob
-    GH --> S1
-    S3 --> Cluster[Kind Cluster efêmero<br/>com aplicação validada]
+    Dev --> CIJob
+    Dev --> Guard
+    Deploy --> EKSc["Cluster EKS (homolog)<br/>aplicação atualizada e validada"]
 ```
+
+> Diagnóstico em falha: se um step do deploy quebra, um passo `if: failure()` dumpa `kubectl get all`, `describe pods`, eventos e logs do namespace. O **smoke test** exercita, contra o app deployado, health/readiness, login, criação de cliente (com normalização de CPF), abertura de OS com baixa de estoque, consulta pública, 401 e HPA/réplicas.
 
 ## Justificativa do banco de dados
 
@@ -276,33 +322,126 @@ graph LR
 - **Tipos nativos:** suporte a `UUID`, `DECIMAL` (valores monetários), `ENUM` (status da OS, tipo de item) e `TIMESTAMP WITH TIME ZONE` sem necessidade de workarounds.
 - **Desempenho em consultas analíticas:** o relatório de tempo médio de execução usa agregações que o PostgreSQL lida com eficiência.
 - **Ecossistema maduro:** integração consolidada com Prisma 7 (via driver adapter `@prisma/adapter-pg`) e documentação abrangente.
-- **Custo zero:** open source, sem licenciamento, ideal para o escopo acadêmico do Tech Challenge.
+
+Na Fase 3 o banco passou de Postgres-em-cluster para **RDS PostgreSQL gerenciado** (subnet privada, TLS obrigatório, backups e métricas geridos pela AWS), provisionado no repositório `fase3-infra-database`. A modelagem também foi **melhorada** (campo `status` em `Cliente`, snapshots imutáveis nas linhas da OS, numeração sequencial anual e políticas de exclusão explícitas).
+
+> **Justificativa formal completa + ajustes no modelo relacional:** ver **[RFC-003 — Escolha do banco de dados](docs/rfc/RFC-003-escolha-do-banco.md)**.
+
+## Modelo de dados (Diagrama ER)
+
+O schema (Prisma, `prisma/schema.prisma`) tem **10 entidades** e **4 enums**. O diagrama abaixo mostra as entidades e seus relacionamentos.
+
+```mermaid
+erDiagram
+    Usuario ||--o{ OrdemServico : "cria"
+    Usuario ||--o{ HistoricoStatusOS : "registra"
+    Cliente ||--o{ Veiculo : "possui"
+    Cliente ||--o{ OrdemServico : "é dono"
+    Veiculo ||--o{ OrdemServico : "atendido em"
+    OrdemServico ||--o{ OSServicos : "contém"
+    OrdemServico ||--o{ OSItemEstoque : "contém"
+    OrdemServico ||--o{ HistoricoStatusOS : "tem histórico"
+    Servicos ||--o{ OSServicos : "referenciado por"
+    ItemEstoque ||--o{ OSItemEstoque : "referenciado por"
+
+    Usuario {
+        uuid id PK
+        string email UK
+        string senhaHash
+    }
+    Cliente {
+        uuid id PK
+        string cpfCnpj UK
+        enum tipoPessoa "FISICA|JURIDICA"
+        enum status "ATIVO|INATIVO"
+    }
+    Veiculo {
+        uuid id PK
+        uuid clienteId FK
+        string placa UK
+    }
+    Servicos {
+        uuid id PK
+        decimal precoBase
+        int tempoEstimadoMin
+        bool ativo
+    }
+    ItemEstoque {
+        uuid id PK
+        string sku UK
+        enum tipo "PECA|INSUMO"
+        int quantidadeEstoque
+        int estoqueMinimo
+    }
+    OrdemServico {
+        uuid id PK
+        string codigo UK
+        uuid clienteId FK
+        uuid veiculoId FK
+        uuid usuarioCriadorId FK
+        enum status "6 estados"
+        decimal valorTotal
+    }
+    OSServicos {
+        uuid id PK
+        uuid ordemServicoId FK
+        uuid servicoId FK
+        string nomeSnapshot
+        decimal precoUnitario
+        decimal subtotal
+    }
+    OSItemEstoque {
+        uuid id PK
+        uuid ordemServicoId FK
+        uuid itemEstoqueId FK
+        string nomeSnapshot
+        decimal precoUnitario
+        decimal subtotal
+    }
+    HistoricoStatusOS {
+        uuid id PK
+        uuid ordemServicoId FK
+        uuid usuarioId FK
+        enum status
+    }
+    OSCodigoCounter {
+        int ano PK
+        int contador
+    }
+```
+
+**Explicação dos relacionamentos:**
+
+- **Cliente 1—N Veículo** e **Cliente 1—N OrdemServico:** um cliente tem vários veículos e várias OS. `onDelete: Restrict` — não se apaga um cliente que ainda tem veículo/OS.
+- **Veículo 1—N OrdemServico:** cada OS é para um veículo; um veículo pode ter várias OS ao longo do tempo (`Restrict`).
+- **Usuário 1—N OrdemServico / HistoricoStatusOS:** o funcionário que cria a OS e o autor de cada transição de status. (Sobre o ator em ações de cliente, ver [ADR-001](docs/adr/ADR-001-ator-trilha-auditoria.md).)
+- **OrdemServico 1—N OSServicos / OSItemEstoque:** as **linhas** da OS (serviços e peças). Guardam `nomeSnapshot`/`precoUnitario` congelados no momento da inclusão. `onDelete: Cascade` — apagar a OS remove suas linhas.
+- **OrdemServico 1—N HistoricoStatusOS:** a trilha cronológica de status (`Cascade`), base do relatório de tempo médio por status.
+- **Servicos / ItemEstoque 1—N linhas:** o catálogo referenciado pelas linhas (`Restrict` — não se apaga um serviço/item usado em alguma OS).
+- **OSCodigoCounter:** tabela isolada (sem FK), um contador por ano para gerar `codigo` sequencial da OS de forma transacional.
 
 ## Stack
 
-| Tecnologia | Versão |
+| Camada | Tecnologia |
 |---|---|
-| Node.js | 24.x |
-| NestJS | 11.x |
-| Prisma | 7.x |
-| PostgreSQL | 17 |
-| Docker / Docker Compose | 29.x / 5.x |
-| Kubernetes | 1.35 (via Kind 0.27+) |
-| Terraform | 1.6+ |
+| **Runtime / Framework** | Node.js 24 · NestJS 11 · TypeScript |
+| **Persistência** | Prisma 7 (`@prisma/adapter-pg`) · PostgreSQL 17 |
+| **Autenticação** | JWT HS256 (Passport) · bcrypt · função serverless (Lambda) por CPF |
+| **Observabilidade** | `nestjs-pino` (logs JSON + correlation id) · endpoints `/health` e `/health/ready` |
+| **Container** | Docker (multi-stage, non-root) · Docker Compose (local) |
+| **Nuvem (AWS)** | **EKS** (Kubernetes 1.3x) · **RDS PostgreSQL** · **Lambda + API Gateway** · **ECR** · **SSM** · **ALB** |
+| **IaC / CI-CD** | Terraform · GitHub Actions (OIDC, deploy no EKS) |
+| **Testes** | Jest (unit) · Testcontainers (e2e com Postgres real) |
 
 ## Pré-requisitos
 
-- Node.js 24+
-- npm 11+
-- Docker e Docker Compose
+**Desenvolvimento local:** Node.js 24+, npm 11+, Docker e Docker Compose.
 
-Para o provisionamento em Kubernetes:
+**Para operar o deploy na AWS (EKS):** AWS CLI v2 (credenciais/OIDC), `kubectl`. O provisionamento da infraestrutura (VPC/EKS/RDS) fica nos repositórios de infra (Terraform) — ver [Solução em 4 repositórios](#solução-em-4-repositórios).
 
-- Kind 0.27+
-- Terraform 1.6+
-- kubectl
+## Execução local (Docker Compose)
 
-## Execução com Docker (recomendado)
+Forma recomendada para rodar a aplicação localmente (o deploy na nuvem é automatizado pelo CI/CD — ver [Infraestrutura e deploy na AWS](#infraestrutura-e-deploy-na-aws-eks)).
 
 ```bash
 # 1. Clonar o repositório
@@ -523,6 +662,26 @@ curl -X POST https://<api-gateway>/ordens-servico/minhas/<osId>/aprovar \
 
 > A distinção admin/cliente é feita na `JwtStrategy` (pela presença de `tipo: "cliente"` vs `email` no payload) e o controle de acesso no `JwtAuthGuard` + decorator `@Roles`. Ver a [RFC-001](docs/rfc/RFC-001-estrategia-autenticacao.md) para a estratégia completa — alternativas consideradas, consequências e riscos.
 
+## Observabilidade
+
+A aplicação foi instrumentada para dar **visibilidade total** sobre o funcionamento, como o desafio pede.
+
+**Healthchecks e uptime** — endpoints dedicados (públicos), usados pelas probes do Kubernetes e pelo health check do ALB:
+
+| Endpoint | Tipo | Verifica |
+|---|---|---|
+| `GET /health` | liveness | processo no ar (raso, não depende do banco) |
+| `GET /health/ready` | readiness | conexão com o banco (`SELECT 1`); responde `503` se o banco não responde |
+
+**Logs estruturados (JSON) com correlação** — via `nestjs-pino`. Cada requisição recebe um **`correlationId`**: a aplicação reaproveita um id vindo do API Gateway/ALB (`x-correlation-id`, `x-amzn-trace-id`, etc.) quando presente, ou gera um, e o devolve no header `x-correlation-id` — fechando a correlação **ponta a ponta** com a Lambda (que já loga em JSON com `requestId`). Headers sensíveis (`authorization`, `cookie`, `x-webhook-token`) são redigidos no log.
+
+```json
+{ "level": 30, "correlationId": "1-6a97...", "req": { "method": "POST", "url": "/ordens-servico" },
+  "res": { "statusCode": 201 }, "responseTime": 42, "msg": "request completed" }
+```
+
+**Métricas, dashboards e alertas** — a integração com o **APM (New Relic)** está em implementação (frente do time) e cobre: **latência das APIs**, **consumo de CPU/memória do Kubernetes** (o `metrics-server` já alimenta o HPA), **alertas para falhas no processamento de OS**, e os dashboards de **volume diário de OS**, **tempo médio de execução por status** e **erros nas integrações**. A aplicação já produz o dado de base para esses painéis: cada transição grava um `HistoricoStatusOS` (com timestamps) e existe o endpoint de relatório de tempo médio por serviço.
+
 ## Documentação da API
 
 O Swagger UI serve como collection interativa completa das APIs, com todos os DTOs de entrada e resposta, formatos (`uuid`, `email`, `date`), enums, exemplos e códigos HTTP possíveis.
@@ -530,12 +689,25 @@ O Swagger UI serve como collection interativa completa das APIs, com todos os DT
 - **Swagger UI (interativo):** `http://localhost:3000/api` — permite executar cada endpoint direto do browser após autenticar via `Authorize` com o `accessToken` do login
 - **OpenAPI JSON (para importar em Postman/Insomnia):** `http://localhost:3000/api-json`
 
-## Documentação de arquitetura (RFC e ADR)
+## Documentação de arquitetura (RFCs e ADRs)
 
-Decisões técnicas e arquiteturais relevantes da Fase 3 são registradas em Markdown:
+As decisões técnicas e arquiteturais da Fase 3 estão registradas em Markdown na pasta [`docs/`](docs/). **RFCs** documentam decisões técnicas relevantes (com contexto, alternativas e consequências); **ADRs** registram decisões arquiteturais permanentes.
 
-- **[RFC-001 — Estratégia de autenticação](docs/rfc/RFC-001-estrategia-autenticacao.md):** modelo de autenticação dupla (funcionário por email/senha e cliente por CPF via função serverless), formato dos tokens, papéis/propriedade e integração com a Lambda e o SSM.
-- **[ADR-001 — Ator da trilha de auditoria em ações de cliente](docs/adr/ADR-001-ator-trilha-auditoria.md):** por que o histórico de status registra o `usuarioCriadorId` (funcionário) quando a ação é do cliente, e o caminho de evolução.
+**RFCs — [`docs/rfc/`](docs/rfc/)**
+
+| RFC | Assunto |
+|---|---|
+| [RFC-001 — Estratégia de autenticação](docs/rfc/RFC-001-estrategia-autenticacao.md) | Autenticação dupla (funcionário email/senha + cliente por CPF via função serverless), formato dos tokens, papéis/propriedade e integração Lambda↔SSM. Inclui o **diagrama de sequência** do fluxo de auth. |
+| [RFC-002 — Escolha da nuvem](docs/rfc/RFC-002-escolha-da-nuvem.md) | Por que **AWS**, mapeamento dos requisitos para os serviços (EKS, RDS, Lambda, API Gateway, ECR, SSM), alternativas (GCP, Azure) e trade-offs. |
+| [RFC-003 — Escolha do banco](docs/rfc/RFC-003-escolha-do-banco.md) | Justificativa formal de **PostgreSQL + RDS gerenciado** e os **ajustes no modelo relacional**. |
+
+**ADRs — [`docs/adr/`](docs/adr/)**
+
+| ADR | Decisão |
+|---|---|
+| [ADR-001 — Ator da trilha de auditoria](docs/adr/ADR-001-ator-trilha-auditoria.md) | Por que o histórico registra o `usuarioCriadorId` (funcionário) em ações de cliente. |
+| [ADR-002 — Uso de HPA](docs/adr/ADR-002-uso-de-hpa.md) | Escalabilidade horizontal por HPA (CPU/memória), min/max de réplicas e trade-offs. |
+| [ADR-003 — Padrão de comunicação](docs/adr/ADR-003-padrao-de-comunicacao.md) | Comunicação síncrona REST/JSON stateless com JWT; auth desacoplada por segredo compartilhado; webhook e email best-effort. |
 
 ## Endpoints da API
 
@@ -649,15 +821,49 @@ RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → EM_EXECUCAO → FINALIZ
 
 Cada transição registra um `HistoricoStatusOS` com data, usuário e observação. Envios de email são best-effort: uma falha do SMTP não bloqueia a transição de status.
 
+### Diagrama de sequência — abertura de OS
+
+Fluxo do `POST /ordens-servico`: um funcionário abre a OS por **CPF/CNPJ + placa**, opcionalmente já com serviços e peças. O cliente e o veículo são validados primeiro; a criação em si — validação de serviços/itens, geração do código, criação das linhas com snapshots, baixa de estoque e totais — roda dentro de uma **única transação atômica** (`createComItens`), que reverte por completo se qualquer item estiver indisponível.
+
+```mermaid
+sequenceDiagram
+    actor F as Funcionário (admin)
+    participant API as API (NestJS · EKS)
+    participant DB as RDS (PostgreSQL)
+
+    F->>API: POST /ordens-servico (Bearer admin)<br/>{ cpfCnpj, placa, servicos[], itens[] }
+    API->>API: JwtAuthGuard (admin) · valida DTO · normaliza CPF/placa
+    API->>DB: busca Cliente por cpfCnpj
+    alt cliente não encontrado
+        API-->>F: 404 cliente não encontrado
+    end
+    API->>DB: busca Veículo por placa
+    alt veículo não encontrado
+        API-->>F: 404 veículo não encontrado
+    else veículo não pertence ao cliente
+        API-->>F: 422
+    end
+    rect rgb(240, 245, 255)
+    Note over API,DB: createComItens — transação atômica única
+    API->>DB: valida serviços ativos e itens (estoque suficiente)
+    API->>DB: gera código (OSCodigoCounter do ano) · cria OS (RECEBIDA)
+    API->>DB: cria linhas (OSServicos/OSItemEstoque) com snapshots · baixa de estoque
+    API->>DB: calcula/grava totais · HistoricoStatusOS inicial
+    end
+    alt item/serviço indisponível ou estoque insuficiente
+        API-->>F: 422 (transação revertida)
+    else sucesso
+        API-->>F: 201 { id, codigo, status: RECEBIDA, valorTotal }
+    end
+```
+
 ## Testes
 
-Cobertura atual: **313 testes unitários** (84 suites) + **59 testes end-to-end** (8 suites, com Postgres real via Testcontainers).
+Cobertura atual: **313 testes unitários** (84 suites) + **62 testes end-to-end** (9 suites, com Postgres real via Testcontainers).
 
-- Statements: **69.61%**
-- Branches: **59.39%**
-- Functions: **66.67%**
-
-Relatório completo publicado em: [https://jest-test-coverage.vercel.app/](https://jest-test-coverage.vercel.app/)
+- Statements: **68.53%**
+- Branches: **58.55%**
+- Functions: **66.38%**
 
 ```bash
 # Todos os testes unitários
@@ -689,200 +895,69 @@ npx jest src/path/to/file.spec.ts
 
 ---
 
-## Infraestrutura (Fase 2)
+## Infraestrutura e deploy na AWS (EKS)
 
-### Pré-requisitos
+O deploy é **automático via CI/CD**: todo push em `develop` ou `main` dispara o `cd.yml`, que builda a imagem, publica no **ECR** e faz o rollout no **EKS** (as duas branches entregam no mesmo ambiente de homologação). O provisionamento da infraestrutura (VPC, EKS, node group, RDS, ECR, OIDC, budget) é feito por **Terraform** nos repositórios de infra — ver [Solução em 4 repositórios](#solução-em-4-repositórios).
 
-| Ferramenta | Versão mínima | Instalação |
-|---|---|---|
-| Docker | 24+ | [docs.docker.com](https://docs.docker.com/get-docker/) |
-| Kind | 0.27+ | `brew install kind` ou [kind.sigs.k8s.io](https://kind.sigs.k8s.io/) |
-| Terraform | 1.6+ | [developer.hashicorp.com/terraform](https://developer.hashicorp.com/terraform/install) |
-| kubectl | qualquer | `brew install kubectl` |
+### Pipelines (GitHub Actions)
 
----
+Dois workflows em `.github/workflows/`, cada um com seu `concurrency`. Actions pinadas por SHA; autenticação na AWS por **OIDC** (sem chave estática).
 
-### 1. Desenvolvimento local (docker-compose)
-
-O jeito mais rápido de subir o banco e a aplicação localmente:
-
-```bash
-# Sobe o PostgreSQL 17
-docker compose up -d
-
-# Copia variáveis de ambiente
-cp .env.example .env
-
-# Aplica migrations e inicia a API em modo watch
-npx prisma migrate dev
-npm run start:dev
-```
-
-Swagger UI disponível em `http://localhost:3000/api`.
-
----
-
-### 2. Provisionar o cluster Kind com Terraform
-
-```bash
-cd infra
-
-# Baixa o provider tehcyx/kind
-terraform init
-
-# Cria o cluster (1 control-plane + 2 workers)
-terraform apply
-
-# Verificar os nós
-kubectl get nodes
-```
-
-Para destruir o cluster:
-
-```bash
-terraform destroy
-```
-
-#### Variáveis disponíveis
-
-| Variável | Padrão | Descrição |
-|---|---|---|
-| `cluster_name` | `oficina-cluster` | Nome do cluster Kind |
-| `app_host_port` | `3000` | Porta do host mapeada para a API |
-| `db_host_port` | `5432` | Porta do host mapeada para o PostgreSQL |
-
-Exemplo sobrescrevendo a porta da aplicação:
-
-```bash
-terraform apply -var="app_host_port=8080"
-```
-
----
-
-### 3. Aplicar os manifestos Kubernetes
-
-```bash
-# Namespace
-kubectl apply -f k8s/00-namespace.yaml
-
-# Banco de dados (StatefulSet + Services + Secret)
-kubectl apply -f k8s/postgres/
-kubectl rollout status statefulset/postgres -n oficina --timeout=180s
-
-# ConfigMap e Secrets da aplicação
-kubectl apply -f k8s/app/01-configmap.yaml
-kubectl apply -f k8s/app/02-secret.yaml
-
-# Migrations (Job one-shot)
-export IMAGE_TAG="ghcr.io/<org>/<repo>:latest"
-sed "s|IMAGE_PLACEHOLDER|${IMAGE_TAG}|g" k8s/app/03-migration-job.yaml | kubectl apply -f -
-kubectl wait --for=condition=complete job/db-migration -n oficina --timeout=120s
-
-# Deployment + Service + HPA
-sed "s|IMAGE_PLACEHOLDER|${IMAGE_TAG}|g" k8s/app/04-deployment.yaml | kubectl apply -f -
-kubectl apply -f k8s/app/05-service.yaml
-kubectl apply -f k8s/app/06-hpa.yaml
-
-# Verificar pods
-kubectl get pods -n oficina
-```
-
-A API ficará acessível em `http://localhost:3000/api` (via NodePort mapeado pelo Kind).
-
----
-
-### 4. Métricas e HPA
-
-O HPA exige o **Metrics Server** no cluster. Para Kind (certificado auto-assinado), instale com:
-
-```bash
-kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
-
-# Patch necessário para Kind aceitar TLS do kubelet
-kubectl patch deployment metrics-server -n kube-system \
-  --type='json' \
-  -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
-```
-
-Verificar se o HPA está funcionando:
-
-```bash
-kubectl get hpa -n oficina
-```
-
-#### Simular carga para acionar o HPA (vídeo demonstrativo)
-
-```bash
-# Instale o hey (ferramenta de carga HTTP)
-go install github.com/rakyll/hey@latest
-
-# Gera 500 requisições simultâneas por 60 segundos
-hey -z 60s -c 100 http://localhost:3000/api
-
-# Em outro terminal, observe o HPA escalar os pods
-kubectl get hpa oficina-api-hpa -n oficina -w
-kubectl get pods -n oficina -w
-```
-
----
-
-### 5. Imagem Docker
-
-```bash
-# Build local
-docker build -t oficina-api:local .
-
-# Carregar no cluster Kind para uso sem registry
-kind load docker-image oficina-api:local --name oficina-cluster
-```
-
----
-
-### 6. Pipelines CI e CD (GitHub Actions)
-
-O projeto separa **Continuous Integration** e **Continuous Delivery** em dois workflows dedicados dentro de `.github/workflows/`. Cada arquivo tem seu próprio bloco `concurrency` que cancela runs anteriores da mesma branch/PR quando um novo commit chega. Todas as actions estão pinadas por SHA completo (segurança supply chain) nas versões que declaram `node24`.
-
-#### `ci.yml` — Continuous Integration
-
-Feedback rápido de validação para cada mudança de código.
-
+#### `ci.yml` — Integração
 | Aspecto | Valor |
 |---|---|
-| **Trigger** | `push` e `pull_request` em `main` e `develop` |
-| **Job** | `Build & Test` — `npm ci` → `npx prisma generate` → `npm test` (300 unit tests) → `npm run build` |
-| **Duração média** | ~1 min |
+| **Trigger** | `push` e `pull_request` em `main`/`develop` |
+| **Job** | `Build & Test` — `npm ci` → `prisma generate` → testes unitários → `npm run build` |
 
-#### `cd.yml` — Continuous Delivery
-
-Empacota e entrega a aplicação no cluster.
-
+#### `cd.yml` — Entrega (deploy automático no EKS)
 | Aspecto | Valor |
 |---|---|
-| **Trigger** | `push` em `main` e `develop` (não roda em PR) |
-| **Jobs encadeados** | `test` (guard) → `docker` → `deploy` |
-| **Duração média** | ~10 min |
+| **Trigger** | `push` em `main`/`develop` (não roda em PR) |
+| **Jobs** | `test` (guard) → `build` (ECR) → `deploy` (EKS), serializados por `concurrency: deploy-homolog` |
 
 **Estágios do `cd.yml`:**
 
 | Estágio | O que faz |
 |---|---|
-| **Build & Test (guard)** | Repete a validação do CI antes de empacotar, garantindo que um push com testes quebrados nunca produza imagem publicada nem chegue ao cluster |
-| **Docker Image** | `docker/setup-buildx-action` → login no GHCR → build multi-stage com fix Prisma `.ts` imports → push com tag `sha-<hash>` (+ `latest` só na branch default) → cache GHA |
-| **Deploy to Kind** | Instala Kind + kubectl + Terraform → `terraform apply` provisiona o cluster → `kind load docker-image` → Metrics Server + `--kubelet-insecure-tls` → `kubectl apply` postgres com `rollout status` → Job de migration → `kubectl apply` deployment/service/HPA → **Smoke test em 16 verificações end-to-end** (login, CRUDs, decremento atômico de estoque, máquina de estados completa, filtro Fase 2, webhook externo com token do secret, HPA provisionado, réplicas ativas) |
+| **Test guard** | Repete os testes antes de empacotar — push quebrado não gera imagem nem deploy. |
+| **Build & Push (ECR)** | `configure-aws-credentials` (OIDC) → login no ECR → `docker build --platform linux/amd64` → push no ECR com tag = SHA do commit. |
+| **Deploy (EKS)** | `aws eks update-kubeconfig` → monta o `Secret` a partir do **SSM** (com `sslmode=require`) → aplica o ConfigMap → roda o **Job de migration** e **aguarda concluir** → aplica `deployment/service/hpa/ingress/pdb` → `rollout status` → **smoke test** (health/readiness, login, criação de cliente com normalização de CPF, abertura de OS com baixa de estoque, consulta pública, 401, HPA/réplicas). Em falha, um passo `if: failure()` dumpa pods/eventos/logs. |
 
-Se qualquer step do estágio Deploy falhar, um step `if: failure()` executa **Diagnose cluster state on failure**, dumpando `kubectl get all`, `kubectl describe pods`, eventos e logs (atuais e previous) do namespace `oficina` — evita ter que reproduzir localmente.
+**Pré-requisitos do pipeline** (configurados uma vez): o secret de repositório **`AWS_ROLE_ARN`** (role OIDC do bootstrap, com acesso ao EKS via *access entry*) e o **trust da role** incluindo este repositório. Sem isso, o `cd.yml` falha em `configure-aws-credentials`.
 
-#### Comportamento por evento
+### Manifestos Kubernetes (`k8s/`)
 
-| Evento | ci.yml | cd.yml |
-|---|:---:|:---:|
-| Pull request para `main`/`develop` | ✅ roda | ⏭ não dispara |
-| Push (merge) em `main`/`develop` | ✅ roda | ✅ roda |
-
-Os dois rodam em paralelo no push, cada um com sua própria responsabilidade.
-
-| Secret | Descrição |
+| Arquivo | Recurso |
 |---|---|
-| `GITHUB_TOKEN` | Fornecido automaticamente pelo GitHub Actions — usado para publicar a imagem no GHCR |
+| `00-namespace.yaml` | Namespace `oficina` |
+| `app/01-configmap.yaml` | ConfigMap (variáveis não sensíveis) |
+| `app/03-migration-job.yaml` | Job one-shot `prisma migrate deploy` (roda **de dentro** do cluster, pois o RDS é privado) |
+| `app/04-deployment.yaml` | Deployment (2–10 réplicas, probes `/health`, `securityContext`, `topologySpread`) |
+| `app/05-service.yaml` | Service ClusterIP :3000 |
+| `app/06-hpa.yaml` | HorizontalPodAutoscaler (CPU 70% / memória 80%) |
+| `app/07-ingress.yaml` | Ingress ALB internet-facing (healthcheck `/health`) |
+| `app/08-pdb.yaml` | PodDisruptionBudget `minAvailable: 1` |
 
-> **Nota:** As credenciais em `k8s/app/02-secret.yaml` e `k8s/postgres/01-secret.yaml` são valores placeholder versionados no repo.
+> O `Secret` **não é versionado**: o pipeline o monta a partir do **SSM Parameter Store** no momento do deploy (`DATABASE_URL`, `JWT_SECRET`) + valores de mail/webhook. O `JWT_SECRET` é o **mesmo** que a Lambda usa para assinar o token — por isso é lido do SSM, e não chumbado. As migrations ficam a cargo do **Job** (a imagem só faz `start`); ver [ADR-002](docs/adr/ADR-002-uso-de-hpa.md) sobre o HPA e a [RFC-001](docs/rfc/RFC-001-estrategia-autenticacao.md) sobre o segredo compartilhado.
+
+### Operar o cluster manualmente (kubectl)
+
+Após configurar as credenciais (`aws configure`), conecte o `kubectl` ao EKS:
+
+```bash
+aws eks update-kubeconfig --region us-east-1 --name tc3-oficina-homolog
+kubectl get pods -n oficina
+kubectl get hpa,pdb,ingress -n oficina
+kubectl logs -n oficina -l app=oficina-api --tail=50   # logs JSON
+```
+
+### Deploy ativo (homologação)
+
+- **API (via ALB):** `http://k8s-oficina-oficinaa-5b75d4a62f-802718820.us-east-1.elb.amazonaws.com` — Swagger em `/api`
+- **Autenticação por CPF (Lambda via API Gateway):** `POST https://8hkalepe37.execute-api.us-east-1.amazonaws.com/auth`
+
+> Ambiente acadêmico: para conter custo, o cluster pode estar desligado (`terraform destroy`/`apply` reconstroem em ~20 min).
+
+### Desenvolvimento local em Kubernetes (opcional, Kind)
+
+O diretório `infra/` mantém um Terraform que provisiona um cluster **Kind** local (efêmero) para testar os manifestos sem a AWS. É opcional e independente do deploy na nuvem — o caminho recomendado para desenvolvimento é o [Docker Compose](#execução-local-docker-compose).
