@@ -61,6 +61,11 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: WEBHOOK_ORCAMENTO_TOKEN
+            - name: MAIL_LAMBDA_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: MAIL_LAMBDA_TOKEN
           # Resource limits are required for HPA to compute utilization percentages
           resources:
             requests:

@@ -7,6 +7,5 @@ data:
   NODE_ENV: "production"
   APPLICATION_PORT: "3000"
   JWT_EXPIRES_IN: "1h"
-  MAIL_HOST: "smtp.ethereal.email"
-  MAIL_PORT: "587"
-  MAIL_FROM: '"Oficina SOAT" <noreply@oficina.com>'
+  # Valor retornado pelo output mail_url do Terraform da stack tc3-auth-lambda.
+  MAIL_LAMBDA_URL: "https://EXEMPLO.execute-api.us-east-1.amazonaws.com/mail"

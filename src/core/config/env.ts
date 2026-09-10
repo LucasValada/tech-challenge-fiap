@@ -17,9 +17,6 @@ export function validateEnv(): void {
   must('JWT_SECRET');
   must('JWT_EXPIRES_IN');
 
-  must('MAIL_FROM');
-  must('MAIL_HOST');
-  must('MAIL_USER');
-  must('MAIL_PASS');
-  must('MAIL_PORT');
+  must('MAIL_LAMBDA_URL');
+  must('MAIL_LAMBDA_TOKEN');
 }
