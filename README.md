@@ -52,10 +52,10 @@ A Fase 3 exige a segregação da solução em **quatro repositórios git indepen
 
 | # | Repositório | Papel | Stack |
 |---|---|---|---|
-| 1 | `fase3-lambda-auth-cpf` | Functions Serverless de **autenticação por CPF** (`/auth`) e de **notificações por e-mail** (`/mail`) **+ API Gateway** (porta de entrada da solução) | AWS Lambda (Node), API Gateway HTTP v2, `pg`, `nodemailer` |
-| 2 | `fase3-infra-k8s` | Terraform do **cluster EKS** (VPC, EKS, node group, ECR, ALB Controller, OIDC, budget) | Terraform, módulos AWS |
-| 3 | `fase3-infra-database` | Terraform do **RDS PostgreSQL** gerenciado (+ publicação dos segredos no SSM) | Terraform, RDS |
-| 4 | **`fase3-app` (este repo)** | **Aplicação principal** NestJS rodando no EKS | NestJS 11, Prisma 7, PostgreSQL |
+| 1 | [`tc3-auth-lambda`](https://github.com/tiagostorch/tc3-auth-lambda) | **Duas** Functions Serverless no mesmo repo, atrás de um único **API Gateway**: **autenticação por CPF** (`POST /auth`) e **notificações por e-mail** (`POST /mail`) | AWS Lambda (Node), API Gateway HTTP v2, `pg`, `nodemailer` |
+| 2 | [`tc3-infra-k8s`](https://github.com/tiagostorch/tc3-infra-k8s) | Terraform do **cluster EKS** (VPC, EKS, node group, ECR, ALB Controller, OIDC, budget) + observabilidade New Relic (agente, dashboard, alertas) | Terraform, módulos AWS |
+| 3 | [`tc3-infra-db`](https://github.com/tiagostorch/tc3-infra-db) | Terraform do **RDS PostgreSQL** gerenciado (+ publicação dos segredos no SSM) | Terraform, RDS |
+| 4 | [**`tech-challenge-fiap`**](https://github.com/LucasValada/tech-challenge-fiap) **(este repo)** | **Aplicação principal** NestJS rodando no EKS | NestJS 11, Prisma 7, PostgreSQL |
 
 Os repositórios se integram por **rede privada (VPC)**, **SSM Parameter Store** (segredos compartilhados, incl. o `JWT_SECRET` que a Lambda e a app usam) e **`terraform_remote_state`**. Por que AWS e como cada peça se encaixa: ver **[RFC-002 — Escolha da nuvem](docs/rfc/RFC-002-escolha-da-nuvem.md)**.
 
@@ -327,7 +327,7 @@ graph LR
 - **Desempenho em consultas analíticas:** o relatório de tempo médio de execução usa agregações que o PostgreSQL lida com eficiência.
 - **Ecossistema maduro:** integração consolidada com Prisma 7 (via driver adapter `@prisma/adapter-pg`) e documentação abrangente.
 
-Na Fase 3 o banco passou de Postgres-em-cluster para **RDS PostgreSQL gerenciado** (subnet privada, TLS obrigatório, backups e métricas geridos pela AWS), provisionado no repositório `fase3-infra-database`. A modelagem também foi **melhorada** (campo `status` em `Cliente`, snapshots imutáveis nas linhas da OS, numeração sequencial anual e políticas de exclusão explícitas).
+Na Fase 3 o banco passou de Postgres-em-cluster para **RDS PostgreSQL gerenciado** (subnet privada, TLS obrigatório, backups e métricas geridos pela AWS), provisionado no repositório [`tc3-infra-db`](https://github.com/tiagostorch/tc3-infra-db). A modelagem também foi **melhorada** (campo `status` em `Cliente`, snapshots imutáveis nas linhas da OS, numeração sequencial anual e políticas de exclusão explícitas).
 
 > **Justificativa formal completa + ajustes no modelo relacional:** ver **[RFC-003 — Escolha do banco de dados](docs/rfc/RFC-003-escolha-do-banco.md)**.
 
@@ -519,7 +519,7 @@ As notificações por e-mail são enviadas por uma **Lambda serverless** — ver
 
 ## Notificações por e-mail (Lambda)
 
-O envio de e-mail (orçamento, finalização e entrega) **não é feito pelo app**: ele faz um `POST` autenticado para a **Lambda de notificações** (repositório `tc3-auth-lambda`, rota `/mail` do API Gateway), que cuida do SMTP. O envio é **best-effort** — uma falha é registrada no log e **não bloqueia** a transição de status da OS (com timeout de 15s).
+O envio de e-mail (orçamento, finalização e entrega) **não é feito pelo app**: ele faz um `POST` autenticado para a **Lambda de notificações** — que fica no repositório [`tc3-auth-lambda`](https://github.com/tiagostorch/tc3-auth-lambda), **o mesmo da autenticação por CPF** (as duas Lambdas convivem lá, atrás do mesmo API Gateway) —, na rota `/mail`, e ela cuida do SMTP. O envio é **best-effort** — uma falha é registrada no log e **não bloqueia** a transição de status da OS (com timeout de 15s).
 
 Duas variáveis controlam a integração:
 
@@ -557,7 +557,7 @@ O token administrativo carrega `{ sub, email }` e é resolvido como `tipo: "admi
 
 ### 2. Clientes — CPF (função serverless)
 
-O cliente da oficina autentica **pelo CPF**, através de uma **função serverless (AWS Lambda)** exposta no API Gateway — repositório separado (`fase3-lambda-auth-cpf`). O fluxo:
+O cliente da oficina autentica **pelo CPF**, através de uma **função serverless (AWS Lambda)** exposta no API Gateway. Ela vive no repositório [`tc3-auth-lambda`](https://github.com/tiagostorch/tc3-auth-lambda) — **o mesmo repositório que também hospeda a Lambda de notificações por e-mail** (`/mail`); são duas funções no mesmo projeto, atrás do mesmo API Gateway. O fluxo:
 
 1. Cliente envia o CPF → `POST /auth` (API Gateway → Lambda)
 2. A Lambda valida os dígitos do CPF, consulta o cliente no banco e verifica se está **ATIVO**
