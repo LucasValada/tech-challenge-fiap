@@ -35,12 +35,12 @@ lerna-debug.log*
 !.vscode/launch.json
 !.vscode/extensions.json
 
-# dotenv environment variable files
+# dotenv environment variable files — credenciais, NUNCA commitar
 .env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
+.env.*
+# Exceção: .env.example já é versionado e contém apenas placeholders SEM valores
+# reais (as chaves New Relic ficam vazias). Nunca coloque credenciais nele.
+!.env.example
 
 # temp directory
 .temp

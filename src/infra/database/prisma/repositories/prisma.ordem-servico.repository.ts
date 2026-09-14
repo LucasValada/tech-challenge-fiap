@@ -32,6 +32,11 @@ import {
   STATUS_EXCLUIDOS_DA_LISTAGEM,
   prioridadeStatusListagem,
 } from '../../../../modules/ordem-servico/domain/services/prioridadeStatusOS';
+import {
+  registrarFalhaOrdemServico,
+  registrarTransicaoDeStatus,
+  segundosEntre,
+} from '../../../../modules/ordem-servico/application/shared/telemetria-ordem-servico';
 
 type Tx = Prisma.TransactionClient;
 
@@ -617,6 +622,18 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
     });
   }
 
+  /**
+   * Único ponto por onde toda mudança de status passa — transição manual,
+   * envio de orçamento, decisão do cliente e webhook de orçamento. Por isso a
+   * telemetria da transição é emitida aqui, e não em cada caso de uso: um
+   * quinto caminho que surja amanhã já nasce medido, em vez de abrir um buraco
+   * silencioso no painel de tempo por status.
+   *
+   * A duração sai do histórico, não do `updatedAt`: qualquer edição da ordem
+   * mexe no `updatedAt`, enquanto o histórico só recebe registro em transição.
+   * A entrada mais recente, lida dentro da mesma transação, marca quando a
+   * ordem entrou no status de onde está saindo agora.
+   */
   async transicionarStatus(
     ordemId: string,
     novoStatus: StatusOrdemServico,
@@ -624,7 +641,58 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
     usuarioId: string,
     observacao: string | null,
   ): Promise<OrdemServico> {
+    const { ordem, entradaAnterior, entradaNova } =
+      await this.persistirTransicao(
+        ordemId,
+        novoStatus,
+        tipoTransicao,
+        usuarioId,
+        observacao,
+      ).catch((erro: unknown) => {
+        registrarFalhaOrdemServico('transicao_status', erro, {
+          ordem_id: ordemId,
+          status_novo: novoStatus,
+        });
+        throw erro;
+      });
+
+    // Só depois do commit: transição que sofreu rollback não pode aparecer
+    // no painel como se tivesse acontecido.
+
+    registrarTransicaoDeStatus({
+      ordemId,
+      codigo: ordem.codigo,
+      statusAnterior: entradaAnterior?.status,
+      statusNovo: novoStatus,
+      tipoTransicao,
+      usuarioId,
+      segundosNoStatus: segundosEntre(
+        entradaAnterior?.createdAt,
+        entradaNova.createdAt,
+      ),
+      segundosDesdeAbertura: segundosEntre(
+        ordem.createdAt,
+        entradaNova.createdAt,
+      ),
+    });
+
+    return this.toEntity(ordem);
+  }
+
+  private persistirTransicao(
+    ordemId: string,
+    novoStatus: StatusOrdemServico,
+    tipoTransicao: 'AVANCO' | 'ROLLBACK',
+    usuarioId: string,
+    observacao: string | null,
+  ) {
     return this.prisma.$transaction(async (tx) => {
+      const entradaAnterior = await tx.historicoStatusOS.findFirst({
+        where: { ordemServicoId: ordemId },
+        orderBy: { createdAt: 'desc' },
+        select: { status: true, createdAt: true },
+      });
+
       const updateData: {
         status: StatusOrdemServico;
         finalizadaAt?: Date | null;
@@ -644,16 +712,17 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
         data: updateData,
       });
 
-      await tx.historicoStatusOS.create({
+      const entradaNova = await tx.historicoStatusOS.create({
         data: {
           ordemServicoId: ordemId,
           status: novoStatus,
           usuarioId,
           observacao,
         },
+        select: { createdAt: true },
       });
 
-      return this.toEntity(ordem);
+      return { ordem, entradaAnterior, entradaNova };
     });
   }
 

@@ -24,13 +24,13 @@ A API cobre a gestão de clientes, veículos, serviços, peças/insumos e ordens
 - [Execução local (Docker Compose)](#execução-local-docker-compose)
 - [Execução local (desenvolvimento)](#execução-local-desenvolvimento)
 - [Variáveis de ambiente](#variáveis-de-ambiente)
-- [Configuração de email (Ethereal)](#configuração-de-email-ethereal)
+- [Notificações por e-mail (Lambda)](#notificações-por-e-mail-lambda)
 - [Autenticação](#autenticação)
-- [Observabilidade](#observabilidade)
 - [Documentação da API](#documentação-da-api)
 - [Documentação de arquitetura (RFCs e ADRs)](#documentação-de-arquitetura-rfcs-e-adrs)
 - [Endpoints da API](#endpoints-da-api)
 - [Fluxo da Ordem de Serviço](#fluxo-da-ordem-de-serviço)
+- [Observabilidade](#observabilidade)
 - [Testes](#testes)
 - [Scripts disponíveis](#scripts-disponíveis)
 - [Infraestrutura e deploy na AWS (EKS)](#infraestrutura-e-deploy-na-aws-eks)
@@ -52,7 +52,7 @@ A Fase 3 exige a segregação da solução em **quatro repositórios git indepen
 
 | # | Repositório | Papel | Stack |
 |---|---|---|---|
-| 1 | `fase3-lambda-auth-cpf` | Function Serverless de autenticação por CPF **+ API Gateway** (porta de entrada da solução) | AWS Lambda (Node), API Gateway HTTP v2, `pg` |
+| 1 | `fase3-lambda-auth-cpf` | Functions Serverless de **autenticação por CPF** (`/auth`) e de **notificações por e-mail** (`/mail`) **+ API Gateway** (porta de entrada da solução) | AWS Lambda (Node), API Gateway HTTP v2, `pg`, `nodemailer` |
 | 2 | `fase3-infra-k8s` | Terraform do **cluster EKS** (VPC, EKS, node group, ECR, ALB Controller, OIDC, budget) | Terraform, módulos AWS |
 | 3 | `fase3-infra-database` | Terraform do **RDS PostgreSQL** gerenciado (+ publicação dos segredos no SSM) | Terraform, RDS |
 | 4 | **`fase3-app` (este repo)** | **Aplicação principal** NestJS rodando no EKS | NestJS 11, Prisma 7, PostgreSQL |
@@ -97,22 +97,23 @@ src/infra/database/prisma/repositories/
 
 ### Diagrama de Componentes — visão de nuvem
 
-Visão de alto nível de toda a solução na AWS: o cliente entra pelo **API Gateway**, que roteia a autenticação para a **Lambda** e as rotas protegidas para o **ALB → pods no EKS**; a aplicação e a Lambda usam o **RDS** (banco gerenciado) e compartilham segredos pelo **SSM**; a imagem vem do **ECR**; e a observabilidade coleta métricas, logs e traces.
+Visão de alto nível de toda a solução na AWS: o cliente entra pelo **API Gateway**, que roteia a **autenticação** (`/auth`) e as **notificações** (`/mail`) para **Lambdas serverless** e as rotas protegidas para o **ALB → pods no EKS**; a aplicação e a Lambda de auth usam o **RDS** (banco gerenciado) e compartilham segredos pelo **SSM**; a imagem vem do **ECR**; a Lambda de e-mail cuida do SMTP; e a observabilidade (New Relic) coleta métricas, logs e traces.
 
 ```mermaid
 graph TB
     Cliente["Cliente / Funcionário<br/>browser · curl · Postman"]
     Webhook["Sistema externo<br/>aprovação de orçamento"]
-    SMTP["SMTP<br/>Ethereal / SES"]
-    Obs["Observabilidade<br/>New Relic — métricas, APM, dashboards,<br/>alertas (em implementação) + logs JSON"]
+    SMTP["SMTP<br/>Ethereal / SES<br/>(usado pela Lambda de e-mail)"]
+    Obs["Observabilidade<br/>New Relic — métricas, APM,<br/>dashboards, alertas + logs JSON"]
 
     subgraph AWS["AWS · us-east-1"]
-        GW["<b>API Gateway</b> (HTTP v2)<br/>POST /auth → Lambda<br/>ANY /&#123;proxy+&#125; → ALB (VPC Link)"]
+        GW["<b>API Gateway</b> (HTTP v2)<br/>POST /auth → Lambda auth<br/>POST /mail → Lambda e-mail<br/>ANY /&#123;proxy+&#125; → ALB (VPC Link)"]
         ECR["<b>ECR</b><br/>imagem da API"]
-        SSM["<b>SSM Parameter Store</b><br/>JWT_SECRET, DATABASE_URL<br/>(SecureString)"]
+        SSM["<b>SSM Parameter Store</b><br/>JWT_SECRET, DATABASE_URL,<br/>MAIL_API_TOKEN (SecureString)"]
 
         subgraph VPC["VPC — subnets privadas"]
-            Lambda["<b>Lambda</b> — auth por CPF<br/>valida CPF · checa status · emite JWT"]
+            LambdaAuth["<b>Lambda</b> — auth por CPF<br/>valida CPF · checa status · emite JWT"]
+            LambdaMail["<b>Lambda</b> — notificações<br/>envia e-mail via SMTP"]
             ALB["<b>ALB</b> internet-facing<br/>Ingress via ALB Controller"]
 
             subgraph EKS["<b>EKS</b> — cluster Kubernetes"]
@@ -124,15 +125,18 @@ graph TB
     end
 
     Cliente -->|"HTTPS/REST + JWT"| GW
-    GW -->|"POST /auth"| Lambda
+    GW -->|"POST /auth"| LambdaAuth
+    GW -->|"POST /mail"| LambdaMail
     GW -->|"rotas protegidas (VPC Link)"| ALB
     ALB --> Pods
-    Lambda -->|"SELECT cliente (TLS)"| RDS
+    LambdaAuth -->|"SELECT cliente (TLS)"| RDS
     Pods -->|"SQL/TLS 5432"| RDS
     Pods -->|"pull imagem"| ECR
     Pods -->|"lê segredos"| SSM
-    Lambda -->|"mesmo JWT_SECRET"| SSM
-    Pods -->|"email best-effort"| SMTP
+    LambdaAuth -->|"mesmo JWT_SECRET"| SSM
+    Pods -->|"POST /mail — notificação (best-effort)"| GW
+    LambdaMail -->|"envia e-mail"| SMTP
+    LambdaMail -->|"lê token + SMTP"| SSM
     Webhook -->|"POST /webhooks/orcamento"| ALB
     Pods -.->|"métricas · logs · traces"| Obs
 ```
@@ -157,16 +161,16 @@ graph TB
 
     subgraph Externos["Sistemas externos"]
         Webhook["<b>Sistema Externo de Aprovação</b><br/><i>[External System]</i><br/>Envia decisão de orçamento via<br/>POST /webhooks/orcamento com<br/>X-Webhook-Token"]
-        SMTP["<b>SMTP Ethereal</b><br/><i>[External System]</i><br/>Servidor SMTP falso para emails<br/>de orçamento, finalização e entrega"]
+        MailLambda["<b>Lambda de Notificações</b><br/><i>[External System]</i><br/>Recebe POST /mail (via API Gateway)<br/>e envia e-mails de orçamento,<br/>finalização e entrega via SMTP"]
     end
 
     Clientes -->|"HTTPS / REST<br/>JSON + JWT (privado) ou<br/>código+placa (público)"| API
     Webhook -->|"POST /webhooks/orcamento<br/>JSON + X-Webhook-Token"| API
     API -->|"reads/writes<br/>TCP 5432 via Prisma"| DB
-    API -->|"envia emails<br/>SMTP 587"| SMTP
+    API -->|"POST /mail<br/>JSON + x-mail-api-token"| MailLambda
 
     class Clientes person
-    class Webhook,SMTP external
+    class Webhook,MailLambda external
     class API container
     class DB database
 ```
@@ -211,7 +215,7 @@ graph TB
             direction LR
             Bcrypt["<b>BcryptPasswordHasher</b><br/><i>[Component: bcrypt]</i><br/>auth/infra e user/infra"]
             Jwt["<b>JwtTokenIssuer</b><br/><i>[Component: @nestjs/jwt]</i><br/>auth/infra"]
-            Mailer["<b>NestMailerEmailSender</b><br/><i>[Component: @nestjs-modules/mailer]</i><br/>mail/infra, provider EMAIL_SENDER"]
+            Mailer["<b>NestMailerEmailSender</b><br/><i>[Component: fetch → Lambda de e-mail]</i><br/>mail/infra, provider EMAIL_SENDER"]
         end
 
         subgraph SharedInfra["Infra compartilhada — src/infra e src/modules/prisma"]
@@ -224,7 +228,7 @@ graph TB
     subgraph Externos["Sistemas externos"]
         direction TB
         DB[("<b>PostgreSQL 17</b><br/><i>[ContainerDb: Banco relacional]</i>")]
-        SMTP["<b>SMTP Ethereal</b><br/><i>[External System]</i><br/>Emails de dev"]
+        MailLambda["<b>Lambda de Notificações</b><br/><i>[External System]</i><br/>Envia e-mail via SMTP"]
     end
 
     Cliente -->|"HTTPS / REST"| Controllers
@@ -243,11 +247,11 @@ graph TB
 
     PrismaRepos -->|"usa Prisma Client"| PrismaSvc
     PrismaSvc -->|"TCP 5432 / pg driver"| DB
-    Mailer -->|"envia email / SMTP 587"| SMTP
+    Mailer -->|"POST /mail (HTTP + token)"| MailLambda
 
     class Cliente person
     class DB database
-    class SMTP external
+    class MailLambda external
     class Controllers,DTOs,UseCases,Mappers,Shared,Entities,DomainSvc,Repos,Bcrypt,Jwt,Mailer,PrismaSvc,PrismaRepos component
 ```
 
@@ -273,7 +277,7 @@ graph TB
             RDS[("RDS PostgreSQL<br/>db.t4g.micro · subnet privada · TLS")]
         end
         ECR["ECR — imagem da API"]
-        SSM["SSM /tc3-oficina/homolog/*<br/>DATABASE_URL · JWT_SECRET (SecureString)"]
+        SSM["SSM /tc3-oficina/homolog/*<br/>DATABASE_URL · JWT_SECRET · MAIL_API_TOKEN<br/>NEW_RELIC_LICENSE_KEY (SecureString)"]
     end
 
     Ingress --> Svc --> Deploy
@@ -427,7 +431,8 @@ erDiagram
 | **Runtime / Framework** | Node.js 24 · NestJS 11 · TypeScript |
 | **Persistência** | Prisma 7 (`@prisma/adapter-pg`) · PostgreSQL 17 |
 | **Autenticação** | JWT HS256 (Passport) · bcrypt · função serverless (Lambda) por CPF |
-| **Observabilidade** | `nestjs-pino` (logs JSON + correlation id) · endpoints `/health` e `/health/ready` |
+| **Notificações** | Função serverless (Lambda de e-mail via `/mail`) · envio best-effort por HTTP |
+| **Observabilidade** | `nestjs-pino` (logs JSON + correlationId) · **New Relic** (APM, métricas customizadas, traces distribuídos, dashboards e alertas) · endpoints `/health` e `/health/ready` |
 | **Container** | Docker (multi-stage, non-root) · Docker Compose (local) |
 | **Nuvem (AWS)** | **EKS** (Kubernetes 1.3x) · **RDS PostgreSQL** · **Lambda + API Gateway** · **ECR** · **SSM** · **ALB** |
 | **IaC / CI-CD** | Terraform · GitHub Actions (OIDC, deploy no EKS) |
@@ -456,7 +461,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-O compose cuida de tudo: sobe o Postgres, aguarda o healthcheck, aplica as migrations automaticamente e inicia a API. O usuário admin padrão (`admin@oficina.com` / `senha123`) é criado por uma migration, sem necessidade de seed manual.
+O compose cuida de tudo: sobe o Postgres, aguarda o healthcheck, aplica as migrations no serviço one-shot `migrate` e só então inicia a API (mesmo papel do Job `db-migration` no cluster). O usuário admin padrão (`admin@oficina.com` / `senha123`) é criado por uma migration, sem necessidade de seed manual.
 
 A API estará disponível em `http://localhost:3000` e o Swagger UI em `http://localhost:3000/api`.
 
@@ -496,62 +501,40 @@ Copie `.env.example` para `.env` e preencha:
 | `OFICINA_DB` | sim | Nome do banco (usado pelo docker-compose) |
 | `JWT_SECRET` | sim | Segredo para assinar tokens JWT |
 | `JWT_EXPIRES_IN` | não | Expiração do token (default: `1h`) |
-| `MAIL_HOST` | não | Host SMTP (default: `smtp.ethereal.email`) |
-| `MAIL_PORT` | não | Porta SMTP (default: `587`) |
-| `MAIL_USER` | não | Usuário SMTP |
-| `MAIL_PASS` | não | Senha SMTP |
-| `MAIL_FROM` | não | Remetente padrão dos emails |
+| `MAIL_LAMBDA_URL` | sim | URL da Lambda de notificações (rota `/mail` do API Gateway) para onde o app envia os e-mails |
+| `MAIL_LAMBDA_TOKEN` | sim | Token de chamada da Lambda de e-mail (header `x-mail-api-token`) |
 | `WEBHOOK_ORCAMENTO_TOKEN` | sim | Token compartilhado para autenticar `POST /webhooks/orcamento` |
+| `LOG_LEVEL` | não | Nível do pino (default: `info`) |
+| `NEW_RELIC_ENABLED` | não | Liga o agente de APM, as métricas customizadas e a injeção de `trace.id`/`span.id` no log (default na imagem: `false`) |
+| `NEW_RELIC_LICENSE_KEY` | com o agente ligado | Chave de ingestão do New Relic. **Só no `.env` (ignorado pelo git) ou no Secret do cluster** — nunca no `.env.example` |
+| `NEW_RELIC_APP_NAME` | não | Nome no APM e valor do atributo `servico` (default: `oficina-api`) |
+| `NEW_RELIC_LABELS` | não | Tags padrão (`environment:production;project:tech-challenge-fiap`): marcam a entidade no APM e viram os campos `environment`/`project` de toda linha de log |
 
-Para o envio de email em desenvolvimento, siga o passo a passo da seção [Configuração de email (Ethereal)](#configuração-de-email-ethereal).
+> **Segurança:** `.env` e `.env.*` estão no `.gitignore` (a única exceção é o
+> `.env.example`, sem valores reais) e no `.dockerignore` — a chave nunca entra
+> no repositório nem na imagem. No `docker compose`, o `.env` é lido em runtime;
+> no cluster, a chave vem do Secret `app-secret`, sincronizado do SSM pelo CD.
 
-## Configuração de email (Ethereal)
+As notificações por e-mail são enviadas por uma **Lambda serverless** — ver [Notificações por e-mail (Lambda)](#notificações-por-e-mail-lambda).
 
-O envio de email de orçamento, finalização e entrega da OS é feito via SMTP. Para não depender de um provedor real em ambiente de desenvolvimento, a aplicação foi pensada para funcionar com [Ethereal](https://ethereal.email), um SMTP falso e gratuito que captura toda mensagem enviada e disponibiliza uma URL de preview (nenhum email chega ao destinatário real).
+## Notificações por e-mail (Lambda)
 
-### 1. Criar uma conta Ethereal
+O envio de e-mail (orçamento, finalização e entrega) **não é feito pelo app**: ele faz um `POST` autenticado para a **Lambda de notificações** (repositório `tc3-auth-lambda`, rota `/mail` do API Gateway), que cuida do SMTP. O envio é **best-effort** — uma falha é registrada no log e **não bloqueia** a transição de status da OS (com timeout de 15s).
 
-1. Acesse [https://ethereal.email/create](https://ethereal.email/create)
-2. Clique em **Create Ethereal Account** — a conta é gerada instantaneamente, sem cadastro nem confirmação de email
-3. A página exibe as credenciais SMTP:
+Duas variáveis controlam a integração:
 
-```
-Name:     Ethereal <ethereal.user@ethereal.email>
-Username: xxxxxxxxxxxxxxxxxx@ethereal.email
-Password: yyyyyyyyyyyyyyyyyy
-Host:     smtp.ethereal.email
-Port:     587
-Security: STARTTLS
-```
+| Variável | De onde vem |
+|---|---|
+| `MAIL_LAMBDA_URL` | ConfigMap no cluster; `.env` no local. É a rota `/mail` do API Gateway (output `mail_url` do Terraform da Lambda). |
+| `MAIL_LAMBDA_TOKEN` | Secret `app-secret` no cluster (o CD lê do SSM `MAIL_API_TOKEN`); `.env` no local. Precisa casar com o token que a Lambda valida (header `x-mail-api-token`). |
 
-> **Anote as credenciais** — a página não fica salva. Se perder, basta gerar uma conta nova.
+A configuração de **SMTP** (host, usuário, senha — Ethereal em homologação, ou um provedor real como Amazon SES/SendGrid em produção) vive **na Lambda** (parâmetros no SSM), **não no app**. Ou seja, trocar o provedor de e-mail não toca no código nem no deploy da aplicação.
 
-### 2. Preencher o `.env`
-
-Cole os valores gerados nas variáveis `MAIL_*` do `.env`:
-
-```env
-MAIL_HOST="smtp.ethereal.email"
-MAIL_PORT=587
-MAIL_USER="<Username gerado pelo Ethereal>"
-MAIL_PASS="<Password gerada pelo Ethereal>"
-MAIL_FROM='"Oficina SOAT" <noreply@oficina.com>'
-```
-
-O `MAIL_FROM` pode ser qualquer valor — o Ethereal aceita qualquer remetente.
-
-### 3. Ver os emails enviados
-
-Após disparar qualquer email pela API (`POST /ordens-servico/:id/enviar-orcamento` ou uma transição para `FINALIZADA`/`ENTREGUE`), o log da aplicação imprime uma **Preview URL**:
+**Local:** aponte `MAIL_LAMBDA_URL`/`MAIL_LAMBDA_TOKEN` para a Lambda de homologação, ou deixe valores quaisquer — o envio falha best-effort, sem quebrar o fluxo. Ao disparar um e-mail (`POST /ordens-servico/:id/enviar-orcamento` ou uma transição para `FINALIZADA`/`ENTREGUE`), o log registra o resultado:
 
 ```
-LOG [NestMailerEmailSender] Email de orçamento enviado para cliente@teste.com (OS: OS-2026-000001)
-LOG [NestMailerEmailSender] Preview URL (Ethereal): https://ethereal.email/message/akw7gic6bekDZcIrak6...
+LOG [NestMailerEmailSender] Email enviado via Lambda: orçamento (OS: OS-2026-000001) para cliente@teste.com
 ```
-
-Abra a URL no navegador para ver o email exatamente como o cliente receberia (assunto, corpo em texto puro, HTML se houver). Também é possível abrir [https://ethereal.email/messages](https://ethereal.email/messages) logado com a conta criada para ver todos os emails na caixa de entrada.
-
-> **Em produção**, substitua `MAIL_HOST`/`MAIL_PORT`/`MAIL_USER`/`MAIL_PASS` por um provedor SMTP real (SendGrid, Amazon SES, Gmail, etc). Se qualquer envio falhar, a aplicação registra o erro no log e segue o fluxo — o email é best-effort e uma falha não bloqueia a transição de status da OS.
 
 ## Autenticação
 
@@ -661,26 +644,6 @@ curl -X POST https://<api-gateway>/ordens-servico/minhas/<osId>/aprovar \
 ```
 
 > A distinção admin/cliente é feita na `JwtStrategy` (pela presença de `tipo: "cliente"` vs `email` no payload) e o controle de acesso no `JwtAuthGuard` + decorator `@Roles`. Ver a [RFC-001](docs/rfc/RFC-001-estrategia-autenticacao.md) para a estratégia completa — alternativas consideradas, consequências e riscos.
-
-## Observabilidade
-
-A aplicação foi instrumentada para dar **visibilidade total** sobre o funcionamento, como o desafio pede.
-
-**Healthchecks e uptime** — endpoints dedicados (públicos), usados pelas probes do Kubernetes e pelo health check do ALB:
-
-| Endpoint | Tipo | Verifica |
-|---|---|---|
-| `GET /health` | liveness | processo no ar (raso, não depende do banco) |
-| `GET /health/ready` | readiness | conexão com o banco (`SELECT 1`); responde `503` se o banco não responde |
-
-**Logs estruturados (JSON) com correlação** — via `nestjs-pino`. Cada requisição recebe um **`correlationId`**: a aplicação reaproveita um id vindo do API Gateway/ALB (`x-correlation-id`, `x-amzn-trace-id`, etc.) quando presente, ou gera um, e o devolve no header `x-correlation-id` — fechando a correlação **ponta a ponta** com a Lambda (que já loga em JSON com `requestId`). Headers sensíveis (`authorization`, `cookie`, `x-webhook-token`) são redigidos no log.
-
-```json
-{ "level": 30, "correlationId": "1-6a97...", "req": { "method": "POST", "url": "/ordens-servico" },
-  "res": { "statusCode": 201 }, "responseTime": 42, "msg": "request completed" }
-```
-
-**Métricas, dashboards e alertas** — a integração com o **APM (New Relic)** está em implementação (frente do time) e cobre: **latência das APIs**, **consumo de CPU/memória do Kubernetes** (o `metrics-server` já alimenta o HPA), **alertas para falhas no processamento de OS**, e os dashboards de **volume diário de OS**, **tempo médio de execução por status** e **erros nas integrações**. A aplicação já produz o dado de base para esses painéis: cada transição grava um `HistoricoStatusOS` (com timestamps) e existe o endpoint de relatório de tempo médio por serviço.
 
 ## Documentação da API
 
@@ -819,7 +782,7 @@ RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → EM_EXECUCAO → FINALIZ
 5. **FINALIZADA:** serviço concluído (email automático ao cliente com `finalizadaAt`)
 6. **ENTREGUE:** veículo devolvido ao cliente (email automático de confirmação com `entregueAt`)
 
-Cada transição registra um `HistoricoStatusOS` com data, usuário e observação. Envios de email são best-effort: uma falha do SMTP não bloqueia a transição de status.
+Cada transição registra um `HistoricoStatusOS` com data, usuário e observação. Os e-mails são enviados pela Lambda de notificações e são best-effort: uma falha no envio não bloqueia a transição de status.
 
 ### Diagrama de sequência — abertura de OS
 
@@ -857,13 +820,69 @@ sequenceDiagram
     end
 ```
 
+## Observabilidade
+
+A aplicação escreve **um JSON por linha** no stdout, via `nestjs-pino`. No
+cluster, o Fluent Bit do `nri-bundle` recolhe e entrega ao New Relic, que
+desestrutura o JSON em atributos consultáveis — nada é escrito em arquivo e não
+há CloudWatch no caminho.
+
+```json
+{"level":"info","timestamp":1789243924881,"servico":"oficina-api",
+ "environment":"production","project":"tech-challenge-fiap",
+ "correlationId":"7d2f…","trace.id":"9a1c…","span.id":"4f70…","entity.name":"oficina-api",
+ "evento":"ordem_servico.criada","ordem_id":"os-1","codigo":"OS-2026-000042",
+ "message":"ordem_servico.criada"}
+```
+
+| Campo | De onde vem |
+|---|---|
+| `level`, `timestamp`, `servico` | Configuração do pino em `src/app.module.ts` — os nomes seguem o que o New Relic indexa nativamente |
+| `environment`, `project` | Tags padrão, lidas de `NEW_RELIC_LABELS` (a mesma variável das tags da entidade no APM) |
+| `correlationId` | id da requisição no pino-http (`quietReqLogger`); reaproveita o `x-correlation-id` recebido ou gera um |
+| `trace.id`, `span.id`, `entity.*` | `mixin` chamando `newrelic.getLinkingMetadata()` — liga o log ao trace distribuído; com um `traceparent` W3C recebido, o `trace.id` é o do cliente |
+| `evento` + campos em `snake_case` | Evento de negócio emitido pelo caso de uso |
+
+O agente sobe por `node -r newrelic dist/src/main.js` — o CMD da imagem, em
+forma exec —, **antes** de qualquer módulo da aplicação: é essa ordem que
+permite a ele instrumentar Express e Prisma no momento em que são importados.
+As migrations não rodam mais no CMD: no cluster ficam no Job `db-migration`, e
+no `docker compose` no serviço `migrate`. Assim o stdout da API é só JSON e o
+Node recebe o SIGTERM direto (desligamento gracioso, com flush do agente).
+
+**Métricas customizadas** (APM, `Custom/OrdemServico/*`): criação de OS, tempo
+em cada status (medido no commit de toda transição — manual, envio de
+orçamento, decisão do cliente e webhook), lead time até a entrega e falhas por
+etapa. Detalhes, nomes e consultas NRQL em `tc3-infra-k8s/OBSERVABILIDADE.md`.
+
+Eventos de negócio (`registrarEvento` / `registrarFalha`, em
+`src/common/observability/`) saem pelo mesmo logger da requisição, e por isso
+herdam o `correlationId` e os campos de trace sem que nenhum caso de uso precise
+receber o logger no construtor.
+
+Em desenvolvimento nada disso está ligado: sem `NEW_RELIC_ENABLED=true` o pacote
+nem é carregado, e o log sai igual, só que sem os campos de trace. Em teste
+unitário os eventos viram no-op, porque `configurarTelemetria` só é chamado no
+bootstrap.
+
+Endpoints de saúde, usados pelas probes do Kubernetes, pelo health check do ALB
+e pelo monitor de Synthetics:
+
+| Rota | Uso |
+|---|---|
+| `GET /health` | Liveness raso — não toca no banco |
+| `GET /health/ready` | Readiness — `SELECT 1`, responde 503 se o banco cai |
+
+O desenho completo — agentes, dashboard, alertas e o contrato dos campos — está
+no repositório de infraestrutura, em `tc3-infra-k8s/OBSERVABILIDADE.md`.
+
 ## Testes
 
-Cobertura atual: **313 testes unitários** (84 suites) + **62 testes end-to-end** (9 suites, com Postgres real via Testcontainers).
+Cobertura atual: **344 testes unitários** (88 suites) + **62 testes end-to-end** (9 suites, com Postgres real via Testcontainers).
 
-- Statements: **68.53%**
-- Branches: **58.55%**
-- Functions: **66.38%**
+- Statements: **69.41%**
+- Branches: **60.28%**
+- Functions: **66.5%**
 
 ```bash
 # Todos os testes unitários
@@ -938,7 +957,7 @@ Dois workflows em `.github/workflows/`, cada um com seu `concurrency`. Actions p
 | `app/07-ingress.yaml` | Ingress ALB internet-facing (healthcheck `/health`) |
 | `app/08-pdb.yaml` | PodDisruptionBudget `minAvailable: 1` |
 
-> O `Secret` **não é versionado**: o pipeline o monta a partir do **SSM Parameter Store** no momento do deploy (`DATABASE_URL`, `JWT_SECRET`) + valores de mail/webhook. O `JWT_SECRET` é o **mesmo** que a Lambda usa para assinar o token — por isso é lido do SSM, e não chumbado. As migrations ficam a cargo do **Job** (a imagem só faz `start`); ver [ADR-002](docs/adr/ADR-002-uso-de-hpa.md) sobre o HPA e a [RFC-001](docs/rfc/RFC-001-estrategia-autenticacao.md) sobre o segredo compartilhado.
+> O `Secret` **não é versionado**: o pipeline o monta no momento do deploy a partir do **SSM Parameter Store** (`DATABASE_URL`, `JWT_SECRET`, `NEW_RELIC_LICENSE_KEY` e `MAIL_API_TOKEN` → `MAIL_LAMBDA_TOKEN`) mais o `WEBHOOK_ORCAMENTO_TOKEN` (GitHub secret). O `JWT_SECRET` e o `MAIL_API_TOKEN` são os **mesmos** que as Lambdas de auth e de e-mail usam — por isso vêm do SSM, e não chumbados. As migrations ficam a cargo do **Job** (a imagem só faz `start`); ver [ADR-002](docs/adr/ADR-002-uso-de-hpa.md) sobre o HPA e a [RFC-001](docs/rfc/RFC-001-estrategia-autenticacao.md) sobre o segredo compartilhado.
 
 ### Operar o cluster manualmente (kubectl)
 

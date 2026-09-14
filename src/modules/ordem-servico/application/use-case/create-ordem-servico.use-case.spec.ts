@@ -1,3 +1,9 @@
+jest.mock('../shared/telemetria-ordem-servico', () => ({
+  registrarOrdemCriada: jest.fn(),
+  registrarFalhaOrdemServico: jest.fn(),
+  registrarRejeicaoOrdemServico: jest.fn(),
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   NotFoundException,
@@ -5,6 +11,11 @@ import {
 } from '@nestjs/common';
 import { CreateOrdemServicoUseCase } from './create-ordem-servico.use-case';
 import { ServicoIndisponivelError } from '../../domain/errors';
+import {
+  registrarFalhaOrdemServico,
+  registrarOrdemCriada,
+  registrarRejeicaoOrdemServico,
+} from '../shared/telemetria-ordem-servico';
 
 const mockOrdemRepo = { createComItens: jest.fn() };
 const mockClienteRepo = { findByCpfCnpj: jest.fn() };
@@ -88,6 +99,39 @@ describe('CreateOrdemServicoUseCase', () => {
     await expect(useCase.execute('usuario-1', baseDto)).rejects.toBeInstanceOf(
       UnprocessableEntityException,
     );
+
+    // Regra de negócio recusando o pedido não é falha do sistema: não pode
+    // alimentar o alerta de falhas.
+    expect(registrarRejeicaoOrdemServico).toHaveBeenCalledWith(
+      'criacao',
+      expect.any(ServicoIndisponivelError),
+      { cliente_id: 'cliente-1', veiculo_id: 'veiculo-1' },
+    );
+    expect(registrarFalhaOrdemServico).not.toHaveBeenCalled();
+  });
+
+  it('erro sem tradução (banco fora) conta como falha e é repassado intacto', async () => {
+    mockClienteRepo.findByCpfCnpj.mockResolvedValue({
+      id: 'cliente-1',
+      cpfCnpj: '52998224725',
+    });
+    mockVeiculoRepo.findByPlaca.mockResolvedValue({
+      id: 'veiculo-1',
+      clienteId: 'cliente-1',
+    });
+    const erroDeBanco = new Error('connect ECONNREFUSED');
+    mockOrdemRepo.createComItens.mockRejectedValue(erroDeBanco);
+
+    await expect(useCase.execute('usuario-1', baseDto)).rejects.toBe(
+      erroDeBanco,
+    );
+    expect(registrarFalhaOrdemServico).toHaveBeenCalledWith(
+      'criacao',
+      erroDeBanco,
+      { cliente_id: 'cliente-1', veiculo_id: 'veiculo-1' },
+    );
+    expect(registrarRejeicaoOrdemServico).not.toHaveBeenCalled();
+    expect(registrarOrdemCriada).not.toHaveBeenCalled();
   });
 
   it('cria OS no fluxo feliz com 1 serviço e 1 item', async () => {
@@ -117,5 +161,12 @@ describe('CreateOrdemServicoUseCase', () => {
       servicos: [{ servicoId: 'svc-1', quantidade: 1 }],
       itens: [{ itemEstoqueId: 'item-1', quantidade: 2 }],
     });
+    expect(registrarOrdemCriada).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ordemId: 'ordem-1',
+        quantidadeServicos: 1,
+        quantidadeItens: 1,
+      }),
+    );
   });
 });
