@@ -75,16 +75,11 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: JWT_SECRET
-            - name: MAIL_USER
+            - name: MAIL_LAMBDA_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: app-secret
-                  key: MAIL_USER
-            - name: MAIL_PASS
-              valueFrom:
-                secretKeyRef:
-                  name: app-secret
-                  key: MAIL_PASS
+                  key: MAIL_LAMBDA_TOKEN
             - name: WEBHOOK_ORCAMENTO_TOKEN
               valueFrom:
                 secretKeyRef:
