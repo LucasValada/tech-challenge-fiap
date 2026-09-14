@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -6,8 +6,10 @@ COPY package*.json ./
 COPY prisma ./prisma
 COPY scripts ./scripts
 
-# Instala TODAS dependências (incluindo dev)
-RUN npm install
+# Instala TODAS dependências (incluindo dev) — npm ci para build determinístico.
+# --ignore-scripts bloqueia lifecycle scripts de dependências (hardening de
+# supply chain). O prisma generate é rodado explicitamente logo abaixo.
+RUN npm ci --ignore-scripts
 
 RUN npx prisma generate
 
@@ -22,14 +24,17 @@ COPY . .
 # Compila TypeScript
 RUN npm run build
 
-FROM node:22-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
 # Copia apenas dependências de produção (inclui o agente `newrelic`)
 COPY package*.json ./
 
-RUN npm install --omit=dev
+# --ignore-scripts (hardening) e, em seguida, rebuild só do bcrypt — o único
+# módulo nativo de runtime — para garantir o binário sem executar scripts de
+# instalação de terceiros.
+RUN npm ci --omit=dev --ignore-scripts && npm rebuild bcrypt
 
 # Copia build já compilado
 COPY --from=builder /app/dist ./dist
@@ -38,6 +43,9 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/src/generated ./src/generated
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+
+# Bundle da CA do RDS — usado pelo PrismaService para validar o certificado TLS
+COPY certs ./certs
 
 # ─── New Relic: só configuração NÃO sensível ─────────────────────────────────
 # Nenhuma credencial entra na imagem — nem como ENV, nem como ARG (ARG fica no
@@ -71,7 +79,8 @@ EXPOSE 3000
 #   3. `-r newrelic` carrega o agente antes de qualquer módulo da aplicação —
 #      é o que permite instrumentar Express e Prisma.
 #
-# As migrations saíram do CMD: no cluster rodam no Job `db-migration` (antes do
-# Deployment), no docker compose no serviço `migrate`. Rodá-las em todo pod
-# também fazia réplicas concorrerem pela mesma migration a cada scale-out.
+# As migrations NÃO rodam aqui: no EKS ficam a cargo do Job `db-migration`
+# (executado e aguardado pelo CD antes do rollout) e, no local, do serviço
+# one-shot `migrate` do docker-compose. Rodá-las em todo pod também fazia
+# réplicas concorrerem pela mesma migration a cada scale-out.
 CMD ["node", "-r", "newrelic", "dist/src/main.js"]

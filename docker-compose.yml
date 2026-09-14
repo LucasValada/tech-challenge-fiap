@@ -40,6 +40,8 @@ services:
     build:
       context: ./
       dockerfile: ./Dockerfile
+    # Sem `command` aqui: a API usa o CMD da imagem (`node -r newrelic …`), em
+    # forma exec. As migrations rodam antes, no serviço one-shot `migrate`.
     environment:
       NODE_ENV: ${NODE_ENV}
       APPLICATION_PORT: 3000

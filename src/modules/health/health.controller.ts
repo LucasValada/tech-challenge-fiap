@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -18,6 +19,8 @@ import { PrismaService } from '../prisma/prisma.service';
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
+  private readonly logger = new Logger(HealthController.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   @Get()
@@ -35,10 +38,16 @@ export class HealthController {
       await this.prisma.$queryRaw`SELECT 1`;
       return { status: 'ok', database: 'up' };
     } catch (error) {
+      // O detalhe do erro fica só no log do servidor; a resposta pública é
+      // genérica para não expor informações internas de conexão com o banco.
+      this.logger.error(
+        `Readiness falhou ao consultar o banco: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
       throw new ServiceUnavailableException({
         status: 'error',
         database: 'down',
-        message: error instanceof Error ? error.message : String(error),
       });
     }
   }
