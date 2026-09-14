@@ -7,9 +7,11 @@ data:
   NODE_ENV: "production"
   APPLICATION_PORT: "3000"
   JWT_EXPIRES_IN: "1h"
-  MAIL_HOST: "smtp.ethereal.email"
-  MAIL_PORT: "587"
-  MAIL_FROM: '"Oficina SOAT" <noreply@oficina.com>'
+
+  # Notificações serverless: o app não fala SMTP direto — faz POST para a Lambda
+  # de e-mail (rota /mail do API Gateway do repositório tc3-auth-lambda, output
+  # `mail_url`). O token de chamada (MAIL_LAMBDA_TOKEN) vem do Secret app-secret.
+  MAIL_LAMBDA_URL: "https://8hkalepe37.execute-api.us-east-1.amazonaws.com/mail"
 
   # ─── Observabilidade ──────────────────────────────────────────────────────
   # Nenhuma credencial aqui: a license key vem do Secret `app-secret` (ver

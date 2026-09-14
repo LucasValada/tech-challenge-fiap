@@ -127,19 +127,23 @@ jobs:
       # impresso. DATABASE_URL recebe sslmode=require (o app abre TLS no RDS).
       - name: Sync app-secret from SSM
         env:
-          MAIL_USER: ${{ secrets.MAIL_USER }}
-          MAIL_PASS: ${{ secrets.MAIL_PASS }}
           WEBHOOK_ORCAMENTO_TOKEN: ${{ secrets.WEBHOOK_ORCAMENTO_TOKEN }}
         run: |
           set -euo pipefail
           DB_URL=$(aws ssm get-parameter --name "${SSM_PREFIX}/DATABASE_URL" --with-decryption --query Parameter.Value --output text)
           JWT=$(aws ssm get-parameter --name "${SSM_PREFIX}/JWT_SECRET" --with-decryption --query Parameter.Value --output text)
+          # Token de chamada da Lambda de e-mail. Mesmo parâmetro (MAIL_API_TOKEN)
+          # que a stack tc3-auth-lambda gera e a Lambda valida. Estrito: o app
+          # exige MAIL_LAMBDA_TOKEN no boot, então sem ele o deploy deve falhar
+          # aqui em vez de subir um pod que quebra na validação de env.
+          MAIL_TOKEN=$(aws ssm get-parameter --name "${SSM_PREFIX}/MAIL_API_TOKEN" --with-decryption --query Parameter.Value --output text)
           # Publicada por tc3-infra-k8s. Falha tolerada de propósito: sem a
           # chave o agente só não reporta, e derrubar o deploy inteiro por causa
           # de telemetria seria pior do que ficar sem ela por um ciclo.
           NR_KEY=$(aws ssm get-parameter --name "${SSM_PREFIX}/NEW_RELIC_LICENSE_KEY" --with-decryption --query Parameter.Value --output text 2>/dev/null || echo "")
           echo "::add-mask::$DB_URL"
           echo "::add-mask::$JWT"
+          echo "::add-mask::$MAIL_TOKEN"
           # `&&` solto abortaria o step sob `set -e` quando a chave não existe,
           # que é justamente o caso que este bloco existe para tolerar.
           if [ -n "$NR_KEY" ]; then
@@ -152,8 +156,7 @@ jobs:
             --from-literal=DATABASE_URL="$DB_URL" \
             --from-literal=JWT_SECRET="$JWT" \
             --from-literal=NEW_RELIC_LICENSE_KEY="$NR_KEY" \
-            --from-literal=MAIL_USER="${MAIL_USER:-placeholder}" \
-            --from-literal=MAIL_PASS="${MAIL_PASS:-placeholder}" \
+            --from-literal=MAIL_LAMBDA_TOKEN="$MAIL_TOKEN" \
             --from-literal=WEBHOOK_ORCAMENTO_TOKEN="${WEBHOOK_ORCAMENTO_TOKEN:-placeholder}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
