@@ -1,7 +1,14 @@
 import dotenv from 'dotenv';
 import path from 'node:path';
 
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+// `quiet`: o dotenv 17 imprime "injecting env (N) from ..." em texto puro no
+// stdout a cada subida — a primeira linha do log deixava de ser JSON.
+//
+// Caminho a partir do diretório de trabalho, como o ConfigModule faz: o
+// `__dirname` do código compilado é dist/src/core/config, e o `../../.env`
+// antigo apontava para dist/src/.env, que nunca existe. No contêiner não há
+// .env (o .dockerignore o exclui) e as variáveis vêm do ambiente.
+dotenv.config({ path: path.resolve(process.cwd(), '.env'), quiet: true });
 
 function must(name: string): void {
   if (!process.env[name]) {

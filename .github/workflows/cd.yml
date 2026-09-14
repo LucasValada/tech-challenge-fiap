@@ -134,12 +134,24 @@ jobs:
           set -euo pipefail
           DB_URL=$(aws ssm get-parameter --name "${SSM_PREFIX}/DATABASE_URL" --with-decryption --query Parameter.Value --output text)
           JWT=$(aws ssm get-parameter --name "${SSM_PREFIX}/JWT_SECRET" --with-decryption --query Parameter.Value --output text)
+          # Publicada por tc3-infra-k8s. Falha tolerada de propósito: sem a
+          # chave o agente só não reporta, e derrubar o deploy inteiro por causa
+          # de telemetria seria pior do que ficar sem ela por um ciclo.
+          NR_KEY=$(aws ssm get-parameter --name "${SSM_PREFIX}/NEW_RELIC_LICENSE_KEY" --with-decryption --query Parameter.Value --output text 2>/dev/null || echo "")
           echo "::add-mask::$DB_URL"
           echo "::add-mask::$JWT"
+          # `&&` solto abortaria o step sob `set -e` quando a chave não existe,
+          # que é justamente o caso que este bloco existe para tolerar.
+          if [ -n "$NR_KEY" ]; then
+            echo "::add-mask::$NR_KEY"
+          else
+            echo "::warning::NEW_RELIC_LICENSE_KEY ausente no SSM — a API sobe sem APM"
+          fi
           case "$DB_URL" in *sslmode=*) : ;; *) DB_URL="${DB_URL}&sslmode=require";; esac
           kubectl create secret generic app-secret -n "$NAMESPACE" \
             --from-literal=DATABASE_URL="$DB_URL" \
             --from-literal=JWT_SECRET="$JWT" \
+            --from-literal=NEW_RELIC_LICENSE_KEY="$NR_KEY" \
             --from-literal=MAIL_USER="${MAIL_USER:-placeholder}" \
             --from-literal=MAIL_PASS="${MAIL_PASS:-placeholder}" \
             --from-literal=WEBHOOK_ORCAMENTO_TOKEN="${WEBHOOK_ORCAMENTO_TOKEN:-placeholder}" \

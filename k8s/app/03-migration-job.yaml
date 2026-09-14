@@ -14,6 +14,13 @@ metadata:
 spec:
   backoffLimit: 3
   template:
+    metadata:
+      annotations:
+        # A saída do `prisma migrate` é texto puro, não JSON: no New Relic
+        # viraria linhas sem atributo algum, na mesma cota do free tier. O CD
+        # já imprime este log no próprio pipeline (`kubectl logs job/...`),
+        # que é onde alguém procura quando a migration falha.
+        fluentbit.io/exclude: "true"
     spec:
       restartPolicy: OnFailure
       containers:
