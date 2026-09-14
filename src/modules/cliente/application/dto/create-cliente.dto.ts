@@ -55,4 +55,16 @@ export class CreateClienteDto {
     enum: ['FISICA', 'JURIDICA'],
   })
   tipoPessoa!: 'FISICA' | 'JURIDICA';
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['ATIVO', 'INATIVO'])
+  @ApiProperty({
+    description:
+      'Status do cliente. Controla a emissão de token na autenticação por CPF (apenas ATIVO autentica). Padrão: ATIVO.',
+    example: 'ATIVO',
+    enum: ['ATIVO', 'INATIVO'],
+    required: false,
+  })
+  status?: 'ATIVO' | 'INATIVO';
 }

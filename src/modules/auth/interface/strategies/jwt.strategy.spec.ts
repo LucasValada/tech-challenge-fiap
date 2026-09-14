@@ -22,11 +22,28 @@ describe('JwtStrategy', () => {
     );
   });
 
-  it('validate retorna user quando payload é válido', () => {
+  it('validate retorna admin para token de email/senha', () => {
     const strategy = new JwtStrategy(mockConfig);
     const result = strategy.validate({ sub: 'uuid-1', email: 'a@b.com' });
 
-    expect(result).toEqual({ id: 'uuid-1', email: 'a@b.com' });
+    expect(result).toEqual({ id: 'uuid-1', tipo: 'admin', email: 'a@b.com' });
+  });
+
+  it('validate retorna cliente para token da Lambda (auth por CPF)', () => {
+    const strategy = new JwtStrategy(mockConfig);
+    const result = strategy.validate({
+      sub: 'cliente-uuid',
+      tipo: 'cliente',
+      cpf: '529.982.247-25',
+      nome: 'Fulano',
+    });
+
+    expect(result).toEqual({
+      id: 'cliente-uuid',
+      tipo: 'cliente',
+      cpf: '529.982.247-25',
+      nome: 'Fulano',
+    });
   });
 
   it('validate lança UnauthorizedException quando payload é inválido', () => {
@@ -34,6 +51,10 @@ describe('JwtStrategy', () => {
 
     expect(() => strategy.validate({} as any)).toThrow(UnauthorizedException);
     expect(() => strategy.validate({ sub: '', email: '' } as any)).toThrow(
+      UnauthorizedException,
+    );
+    // sub presente mas sem email e sem tipo de cliente: não identificável.
+    expect(() => strategy.validate({ sub: 'uuid-1' } as any)).toThrow(
       UnauthorizedException,
     );
   });

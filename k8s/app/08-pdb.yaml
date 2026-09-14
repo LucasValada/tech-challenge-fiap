@@ -1,0 +1,13 @@
+# PodDisruptionBudget: em disrupções voluntárias (drain de nó, upgrade do
+# cluster, scale-in), o Kubernetes mantém pelo menos 1 réplica no ar — impede
+# que as 2 réplicas sejam despejadas ao mesmo tempo e derrubem a API.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: oficina-api
+  namespace: oficina
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: oficina-api

@@ -1,5 +1,13 @@
-# Replace IMAGE_PLACEHOLDER with the actual image tag before applying:
-#   sed "s|IMAGE_PLACEHOLDER|ghcr.io/org/repo:sha-abc1234|g" 04-deployment.yaml | kubectl apply -f -
+# Deployment da API no EKS. O CD substitui IMAGE_PLACEHOLDER pela imagem do ECR:
+#   sed "s|IMAGE_PLACEHOLDER|<ecr>/tc3-oficina-<env>-api:<sha>|g" 04-deployment.yaml | kubectl apply -f -
+#
+# Sem initContainer de espera: o banco é o RDS gerenciado (fora do cluster), que
+# já está no ar antes de qualquer pod — não há serviço no cluster para aguardar.
+# As probes usam os endpoints de saúde dedicados (liveness raso, readiness com DB).
+#
+# O contêiner usa o CMD da imagem (`node -r newrelic dist/src/main.js`); as
+# migrations rodam antes, no Job 03-migration-job.yaml. Credenciais só por
+# secretKeyRef — nenhum valor sensível neste arquivo.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,19 +25,40 @@ spec:
       labels:
         app: oficina-api
     spec:
-      initContainers:
-        - name: wait-for-postgres
-          image: busybox:1.36
-          command:
-            - sh
-            - -c
-            - |
-              until nc -z postgres.oficina.svc.cluster.local 5432; do
-                echo "waiting for postgres..."; sleep 3
-              done
+      # Hardening: roda sem privilégios (a imagem já usa o usuário node, UID 1000)
+      # e sem montar o token da ServiceAccount (o app não fala com a API do k8s).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
+      # Alta disponibilidade: espalha as réplicas entre AZs e nós. Soft
+      # (ScheduleAnyway) para não deixar pods Pending quando faltar capacidade.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: oficina-api
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: oficina-api
       containers:
         - name: oficina-api
           image: IMAGE_PLACEHOLDER
+          # Sem escalonamento de privilégio e sem capabilities do Linux — a API
+          # é um servidor HTTP na porta 3000, não precisa de nenhuma.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           ports:
             - containerPort: 3000
           envFrom:
@@ -46,40 +75,79 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: JWT_SECRET
-            - name: MAIL_USER
+            - name: MAIL_LAMBDA_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: app-secret
-                  key: MAIL_USER
-            - name: MAIL_PASS
-              valueFrom:
-                secretKeyRef:
-                  name: app-secret
-                  key: MAIL_PASS
+                  key: MAIL_LAMBDA_TOKEN
             - name: WEBHOOK_ORCAMENTO_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: app-secret
                   key: WEBHOOK_ORCAMENTO_TOKEN
-          # Resource limits are required for HPA to compute utilization percentages
+            # Chave de ingestão do New Relic, sincronizada do SSM pelo CD.
+            #
+            # `optional: true` porque telemetria não é requisito de subida: sem a
+            # chave o agente registra o aviso e segue desligado, e a API continua
+            # servindo. Sem isso o pod ficaria em CreateContainerConfigError toda
+            # vez que os manifestos fossem aplicados à mão, antes de o CD ter
+            # criado a chave no Secret — trocando "sem APM" por "sem aplicação".
+            #
+            # O sintoma no dashboard é throughput zerado com o ALB recebendo
+            # tráfego; `kubectl logs` mostra o aviso do agente na primeira linha.
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: NEW_RELIC_LICENSE_KEY
+                  optional: true
+          # Requests/limits são obrigatórios para o HPA calcular a utilização.
+          # O request de memória é o denominador dessa conta: com 128Mi, a API
+          # ociosa já batia nos 80% do alvo e o autoscaler subia para 4 réplicas
+          # sem carga alguma.
           resources:
             requests:
               cpu: "100m"
-              memory: "128Mi"
+              memory: "256Mi"
             limits:
               cpu: "500m"
               memory: "512Mi"
+          # ─── Saúde ─────────────────────────────────────────────────────────
+          # Três sondas com papéis diferentes:
+          #
+          #   startup    segura as outras duas até a primeira resposta. O agente
+          #              do New Relic carrega antes da aplicação e o Prisma abre
+          #              o pool na subida; sem ela, uma subida lenta (nó frio,
+          #              imagem sendo baixada) levava SIGKILL da liveness e
+          #              entrava em CrashLoop sem nunca ter tido chance.
+          #   readiness  checa o banco: pod sem banco sai do Service/ALB, mas
+          #              não é reiniciado — reiniciar não conserta o RDS.
+          #   liveness   rasa, só "o processo responde". Um blip no banco não
+          #              pode derrubar todas as réplicas ao mesmo tempo.
+          #
+          # timeoutSeconds explícito: o default de 1s, com `SELECT 1` no RDS
+          # passando pela instrumentação do agente, dava falso negativo sob carga
+          # — e é sob carga (teste do HPA) que a readiness mais importa.
+          # O estado das sondas chega ao New Relic pelo kube-state-metrics
+          # (K8sPodSample.isReady), que sustenta o alerta "nenhum pod pronto".
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 24 # até 2 min para a primeira resposta
           readinessProbe:
             httpGet:
-              path: /api
+              path: /health/ready
               port: 3000
-            initialDelaySeconds: 15
             periodSeconds: 10
+            timeoutSeconds: 3
             failureThreshold: 3
           livenessProbe:
             httpGet:
-              path: /api
+              path: /health
               port: 3000
-            initialDelaySeconds: 30
             periodSeconds: 20
+            timeoutSeconds: 2
             failureThreshold: 3

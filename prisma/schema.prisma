@@ -23,6 +23,11 @@ enum TipoItemEstoque {
   INSUMO
 }
 
+enum StatusCliente {
+  ATIVO
+  INATIVO
+}
+
 enum StatusOrdemServico {
   RECEBIDA
   EM_DIAGNOSTICO
@@ -45,14 +50,15 @@ model Usuario {
 }
 
 model Cliente {
-  id         String     @id @default(uuid())
+  id         String        @id @default(uuid())
   nome       String
   tipoPessoa TipoPessoa
-  cpfCnpj    String     @unique
+  cpfCnpj    String        @unique
   telefone   String?
   email      String?
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  status     StatusCliente @default(ATIVO)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
 
   veiculos      Veiculo[]
   ordensServico OrdemServico[]

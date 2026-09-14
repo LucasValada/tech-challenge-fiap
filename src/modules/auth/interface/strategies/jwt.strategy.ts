@@ -19,9 +19,25 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   validate(payload: JwtPayload): AuthenticatedUser {
-    if (!payload?.sub || !payload?.email) {
+    if (!payload?.sub) {
       throw new UnauthorizedException();
     }
-    return { id: payload.sub, email: payload.email };
+
+    // Token de cliente emitido pela Lambda de autenticação por CPF.
+    if (payload.tipo === 'cliente') {
+      return {
+        id: payload.sub,
+        tipo: 'cliente',
+        cpf: payload.cpf,
+        nome: payload.nome,
+      };
+    }
+
+    // Token administrativo (login por email/senha).
+    if (payload.email) {
+      return { id: payload.sub, tipo: 'admin', email: payload.email };
+    }
+
+    throw new UnauthorizedException();
   }
 }

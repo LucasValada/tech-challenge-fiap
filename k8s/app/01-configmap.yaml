@@ -7,6 +7,69 @@ data:
   NODE_ENV: "production"
   APPLICATION_PORT: "3000"
   JWT_EXPIRES_IN: "1h"
-  MAIL_HOST: "smtp.ethereal.email"
-  MAIL_PORT: "587"
-  MAIL_FROM: '"Oficina SOAT" <noreply@oficina.com>'
+
+  # Notificações serverless: o app não fala SMTP direto — faz POST para a Lambda
+  # de e-mail (rota /mail do API Gateway do repositório tc3-auth-lambda, output
+  # `mail_url`). O token de chamada (MAIL_LAMBDA_TOKEN) vem do Secret app-secret.
+  MAIL_LAMBDA_URL: "https://8hkalepe37.execute-api.us-east-1.amazonaws.com/mail"
+
+  # ─── Observabilidade ──────────────────────────────────────────────────────
+  # Nenhuma credencial aqui: a license key vem do Secret `app-secret` (ver
+  # 04-deployment.yaml). Este ConfigMap só carrega configuração.
+
+  # Tags padrão do projeto. O agente as aplica à entidade no APM, e o pino as
+  # escreve em toda linha de log (`environment`, `project`) — uma variável só
+  # governa os dois lados. Precisam bater com `newrelic_tags` nos três
+  # repositórios de infraestrutura, que é por onde alertas e painéis filtram.
+  NEW_RELIC_LABELS: "environment:production;project:tech-challenge-fiap"
+
+  # Explícito para ninguém ligar debug em produção por engano: em nível debug o
+  # volume de log multiplica, e o free tier para de ingerir ao passar de 100 GB.
+  LOG_LEVEL: "info"
+
+  # Liga o agente de APM. A MESMA variável é lida pelo agente e pelo helper que
+  # injeta trace.id/span.id no log: um valor governa os dois lados, e não há
+  # como ficar com metade da instrumentação ligada.
+  NEW_RELIC_ENABLED: "true"
+
+  # Nome da aplicação no APM. Precisa bater com `app_new_relic_name` em
+  # tc3-infra-k8s, que é o nome usado nos dashboards e nos alertas. O pino também
+  # o usa como valor do atributo `servico`.
+  NEW_RELIC_APP_NAME: "oficina-api"
+
+  # Toda a configuração vem de variável de ambiente; sem isto o agente procura um
+  # newrelic.js que a imagem não tem e reclama a cada inicialização.
+  NEW_RELIC_NO_CONFIG_FILE: "true"
+
+  # Propaga o contexto de trace entre a Lambda de autenticação e esta API: as
+  # duas pontas aparecem no mesmo trace distribuído.
+  NEW_RELIC_DISTRIBUTED_TRACING_ENABLED: "true"
+
+  # Propagação só no padrão W3C Trace Context (`traceparent`/`tracestate`), sem
+  # o cabeçalho proprietário `newrelic`. A entrada continua aceitando os três;
+  # a saída fica interoperável com qualquer ferramenta que fale W3C. Mesmo
+  # ajuste da Lambda de autenticação.
+  NEW_RELIC_DISTRIBUTED_TRACING_EXCLUDE_NEWRELIC_HEADER: "true"
+
+  # Teto de eventos por ciclo de 60s, por pod. Os defaults (10.000 transações,
+  # 2.000 spans) só pesam sob carga — mas é justamente no teste de estresse do
+  # HPA, com até 10 réplicas, que eles consumiriam dezenas de GB em horas. Com
+  # estes tetos o pior caso fica ~4x menor. Quando há amostragem, as contagens
+  # absolutas de throughput vêm das métricas (não amostradas), não dos eventos.
+  NEW_RELIC_TRANSACTION_EVENTS_MAX_SAMPLES_STORED: "2000"
+  NEW_RELIC_SPAN_EVENTS_MAX_SAMPLES_STORED: "1000"
+
+  # O encaminhamento de log do agente fica DESLIGADO de propósito — e precisa
+  # estar explícito, porque no agente v12 o default é LIGADO. O Fluent Bit do
+  # nri-bundle já recolhe o stdout do pod; ligar os dois enviaria cada linha
+  # duas vezes, e o teto de 100 GB/mês do free tier é compartilhado com as
+  # métricas. O `local_decorating` também sai: o `mixin` do pino já injeta os
+  # campos de trace, e o decorador anexaria os mesmos dados como texto no fim da
+  # linha, quebrando o JSON.
+  NEW_RELIC_APPLICATION_LOGGING_FORWARDING_ENABLED: "false"
+  NEW_RELIC_APPLICATION_LOGGING_LOCAL_DECORATING_ENABLED: "false"
+
+  # Diagnóstico do próprio agente no mesmo stdout, só a partir de warn: em nível
+  # info ele fala mais que a aplicação.
+  NEW_RELIC_LOG: "stdout"
+  NEW_RELIC_LOG_LEVEL: "warn"
