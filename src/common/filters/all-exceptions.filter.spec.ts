@@ -40,6 +40,7 @@ describe('AllExceptionsFilter', () => {
     filter = new AllExceptionsFilter();
     jest.clearAllMocks();
     jest.spyOn(filter['logger'], 'error').mockImplementation();
+    jest.spyOn(filter['logger'], 'warn').mockImplementation();
   });
 
   it('should return 401 with original message for UnauthorizedException', () => {

@@ -9,6 +9,7 @@ import { EmailSender } from '../../../mail/domain/service/email-sender';
 import { classificarTransicao } from '../../domain/services/maquinaDeEstadosOS';
 import { buscarOrdemServicoOuFalhar } from '../../domain/services/buscarOrdemServicoOuFalhar';
 import { TransicionarStatusDto } from '../dto/transicionar-status.dto';
+import { registrarFalha } from '../../../../common/observability';
 
 @Injectable()
 export class TransicionarStatusUseCase {
@@ -43,6 +44,10 @@ export class TransicionarStatusUseCase {
       usuarioId,
       dto.observacao ?? null,
     );
+
+    // A métrica e o evento da transição (tempo no status, lead time) são
+    // emitidos pelo repositório, no commit — é o único ponto que os quatro
+    // caminhos de mudança de status têm em comum.
 
     await this.dispararNotificacaoStatus(ordemId, dto.status);
 
@@ -81,6 +86,13 @@ export class TransicionarStatusUseCase {
       this.logger.error(
         `Falha ao notificar transição para ${novoStatus} (OS: ${ordemId}): ${String(error)}`,
       );
+
+      // Prefixo `integracao.` porque o destinatário é um serviço externo (SMTP):
+      // é assim que o painel de integrações separa o que quebrou fora de casa.
+      registrarFalha('integracao.email.falha', error, {
+        ordem_id: ordemId,
+        status_novo: novoStatus,
+      });
     }
   }
 }

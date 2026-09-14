@@ -18,6 +18,22 @@ services:
       retries: 5
       start_period: 30s
 
+  # Aplica as migrations uma vez e sai — o mesmo papel do Job `db-migration` no
+  # Kubernetes. Saíram do CMD da imagem para o stdout da API ser só JSON e para
+  # réplicas não concorrerem pela mesma migration.
+  migrate:
+    container_name: oficina-migrate
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    command: ["npx", "prisma", "migrate", "deploy"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://${OFICINA_USER}:${OFICINA_PASSWORD}@postgres:5432/${OFICINA_DB}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     container_name: oficina-api
     restart: on-failure
@@ -36,10 +52,21 @@ services:
       MAIL_PASS: ${MAIL_PASS}
       MAIL_PORT: ${MAIL_PORT}
       WEBHOOK_ORCAMENTO_TOKEN: ${WEBHOOK_ORCAMENTO_TOKEN}
+
+      # ─── New Relic ──────────────────────────────────────────────────────
+      # Todos os valores vêm do .env (ignorado pelo git) — nada de credencial
+      # neste arquivo. Sem .env, o agente fica desligado e a chave vazia.
+      NEW_RELIC_ENABLED: ${NEW_RELIC_ENABLED:-false}
+      NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY:-}
+      NEW_RELIC_APP_NAME: ${NEW_RELIC_APP_NAME:-oficina-api}
+      NEW_RELIC_LABELS: ${NEW_RELIC_LABELS:-environment:production;project:tech-challenge-fiap}
+      NEW_RELIC_DISTRIBUTED_TRACING_ENABLED: "true"
+      NEW_RELIC_DISTRIBUTED_TRACING_EXCLUDE_NEWRELIC_HEADER: "true"
     ports:
       - ${APPLICATION_PORT}:3000
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api || exit 1"]
+      # Readiness de verdade (checa o banco), e não a página do Swagger.
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health/ready || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -47,6 +74,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   postgres_data:

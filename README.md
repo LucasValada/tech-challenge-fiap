@@ -23,6 +23,7 @@ Sistema de gerenciamento de oficina mecânica desenvolvido para o Tech Challenge
 - [Documentação de arquitetura (RFC e ADR)](#documentação-de-arquitetura-rfc-e-adr)
 - [Endpoints da API](#endpoints-da-api)
 - [Fluxo da Ordem de Serviço](#fluxo-da-ordem-de-serviço)
+- [Observabilidade](#observabilidade)
 - [Testes](#testes)
 - [Scripts disponíveis](#scripts-disponíveis)
 - [Infraestrutura (Fase 2)](#infraestrutura-fase-2)
@@ -317,7 +318,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-O compose cuida de tudo: sobe o Postgres, aguarda o healthcheck, aplica as migrations automaticamente e inicia a API. O usuário admin padrão (`admin@oficina.com` / `senha123`) é criado por uma migration, sem necessidade de seed manual.
+O compose cuida de tudo: sobe o Postgres, aguarda o healthcheck, aplica as migrations no serviço one-shot `migrate` e só então inicia a API (mesmo papel do Job `db-migration` no cluster). O usuário admin padrão (`admin@oficina.com` / `senha123`) é criado por uma migration, sem necessidade de seed manual.
 
 A API estará disponível em `http://localhost:3000` e o Swagger UI em `http://localhost:3000/api`.
 
@@ -363,6 +364,17 @@ Copie `.env.example` para `.env` e preencha:
 | `MAIL_PASS` | não | Senha SMTP |
 | `MAIL_FROM` | não | Remetente padrão dos emails |
 | `WEBHOOK_ORCAMENTO_TOKEN` | sim | Token compartilhado para autenticar `POST /webhooks/orcamento` |
+| `LOG_LEVEL` | não | Nível do pino (default: `info`) |
+| `NEW_RELIC_ENABLED` | não | Liga o agente de APM, as métricas customizadas e a injeção de `trace.id`/`span.id` no log (default na imagem: `false`) |
+| `NEW_RELIC_LICENSE_KEY` | com o agente ligado | Chave de ingestão do New Relic. **Só no `.env` (ignorado pelo git) ou no Secret do cluster** — nunca no `.env.example` |
+| `NEW_RELIC_ACCOUNT_ID` | não | Account ID da conta (referência; usado pelos repositórios de infraestrutura) |
+| `NEW_RELIC_APP_NAME` | não | Nome no APM e valor do atributo `servico` (default: `oficina-api`) |
+| `NEW_RELIC_LABELS` | não | Tags padrão (`environment:production;project:tech-challenge-fiap`): marcam a entidade no APM e viram os campos `environment`/`project` de toda linha de log |
+
+> **Segurança:** `.env` e `.env.*` estão no `.gitignore` (a única exceção é o
+> `.env.example`, sem valores reais) e no `.dockerignore` — a chave nunca entra
+> no repositório nem na imagem. No `docker compose`, o `.env` é lido em runtime;
+> no cluster, a chave vem do Secret `app-secret`, sincronizado do SSM pelo CD.
 
 Para o envio de email em desenvolvimento, siga o passo a passo da seção [Configuração de email (Ethereal)](#configuração-de-email-ethereal).
 
@@ -649,9 +661,65 @@ RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → EM_EXECUCAO → FINALIZ
 
 Cada transição registra um `HistoricoStatusOS` com data, usuário e observação. Envios de email são best-effort: uma falha do SMTP não bloqueia a transição de status.
 
+## Observabilidade
+
+A aplicação escreve **um JSON por linha** no stdout, via `nestjs-pino`. No
+cluster, o Fluent Bit do `nri-bundle` recolhe e entrega ao New Relic, que
+desestrutura o JSON em atributos consultáveis — nada é escrito em arquivo e não
+há CloudWatch no caminho.
+
+```json
+{"level":"info","timestamp":1789243924881,"servico":"oficina-api",
+ "environment":"production","project":"tech-challenge-fiap",
+ "correlationId":"7d2f…","trace.id":"9a1c…","span.id":"4f70…","entity.name":"oficina-api",
+ "evento":"ordem_servico.criada","ordem_id":"os-1","codigo":"OS-2026-000042",
+ "message":"ordem_servico.criada"}
+```
+
+| Campo | De onde vem |
+|---|---|
+| `level`, `timestamp`, `servico` | Configuração do pino em `src/app.module.ts` — os nomes seguem o que o New Relic indexa nativamente |
+| `environment`, `project` | Tags padrão, lidas de `NEW_RELIC_LABELS` (a mesma variável das tags da entidade no APM) |
+| `correlationId` | id da requisição no pino-http (`quietReqLogger`); reaproveita o `x-correlation-id` recebido ou gera um |
+| `trace.id`, `span.id`, `entity.*` | `mixin` chamando `newrelic.getLinkingMetadata()` — liga o log ao trace distribuído; com um `traceparent` W3C recebido, o `trace.id` é o do cliente |
+| `evento` + campos em `snake_case` | Evento de negócio emitido pelo caso de uso |
+
+O agente sobe por `node -r newrelic dist/src/main.js` — o CMD da imagem, em
+forma exec —, **antes** de qualquer módulo da aplicação: é essa ordem que
+permite a ele instrumentar Express e Prisma no momento em que são importados.
+As migrations não rodam mais no CMD: no cluster ficam no Job `db-migration`, e
+no `docker compose` no serviço `migrate`. Assim o stdout da API é só JSON e o
+Node recebe o SIGTERM direto (desligamento gracioso, com flush do agente).
+
+**Métricas customizadas** (APM, `Custom/OrdemServico/*`): criação de OS, tempo
+em cada status (medido no commit de toda transição — manual, envio de
+orçamento, decisão do cliente e webhook), lead time até a entrega e falhas por
+etapa. Detalhes, nomes e consultas NRQL em `tc3-infra-k8s/OBSERVABILIDADE.md`.
+
+Eventos de negócio (`registrarEvento` / `registrarFalha`, em
+`src/common/observability/`) saem pelo mesmo logger da requisição, e por isso
+herdam o `correlationId` e os campos de trace sem que nenhum caso de uso precise
+receber o logger no construtor.
+
+Em desenvolvimento nada disso está ligado: sem `NEW_RELIC_ENABLED=true` o pacote
+nem é carregado, e o log sai igual, só que sem os campos de trace. Em teste
+unitário os eventos viram no-op, porque `configurarTelemetria` só é chamado no
+bootstrap.
+
+Endpoints de saúde, usados pelas probes do Kubernetes, pelo health check do ALB
+e pelo monitor de Synthetics:
+
+| Rota | Uso |
+|---|---|
+| `GET /health` | Liveness raso — não toca no banco |
+| `GET /health/ready` | Readiness — `SELECT 1`, responde 503 se o banco cai |
+
+O desenho completo — agentes, dashboard, alertas e o contrato dos campos — está
+no repositório de infraestrutura, em `tc3-infra-k8s/OBSERVABILIDADE.md`.
+
 ## Testes
 
-Cobertura atual: **313 testes unitários** (84 suites) + **59 testes end-to-end** (8 suites, com Postgres real via Testcontainers).
+Cobertura atual: **320 testes unitários** (85 suites) + **59 testes end-to-end** (8 suites, com Postgres real via Testcontainers).
 
 - Statements: **69.61%**
 - Branches: **59.39%**

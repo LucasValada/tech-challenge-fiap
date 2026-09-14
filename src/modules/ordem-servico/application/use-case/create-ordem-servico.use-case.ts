@@ -1,4 +1,5 @@
 import {
+  HttpException,
   Inject,
   Injectable,
   NotFoundException,
@@ -19,6 +20,11 @@ import {
 } from '../../domain/services/normalizadores';
 import { CreateOrdemServicoDto } from '../dto/ordem-servico.dto';
 import { traduzirErroDominio } from '../shared/traduzirErroDominio';
+import {
+  registrarFalhaOrdemServico,
+  registrarOrdemCriada,
+  registrarRejeicaoOrdemServico,
+} from '../shared/telemetria-ordem-servico';
 
 @Injectable()
 export class CreateOrdemServicoUseCase {
@@ -38,9 +44,8 @@ export class CreateOrdemServicoUseCase {
     const cpfCnpjNormalizado = normalizarCpfCnpj(dto.cpfCnpj);
     const placa = normalizarPlaca(dto.placa);
 
-    let cliente = await this.clienteRepository.findByCpfCnpj(
-      cpfCnpjNormalizado,
-    );
+    let cliente =
+      await this.clienteRepository.findByCpfCnpj(cpfCnpjNormalizado);
     if (!cliente && cpfCnpjNormalizado !== dto.cpfCnpj) {
       cliente = await this.clienteRepository.findByCpfCnpj(dto.cpfCnpj);
     }
@@ -63,8 +68,10 @@ export class CreateOrdemServicoUseCase {
       );
     }
 
+    let ordem: OrdemServico;
+
     try {
-      return await this.ordemServicoRepository.createComItens({
+      ordem = await this.ordemServicoRepository.createComItens({
         clienteId: cliente.id,
         veiculoId: veiculo.id,
         usuarioCriadorId,
@@ -73,7 +80,32 @@ export class CreateOrdemServicoUseCase {
         itens: dto.itens ?? [],
       });
     } catch (e) {
-      throw traduzirErroDominio(e);
+      const traduzido = traduzirErroDominio(e);
+      const contexto = { cliente_id: cliente.id, veiculo_id: veiculo.id };
+
+      // O repositório também lança erro de domínio (estoque insuficiente,
+      // serviço inativo), que vira 4xx: é a oficina recusando o pedido, não o
+      // sistema falhando. Só o que não tem tradução — banco fora, bug — conta
+      // como falha e alimenta o alerta. Contar os dois juntos faria cada peça
+      // em falta abrir incidente.
+      if (traduzido instanceof HttpException) {
+        registrarRejeicaoOrdemServico('criacao', e, contexto);
+      } else {
+        registrarFalhaOrdemServico('criacao', e, contexto);
+      }
+
+      throw traduzido;
     }
+
+    registrarOrdemCriada({
+      ordemId: ordem.id,
+      codigo: ordem.codigo,
+      clienteId: cliente.id,
+      veiculoId: veiculo.id,
+      quantidadeServicos: dto.servicos?.length ?? 0,
+      quantidadeItens: dto.itens?.length ?? 0,
+    });
+
+    return ordem;
   }
 }

@@ -4,6 +4,10 @@
 # Sem initContainer de espera: o banco é o RDS gerenciado (fora do cluster), que
 # já está no ar antes de qualquer pod — não há serviço no cluster para aguardar.
 # As probes usam os endpoints de saúde dedicados (liveness raso, readiness com DB).
+#
+# O contêiner usa o CMD da imagem (`node -r newrelic dist/src/main.js`); as
+# migrations rodam antes, no Job 03-migration-job.yaml. Credenciais só por
+# secretKeyRef — nenhum valor sensível neste arquivo.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -55,6 +59,22 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: WEBHOOK_ORCAMENTO_TOKEN
+            # Chave de ingestão do New Relic, sincronizada do SSM pelo CD.
+            #
+            # `optional: true` porque telemetria não é requisito de subida: sem a
+            # chave o agente registra o aviso e segue desligado, e a API continua
+            # servindo. Sem isso o pod ficaria em CreateContainerConfigError toda
+            # vez que os manifestos fossem aplicados à mão, antes de o CD ter
+            # criado a chave no Secret — trocando "sem APM" por "sem aplicação".
+            #
+            # O sintoma no dashboard é throughput zerado com o ALB recebendo
+            # tráfego; `kubectl logs` mostra o aviso do agente na primeira linha.
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: NEW_RELIC_LICENSE_KEY
+                  optional: true
           # Requests/limits são obrigatórios para o HPA calcular a utilização.
           # O request de memória é o denominador dessa conta: com 128Mi, a API
           # ociosa já batia nos 80% do alvo e o autoscaler subia para 4 réplicas
@@ -66,17 +86,42 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+          # ─── Saúde ─────────────────────────────────────────────────────────
+          # Três sondas com papéis diferentes:
+          #
+          #   startup    segura as outras duas até a primeira resposta. O agente
+          #              do New Relic carrega antes da aplicação e o Prisma abre
+          #              o pool na subida; sem ela, uma subida lenta (nó frio,
+          #              imagem sendo baixada) levava SIGKILL da liveness e
+          #              entrava em CrashLoop sem nunca ter tido chance.
+          #   readiness  checa o banco: pod sem banco sai do Service/ALB, mas
+          #              não é reiniciado — reiniciar não conserta o RDS.
+          #   liveness   rasa, só "o processo responde". Um blip no banco não
+          #              pode derrubar todas as réplicas ao mesmo tempo.
+          #
+          # timeoutSeconds explícito: o default de 1s, com `SELECT 1` no RDS
+          # passando pela instrumentação do agente, dava falso negativo sob carga
+          # — e é sob carga (teste do HPA) que a readiness mais importa.
+          # O estado das sondas chega ao New Relic pelo kube-state-metrics
+          # (K8sPodSample.isReady), que sustenta o alerta "nenhum pod pronto".
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 24 # até 2 min para a primeira resposta
           readinessProbe:
             httpGet:
               path: /health/ready
               port: 3000
-            initialDelaySeconds: 15
             periodSeconds: 10
+            timeoutSeconds: 3
             failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /health
               port: 3000
-            initialDelaySeconds: 30
             periodSeconds: 20
+            timeoutSeconds: 2
             failureThreshold: 3
