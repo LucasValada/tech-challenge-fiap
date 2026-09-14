@@ -8,7 +8,7 @@
 
 ## Contexto
 
-A solução tem vários componentes que precisam se comunicar: o cliente/funcionário, o **API Gateway**, a **Lambda** de autenticação, a **aplicação** (EKS), o **banco** (RDS), um **sistema externo** de aprovação de orçamento e o **SMTP** de notificação. É preciso definir **como** eles conversam — protocolo, acoplamento e (a)sincronismo — para manter a solução simples e previsível no escopo da fase.
+A solução tem vários componentes que precisam se comunicar: o cliente/funcionário, o **API Gateway**, a **Lambda de autenticação**, a **Lambda de notificações** (e-mail), a **aplicação** (EKS), o **banco** (RDS) e um **sistema externo** de aprovação de orçamento. É preciso definir **como** eles conversam — protocolo, acoplamento e (a)sincronismo — para manter a solução simples e previsível no escopo da fase.
 
 ## Decisão
 
@@ -18,9 +18,9 @@ Adotar **comunicação síncrona via HTTP/REST, stateless com JWT**, como padrã
 2. **Autenticação (Lambda) desacoplada por segredo compartilhado:** a aplicação **não chama** a Lambda. A Lambda emite o JWT (HS256) e a aplicação apenas **valida** com o **mesmo segredo** (via SSM). Comunicação indireta, sem chamada de rede entre eles — reduz acoplamento e latência. (Detalhe em [RFC-001](../rfc/RFC-001-estrategia-autenticacao.md).)
 3. **Aplicação → banco (RDS):** SQL sobre **TCP 5432 com TLS**, via Prisma (pool `pg`), dentro da VPC.
 4. **Sistema externo → aplicação (webhook):** REST **inbound** (`POST /webhooks/orcamento`) autenticado por **token compartilhado** (`X-Webhook-Token`, comparado com `timingSafeEqual`). Integração máquina-a-máquina para a decisão de orçamento.
-5. **Aplicação → SMTP (notificação):** envio de email **best-effort** (fire-and-forget): a falha de SMTP é registrada em log e **não bloqueia** a transição de status da OS.
+5. **Aplicação → Lambda de notificações (e-mail):** a aplicação faz um **POST HTTP** autenticado (`x-mail-api-token`) para a **Lambda de e-mail** (rota `/mail` do API Gateway), que encapsula o SMTP. O SMTP saiu do app — trocar o provedor de e-mail não toca no código nem no deploy da aplicação. Envio **best-effort** (com timeout de 15s): a falha é registrada em log e **não bloqueia** a transição de status da OS.
 
-**Não** adotamos um message broker (SNS/SQS/RabbitMQ) para o fluxo atual: no volume e no escopo da fase, o custo de operar mensageria não se paga; a comunicação síncrona REST é suficiente e mais simples de observar/depurar.
+**Não** adotamos um message broker (SNS/SQS/RabbitMQ) para o fluxo atual: no volume e no escopo da fase, o custo de operar mensageria não se paga; a chamada síncrona à Lambda de e-mail é suficiente e mais simples de observar/depurar.
 
 ## Consequências
 
@@ -31,5 +31,5 @@ Adotar **comunicação síncrona via HTTP/REST, stateless com JWT**, como padrã
 
 ### Negativas / trade-offs
 - **Acoplamento temporal (síncrono):** o cliente espera a resposta; uma dependência lenta (banco) reflete na latência. Mitigado por readiness/timeouts e pelo piso de réplicas.
-- **Notificação sem garantia de entrega:** o email best-effort pode falhar silenciosamente (só o log registra). É uma escolha consciente para não travar a OS; a evolução para **notificação serverless assíncrona** (evento → função) é uma frente separada e resolveria a entrega garantida.
+- **Notificação serverless, porém síncrona:** o SMTP foi **isolado numa Lambda** (trocar o provedor de e-mail não toca no app), mas a chamada app→Lambda é HTTP síncrona e **best-effort** — pode falhar silenciosamente (só o log registra), escolha consciente para não travar a OS. A evolução para **notificação assíncrona por evento** (fila/tópico → função, com entrega garantida) é uma frente separada.
 - **Webhook por token estático** é simples, mas menos robusto que assinatura por HMAC/rotação — aceitável para o escopo; endurecível depois.
