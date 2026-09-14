@@ -151,13 +151,20 @@ jobs:
           else
             echo "::warning::NEW_RELIC_LICENSE_KEY ausente no SSM — a API sobe sem APM"
           fi
+          # Obrigatório e sem fallback: um "placeholder" silencioso deixaria o
+          # webhook com um token fraco conhecido. Sem o secret, o deploy falha
+          # aqui com mensagem clara em vez de subir uma auth de webhook fraca.
+          if [ -z "${WEBHOOK_ORCAMENTO_TOKEN:-}" ]; then
+            echo "::error::WEBHOOK_ORCAMENTO_TOKEN ausente — configure o secret do repositório"
+            exit 1
+          fi
           case "$DB_URL" in *sslmode=*) : ;; *) DB_URL="${DB_URL}&sslmode=require";; esac
           kubectl create secret generic app-secret -n "$NAMESPACE" \
             --from-literal=DATABASE_URL="$DB_URL" \
             --from-literal=JWT_SECRET="$JWT" \
             --from-literal=NEW_RELIC_LICENSE_KEY="$NR_KEY" \
             --from-literal=MAIL_LAMBDA_TOKEN="$MAIL_TOKEN" \
-            --from-literal=WEBHOOK_ORCAMENTO_TOKEN="${WEBHOOK_ORCAMENTO_TOKEN:-placeholder}" \
+            --from-literal=WEBHOOK_ORCAMENTO_TOKEN="$WEBHOOK_ORCAMENTO_TOKEN" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: ConfigMap
