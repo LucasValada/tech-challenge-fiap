@@ -367,7 +367,6 @@ Copie `.env.example` para `.env` e preencha:
 | `LOG_LEVEL` | não | Nível do pino (default: `info`) |
 | `NEW_RELIC_ENABLED` | não | Liga o agente de APM, as métricas customizadas e a injeção de `trace.id`/`span.id` no log (default na imagem: `false`) |
 | `NEW_RELIC_LICENSE_KEY` | com o agente ligado | Chave de ingestão do New Relic. **Só no `.env` (ignorado pelo git) ou no Secret do cluster** — nunca no `.env.example` |
-| `NEW_RELIC_ACCOUNT_ID` | não | Account ID da conta (referência; usado pelos repositórios de infraestrutura) |
 | `NEW_RELIC_APP_NAME` | não | Nome no APM e valor do atributo `servico` (default: `oficina-api`) |
 | `NEW_RELIC_LABELS` | não | Tags padrão (`environment:production;project:tech-challenge-fiap`): marcam a entidade no APM e viram os campos `environment`/`project` de toda linha de log |
 
@@ -719,7 +718,7 @@ no repositório de infraestrutura, em `tc3-infra-k8s/OBSERVABILIDADE.md`.
 
 ## Testes
 
-Cobertura atual: **320 testes unitários** (85 suites) + **59 testes end-to-end** (8 suites, com Postgres real via Testcontainers).
+Cobertura atual: **343 testes unitários** (88 suites) + **59 testes end-to-end** (8 suites, com Postgres real via Testcontainers).
 
 - Statements: **69.61%**
 - Branches: **59.39%**
