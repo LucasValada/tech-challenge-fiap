@@ -60,7 +60,7 @@ Os repositórios se integram por **rede privada (VPC)**, **SSM Parameter Store**
 
 Vídeo (YouTube, até 15 minutos) cobrindo autenticação por CPF, execução do CI/CD, deploy automatizado, consumo das APIs protegidas, dashboard de monitoramento e logs/traces em execução.
 
-**Link:** [https://youtu.be/LJf5b5OW0gM](https://youtu.be/LJf5b5OW0gM)
+**Link:** [https://youtu.be/P01Bz7Hop7w](https://youtu.be/P01Bz7Hop7w)
 
 ## Clean Architecture (interno da API)
 
