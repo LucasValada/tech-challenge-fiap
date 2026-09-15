@@ -3,9 +3,6 @@
 Sistema de gerenciamento de oficina mecânica desenvolvido para o Tech Challenge FIAP SOAT. Este é o **repositório da aplicação principal** (API NestJS que roda em Kubernetes) — um dos **quatro repositórios** da solução (ver [Solução em 4 repositórios](#solução-em-4-repositórios)).
 
 A API cobre a gestão de clientes, veículos, serviços, peças/insumos e ordens de serviço, com **autenticação dupla** (funcionário por email/senha e cliente por **CPF via função serverless**), envio de orçamento por email, acompanhamento público de OS e observabilidade (health, logs JSON com correlação). Roda na **AWS** — **EKS** (Kubernetes gerenciado), **RDS PostgreSQL** (banco gerenciado), imagem no **ECR**, segredos no **SSM**, com um **API Gateway** na frente (roteando a autenticação e as notificações para **Lambdas serverless** e as rotas protegidas para o **ALB → EKS**) — tudo provisionado via **Terraform** e entregue por **CI/CD com deploy automático**.
-
-> **Deploy ativo (homologação):** a API é servida pelo **API Gateway** em `https://8hkalepe37.execute-api.us-east-1.amazonaws.com` (Swagger em `/api`), que roteia a autenticação (`/auth`) e as notificações (`/mail`) para as Lambdas e as rotas protegidas para o **ALB → EKS**. Acesso direto pelo ALB: `http://k8s-oficina-oficinaa-5b75d4a62f-802718820.us-east-1.elb.amazonaws.com`. (Ambiente acadêmico; pode estar desligado para conter custo.)
-
 ## Índice
 
 - [Objetivos](#objetivos)
@@ -294,7 +291,7 @@ graph TB
 
 ### Fluxo de deploy (CI/CD)
 
-Dois workflows em `.github/workflows/`. `ci.yml` valida cada mudança; `cd.yml` empacota e faz o **deploy automático no EKS** a cada push em `develop`/`main` (ambas apontam para o ambiente homolog). Autenticação na AWS por **OIDC** (sem chave estática); actions pinadas por SHA.
+Dois workflows em `.github/workflows/`. `ci.yml` valida cada mudança; `cd.yml` empacota e faz o **deploy automático no EKS** a cada push em `develop`/`main` (ambas apontam para o mesmo ambiente único). Autenticação na AWS por **OIDC** (sem chave estática); actions pinadas por SHA.
 
 ```mermaid
 graph LR
@@ -313,7 +310,7 @@ graph LR
 
     Dev --> CIJob
     Dev --> Guard
-    Deploy --> EKSc["Cluster EKS (homolog)<br/>aplicação atualizada e validada"]
+    Deploy --> EKSc["Cluster EKS<br/>aplicação atualizada e validada"]
 ```
 
 > Diagnóstico em falha: se um step do deploy quebra, um passo `if: failure()` dumpa `kubectl get all`, `describe pods`, eventos e logs do namespace. O **smoke test** exercita, contra o app deployado, health/readiness, login, criação de cliente (com normalização de CPF), abertura de OS com baixa de estoque, consulta pública, 401 e HPA/réplicas.
@@ -528,9 +525,9 @@ Duas variáveis controlam a integração:
 | `MAIL_LAMBDA_URL` | ConfigMap no cluster; `.env` no local. É a rota `/mail` do API Gateway (output `mail_url` do Terraform da Lambda). |
 | `MAIL_LAMBDA_TOKEN` | Secret `app-secret` no cluster (o CD lê do SSM `MAIL_API_TOKEN`); `.env` no local. Precisa casar com o token que a Lambda valida (header `x-mail-api-token`). |
 
-A configuração de **SMTP** (host, usuário, senha — Ethereal em homologação, ou um provedor real como Amazon SES/SendGrid em produção) vive **na Lambda** (parâmetros no SSM), **não no app**. Ou seja, trocar o provedor de e-mail não toca no código nem no deploy da aplicação.
+A configuração de **SMTP** (host, usuário, senha — Ethereal para testes, ou um provedor real como Amazon SES/SendGrid) vive **na Lambda** (parâmetros no SSM), **não no app**. Ou seja, trocar o provedor de e-mail não toca no código nem no deploy da aplicação.
 
-**Local:** aponte `MAIL_LAMBDA_URL`/`MAIL_LAMBDA_TOKEN` para a Lambda de homologação, ou deixe valores quaisquer — o envio falha best-effort, sem quebrar o fluxo. Ao disparar um e-mail (`POST /ordens-servico/:id/enviar-orcamento` ou uma transição para `FINALIZADA`/`ENTREGUE`), o log registra o resultado:
+**Local:** aponte `MAIL_LAMBDA_URL`/`MAIL_LAMBDA_TOKEN` para a Lambda deployada, ou deixe valores quaisquer — o envio falha best-effort, sem quebrar o fluxo. Ao disparar um e-mail (`POST /ordens-servico/:id/enviar-orcamento` ou uma transição para `FINALIZADA`/`ENTREGUE`), o log registra o resultado:
 
 ```
 LOG [NestMailerEmailSender] Email enviado via Lambda: orçamento (OS: OS-2026-000001) para cliente@teste.com
@@ -916,7 +913,9 @@ npx jest src/path/to/file.spec.ts
 
 ## Infraestrutura e deploy na AWS (EKS)
 
-O deploy é **automático via CI/CD**: todo push em `develop` ou `main` dispara o `cd.yml`, que builda a imagem, publica no **ECR** e faz o rollout no **EKS** (as duas branches entregam no mesmo ambiente de homologação). O provisionamento da infraestrutura (VPC, EKS, node group, RDS, ECR, OIDC, budget) é feito por **Terraform** nos repositórios de infra — ver [Solução em 4 repositórios](#solução-em-4-repositórios).
+O deploy é **automático via CI/CD**: todo push em `develop` ou `main` dispara o `cd.yml`, que builda a imagem, publica no **ECR** e faz o rollout no **EKS** (as duas branches entregam no **mesmo ambiente único**). O provisionamento da infraestrutura (VPC, EKS, node group, RDS, ECR, OIDC, budget) é feito por **Terraform** nos repositórios de infra — ver [Solução em 4 repositórios](#solução-em-4-repositórios).
+
+> **Ambiente único.** Conforme validado com o professor, a Fase 3 usa **um único ambiente** na AWS — a distinção entre homologação e produção foi desconsiderada. As branches `develop` e `main` fazem **deploy automático** para esse mesmo ambiente (o deploy da `main` é rotulado como "production" no GitHub).
 
 ### Pipelines (GitHub Actions)
 
@@ -970,10 +969,10 @@ kubectl get hpa,pdb,ingress -n oficina
 kubectl logs -n oficina -l app=oficina-api --tail=50   # logs JSON
 ```
 
-### Deploy ativo (homologação)
+### Deploy ativo
 
-- **API (via ALB):** `http://k8s-oficina-oficinaa-5b75d4a62f-802718820.us-east-1.elb.amazonaws.com` — Swagger em `/api`
-- **Autenticação por CPF (Lambda via API Gateway):** `POST https://8hkalepe37.execute-api.us-east-1.amazonaws.com/auth`
+- **Entrada — API Gateway:** `https://8hkalepe37.execute-api.us-east-1.amazonaws.com` — roteia a autenticação (`/auth`), as notificações (`/mail`) e as rotas protegidas do app (Swagger em `/api`).
+- **Acesso direto ao ALB:** `http://k8s-oficina-oficinaa-5b75d4a62f-802718820.us-east-1.elb.amazonaws.com`
 
 > Ambiente acadêmico: para conter custo, o cluster pode estar desligado (`terraform destroy`/`apply` reconstroem em ~20 min).
 
