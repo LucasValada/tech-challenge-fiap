@@ -2,9 +2,9 @@
 
 Sistema de gerenciamento de oficina mecânica desenvolvido para o Tech Challenge FIAP SOAT. Este é o **repositório da aplicação principal** (API NestJS que roda em Kubernetes) — um dos **quatro repositórios** da solução (ver [Solução em 4 repositórios](#solução-em-4-repositórios)).
 
-A API cobre a gestão de clientes, veículos, serviços, peças/insumos e ordens de serviço, com **autenticação dupla** (funcionário por email/senha e cliente por **CPF via função serverless**), envio de orçamento por email, acompanhamento público de OS e observabilidade (health, logs JSON com correlação). Roda na **AWS** — **EKS** (Kubernetes gerenciado), **RDS PostgreSQL** (banco gerenciado), imagem no **ECR**, segredos no **SSM**, exposta por um **ALB** e integrada à **Lambda + API Gateway** de autenticação — tudo provisionado via **Terraform** e entregue por **CI/CD com deploy automático**.
+A API cobre a gestão de clientes, veículos, serviços, peças/insumos e ordens de serviço, com **autenticação dupla** (funcionário por email/senha e cliente por **CPF via função serverless**), envio de orçamento por email, acompanhamento público de OS e observabilidade (health, logs JSON com correlação). Roda na **AWS** — **EKS** (Kubernetes gerenciado), **RDS PostgreSQL** (banco gerenciado), imagem no **ECR**, segredos no **SSM**, com um **API Gateway** na frente (roteando a autenticação e as notificações para **Lambdas serverless** e as rotas protegidas para o **ALB → EKS**) — tudo provisionado via **Terraform** e entregue por **CI/CD com deploy automático**.
 
-> **Deploy ativo (homologação):** a API é exposta pelo ALB em `http://k8s-oficina-oficinaa-5b75d4a62f-802718820.us-east-1.elb.amazonaws.com` — Swagger em `/api`. (Ambiente acadêmico; pode estar desligado para conter custo.)
+> **Deploy ativo (homologação):** a API é servida pelo **API Gateway** em `https://8hkalepe37.execute-api.us-east-1.amazonaws.com` (Swagger em `/api`), que roteia a autenticação (`/auth`) e as notificações (`/mail`) para as Lambdas e as rotas protegidas para o **ALB → EKS**. Acesso direto pelo ALB: `http://k8s-oficina-oficinaa-5b75d4a62f-802718820.us-east-1.elb.amazonaws.com`. (Ambiente acadêmico; pode estar desligado para conter custo.)
 
 ## Índice
 
