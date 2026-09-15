@@ -95,7 +95,10 @@ jobs:
     name: Deploy (EKS)
     runs-on: ubuntu-latest
     needs: build
-    environment: homolog
+    # Nome do deploy no GitHub (aba Environments/Deployments): a main aparece
+    # como "production" (branch de produção) e a develop como "homolog". É só o
+    # rótulo — o ambiente físico na AWS é o mesmo (cluster/RDS/SSM de homolog).
+    environment: ${{ github.ref_name == 'main' && 'production' || 'homolog' }}
     # Serializa deploys: as duas branches miram o MESMO cluster, então nunca
     # dois deploys ao mesmo tempo (sem cancelar um deploy em andamento).
     concurrency:
