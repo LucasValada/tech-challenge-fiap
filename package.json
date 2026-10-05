@@ -87,8 +87,19 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
-      "**/*.(t|j)s"
+      "**/*.(t|j)s",
+      "!generated/**",
+      "!__mocks__/**",
+      "!main.ts",
+      "!**/*.module.ts",
+      "!**/index.ts"
     ],
+    "coverageThreshold": {
+      "global": {
+        "lines": 80,
+        "statements": 80
+      }
+    },
     "moduleNameMapper": {
       "^(\\.\\.?/.*)\\.js$": "$1",
       ".*/generated/prisma/client": "<rootDir>/__mocks__/prisma-client.ts"
