@@ -10,7 +10,7 @@ Serviços: **OS Service** (este repositório, orquestrador da Saga), **Billing S
 - **Mudança de estado entre serviços é mensagem; consulta e ação do usuário é REST.**
 - **Só o OS Service publica comandos.** Billing e Execution executam o comando e respondem na fila `oficina-os-saga-replies`; eles não conversam entre si.
 - **Entrega "pelo menos uma vez".** O SQS pode entregar a mesma mensagem mais de uma vez, então todo consumidor é idempotente: guarda os `messageId` já processados e confere o estado atual antes de agir.
-- **Falha no processamento** devolve a mensagem para a fila (retry automático do SQS); depois de 5 tentativas (`maxReceiveCount = 5`) ela vai para a DLQ da fila.
+- **Falha de negócio vira resposta; falha técnica vira nova tentativa.** Se o executor não consegue cumprir um comando por motivo de negócio (dados inválidos, recurso indisponível), ele responde com a mensagem de falha (`ExecucaoFalhou` ou `GeracaoOrcamentoFalhou`) e o orquestrador compensa. Falha técnica (serviço fora, erro de rede) devolve a mensagem para a fila (retry automático do SQS); depois de 5 tentativas (`maxReceiveCount = 5`) ela vai para a DLQ, que dispara um alerta, e é reprocessada (*redrive*) depois da correção. Os comandos de compensação (`CancelarOrcamento` e `EstornarPagamento`) também são idempotentes e seguem essa mesma regra, então uma compensação nunca se perde.
 - **Mensagem fora de hora** (por exemplo, uma resposta para uma OS já cancelada) é descartada com um log de aviso, sem erro.
 - **`correlationId`** nasce na abertura da OS (ou vem do header `x-correlation-id` da requisição), viaja em toda mensagem e em toda chamada HTTP, e aparece em todo log JSON. É por ele que se acompanha uma OS nos logs dos três serviços no New Relic.
 
@@ -71,6 +71,7 @@ Os itens e preços de `GerarOrcamento` são os snapshots das linhas da OS (`nome
 | `DiagnosticoIniciado` | Execution | `{ iniciadoEm }` |
 | `DiagnosticoConcluido` | Execution | `{ concluidoEm }` |
 | `OrcamentoEnviado` | Billing | `{ orcamentoId, valorTotal }` |
+| `GeracaoOrcamentoFalhou` | Billing | `{ motivo }` |
 | `OrcamentoAprovado` | Billing | `{ orcamentoId, origem: "CLIENTE" \| "SISTEMA_EXTERNO" }` |
 | `OrcamentoRecusado` | Billing | `{ orcamentoId, origem: "CLIENTE" \| "SISTEMA_EXTERNO", motivo }` |
 | `PagamentoConfirmado` | Billing | `{ pagamentoId, valor, pagoEm }` — `pagamentoId` é o id do pagamento no Mercado Pago |
@@ -90,6 +91,7 @@ O que o OS Service faz ao receber cada resposta. As transições de status da OS
 | `EM_DIAGNOSTICO` | (mecânico lança serviços e itens na OS pelo REST atual; o estoque é baixado como hoje) | — | — |
 | `EM_DIAGNOSTICO` | `DiagnosticoConcluido` | publica `GerarOrcamento` com os snapshots | `EM_DIAGNOSTICO` |
 | `EM_DIAGNOSTICO` | `OrcamentoEnviado` | — | `AGUARDANDO_APROVACAO` |
+| `EM_DIAGNOSTICO` | `GeracaoOrcamentoFalhou` | **compensa:** devolve o estoque | `CANCELADA` |
 | `AGUARDANDO_APROVACAO` | `OrcamentoAprovado` | — | `AGUARDANDO_PAGAMENTO` |
 | `AGUARDANDO_APROVACAO` | `OrcamentoRecusado` | **compensa:** devolve o estoque | `CANCELADA` |
 | `AGUARDANDO_PAGAMENTO` | `PagamentoConfirmado` | publica `IniciarReparo` | `EM_EXECUCAO` |
