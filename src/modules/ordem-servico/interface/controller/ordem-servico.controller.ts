@@ -91,7 +91,8 @@ export class OrdemServicoController {
   @Get('minhas')
   @Roles('cliente')
   @ApiOperation({
-    summary: 'Listar as ordens de serviço do cliente autenticado (auth por CPF)',
+    summary:
+      'Listar as ordens de serviço do cliente autenticado (auth por CPF)',
     description:
       'Rota protegida por autenticação via CPF. Retorna todas as OS do cliente ' +
       'dono do token (emitido pela Lambda), das mais recentes às mais antigas. ' +
@@ -101,7 +102,10 @@ export class OrdemServicoController {
     status: 200,
     description: 'Ordens de serviço do cliente autenticado',
   })
-  @ApiResponse({ status: 403, description: 'Token não autorizado para este recurso' })
+  @ApiResponse({
+    status: 403,
+    description: 'Token não autorizado para este recurso',
+  })
   async findMinhas(@Req() req: Request & { user: AuthenticatedUser }) {
     return this.getMinhasOrdensServicoUseCase.execute(req.user.id);
   }
@@ -146,7 +150,10 @@ export class OrdemServicoController {
       'Rota protegida por autenticação via CPF. Apenas o cliente dono da OS ' +
       '(token emitido pela Lambda) pode aprovar; tokens administrativos recebem 403.',
   })
-  @ApiResponse({ status: 200, description: 'Orçamento aprovado, OS atualizada' })
+  @ApiResponse({
+    status: 200,
+    description: 'Orçamento aprovado, OS atualizada',
+  })
   @ApiResponse({
     status: 403,
     description: 'Token não autorizado para este recurso',
@@ -155,7 +162,10 @@ export class OrdemServicoController {
     status: 404,
     description: 'OS não encontrada ou não pertence ao cliente',
   })
-  @ApiResponse({ status: 409, description: 'OS não está em AGUARDANDO_APROVACAO' })
+  @ApiResponse({
+    status: 409,
+    description: 'OS não está em AGUARDANDO_APROVACAO',
+  })
   async aprovarMinhaOrdem(
     @Req() req: Request & { user: AuthenticatedUser },
     @Param('id', ParseUUIDPipe) id: string,
@@ -174,7 +184,10 @@ export class OrdemServicoController {
       'Rota protegida por autenticação via CPF. Apenas o cliente dono da OS ' +
       'pode rejeitar; a OS volta para EM_DIAGNOSTICO. Tokens administrativos recebem 403.',
   })
-  @ApiResponse({ status: 200, description: 'Orçamento recusado, OS atualizada' })
+  @ApiResponse({
+    status: 200,
+    description: 'Orçamento recusado, OS atualizada',
+  })
   @ApiResponse({
     status: 403,
     description: 'Token não autorizado para este recurso',
@@ -183,7 +196,10 @@ export class OrdemServicoController {
     status: 404,
     description: 'OS não encontrada ou não pertence ao cliente',
   })
-  @ApiResponse({ status: 409, description: 'OS não está em AGUARDANDO_APROVACAO' })
+  @ApiResponse({
+    status: 409,
+    description: 'OS não está em AGUARDANDO_APROVACAO',
+  })
   async rejeitarMinhaOrdem(
     @Req() req: Request & { user: AuthenticatedUser },
     @Param('id', ParseUUIDPipe) id: string,

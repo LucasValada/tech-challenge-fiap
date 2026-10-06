@@ -24,7 +24,10 @@ export class PrismaUserRepository implements UserRepository {
     return this.prisma.usuario.findUnique({ where: { id } });
   }
 
-  async findByEmail(email: string, excludeId?: string): Promise<Usuario | null> {
+  async findByEmail(
+    email: string,
+    excludeId?: string,
+  ): Promise<Usuario | null> {
     const where = excludeId ? { email, NOT: { id: excludeId } } : { email };
     return this.prisma.usuario.findUnique({ where });
   }

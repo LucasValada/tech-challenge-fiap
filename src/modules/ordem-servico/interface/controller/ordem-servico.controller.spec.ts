@@ -105,7 +105,10 @@ describe('OrdemServicoController', () => {
     const detalhe = { id: 'os-1', codigo: 'OS-2026-000001' };
     getMinha.execute.mockResolvedValue(detalhe);
 
-    const result = await controller.findMinhaById(fakeRequest('cliente-1'), 'os-1');
+    const result = await controller.findMinhaById(
+      fakeRequest('cliente-1'),
+      'os-1',
+    );
 
     expect(result).toBe(detalhe);
     expect(getMinha.execute).toHaveBeenCalledWith('cliente-1', 'os-1');

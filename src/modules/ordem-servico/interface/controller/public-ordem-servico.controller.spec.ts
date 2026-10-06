@@ -43,9 +43,9 @@ describe('PublicOrdemServicoController', () => {
     });
 
     it('lança BadRequestException quando placa não é informada', async () => {
-      await expect(controller.consultar(CODIGO, undefined)).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        controller.consultar(CODIGO, undefined),
+      ).rejects.toBeInstanceOf(BadRequestException);
       expect(mockConsultar.execute).not.toHaveBeenCalled();
     });
 

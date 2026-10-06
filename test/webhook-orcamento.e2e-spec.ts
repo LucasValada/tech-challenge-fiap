@@ -29,7 +29,10 @@ describe('POST /webhooks/orcamento (e2e)', () => {
   const cpfCnpj = cpf.generate();
   const placas = ['WHK1A01', 'WHK1A02', 'WHK1A03'];
 
-  const postWebhook = (payload: WebhookPayload, token: string | null = TOKEN) => {
+  const postWebhook = (
+    payload: WebhookPayload,
+    token: string | null = TOKEN,
+  ) => {
     const req = request(ctx.app.getHttpServer()).post(URL);
     if (token !== null) {
       req.set(WEBHOOK_TOKEN_HEADER, token);
@@ -86,8 +89,10 @@ describe('POST /webhooks/orcamento (e2e)', () => {
   });
 
   it('401 quando header X-Webhook-Token está ausente', async () => {
-    await postWebhook({ codigoOS: 'OS-2026-000001', aprovado: true }, null)
-      .expect(401);
+    await postWebhook(
+      { codigoOS: 'OS-2026-000001', aprovado: true },
+      null,
+    ).expect(401);
   });
 
   it('401 quando token está inválido', async () => {

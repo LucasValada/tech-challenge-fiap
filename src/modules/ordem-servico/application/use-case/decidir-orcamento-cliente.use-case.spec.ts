@@ -9,9 +9,7 @@ import { OrdemServicoRepository } from '../../domain/repository/ordem-servico.re
 const CLIENTE_ID = 'cliente-1';
 const OS_ID = 'os-1';
 
-function ordemFake(
-  overrides: Partial<OrdemServico> = {},
-): OrdemServico {
+function ordemFake(overrides: Partial<OrdemServico> = {}): OrdemServico {
   const ordem = new OrdemServico(
     CLIENTE_ID,
     'veiculo-1',
@@ -28,7 +26,9 @@ function ordemFake(
 }
 
 describe('DecidirOrcamentoClienteUseCase', () => {
-  let repo: jest.Mocked<Pick<OrdemServicoRepository, 'findById' | 'transicionarStatus'>>;
+  let repo: jest.Mocked<
+    Pick<OrdemServicoRepository, 'findById' | 'transicionarStatus'>
+  >;
   let useCase: DecidirOrcamentoClienteUseCase;
 
   beforeEach(() => {
@@ -79,18 +79,18 @@ describe('DecidirOrcamentoClienteUseCase', () => {
   it('lança 404 quando a OS não existe', async () => {
     repo.findById.mockResolvedValue(null);
 
-    await expect(useCase.execute(CLIENTE_ID, OS_ID, true)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      useCase.execute(CLIENTE_ID, OS_ID, true),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(repo.transicionarStatus).not.toHaveBeenCalled();
   });
 
   it('lança 404 quando a OS pertence a outro cliente (sem vazar existência)', async () => {
     repo.findById.mockResolvedValue(ordemFake({ clienteId: 'outro-cliente' }));
 
-    await expect(useCase.execute(CLIENTE_ID, OS_ID, true)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      useCase.execute(CLIENTE_ID, OS_ID, true),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(repo.transicionarStatus).not.toHaveBeenCalled();
   });
 
@@ -99,9 +99,9 @@ describe('DecidirOrcamentoClienteUseCase', () => {
       ordemFake({ status: 'EM_EXECUCAO' as StatusOrdemServico }),
     );
 
-    await expect(useCase.execute(CLIENTE_ID, OS_ID, true)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(
+      useCase.execute(CLIENTE_ID, OS_ID, true),
+    ).rejects.toBeInstanceOf(ConflictException);
     expect(repo.transicionarStatus).not.toHaveBeenCalled();
   });
 });

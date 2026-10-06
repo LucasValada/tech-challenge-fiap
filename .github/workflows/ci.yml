@@ -31,8 +31,13 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
-      - name: Run unit tests
-        run: npm test -- --passWithNoTests
+      - name: Lint
+        run: npm run lint:check
+
+      # Falha se a cobertura de linhas ou de instruções ficar abaixo de 80%
+      # (coverageThreshold no package.json).
+      - name: Unit tests with coverage
+        run: npm run test:cov
 
       - name: Compile TypeScript
         run: npm run build

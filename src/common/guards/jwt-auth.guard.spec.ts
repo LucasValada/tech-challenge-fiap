@@ -51,7 +51,12 @@ describe('JwtAuthGuard', () => {
     );
 
     expect(() =>
-      guard.handleRequest(null, { id: '1', tipo: 'admin' }, null, contextFake()),
+      guard.handleRequest(
+        null,
+        { id: '1', tipo: 'admin' },
+        null,
+        contextFake(),
+      ),
     ).toThrow(ForbiddenException);
   });
 

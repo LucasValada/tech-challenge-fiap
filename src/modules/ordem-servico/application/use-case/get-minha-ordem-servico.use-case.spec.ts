@@ -8,9 +8,7 @@ import {
 const CLIENTE_ID = 'cliente-1';
 const OS_ID = 'os-1';
 
-function detalheFake(
-  clienteId = CLIENTE_ID,
-): OrdemServicoDetalhadaView {
+function detalheFake(clienteId = CLIENTE_ID): OrdemServicoDetalhadaView {
   return {
     id: OS_ID,
     codigo: 'OS-2026-000001',
