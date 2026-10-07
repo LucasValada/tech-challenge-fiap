@@ -24,7 +24,10 @@ describe('garantirEmailUnico', () => {
     await expect(
       garantirEmailUnico(mockUserRepo, EMAIL_NOVO),
     ).resolves.toBeUndefined();
-    expect(mockUserRepo.findByEmail).toHaveBeenCalledWith(EMAIL_NOVO, undefined);
+    expect(mockUserRepo.findByEmail).toHaveBeenCalledWith(
+      EMAIL_NOVO,
+      undefined,
+    );
   });
 
   it('lança ConflictException quando email já existe', async () => {

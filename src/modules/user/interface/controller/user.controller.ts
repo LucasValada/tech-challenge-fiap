@@ -78,9 +78,7 @@ export class UserController {
     type: UserCreatedResponseDto,
   })
   @ApiResponse({ status: 409, description: 'Email já cadastrado' })
-  createUser(
-    @Body() dto: UsuarioCreateDto,
-  ): Promise<UserCreatedResponseDto> {
+  createUser(@Body() dto: UsuarioCreateDto): Promise<UserCreatedResponseDto> {
     return this.createUserUseCase.execute(dto);
   }
 

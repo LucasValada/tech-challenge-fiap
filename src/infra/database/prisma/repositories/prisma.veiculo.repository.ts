@@ -38,7 +38,10 @@ export class PrismaVeiculoRepository implements VeiculoRepository {
     return this.prisma.veiculo.findFirst({ where });
   }
 
-  async update(id: string, data: UpdateVeiculoData): Promise<VeiculoComCliente> {
+  async update(
+    id: string,
+    data: UpdateVeiculoData,
+  ): Promise<VeiculoComCliente> {
     return this.prisma.veiculo.update({
       where: { id },
       data,

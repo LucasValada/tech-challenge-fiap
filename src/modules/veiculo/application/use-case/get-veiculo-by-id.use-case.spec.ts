@@ -46,8 +46,8 @@ describe('GetVeiculoByIdUseCase', () => {
   it('lança NotFoundException quando o veículo não existe', async () => {
     mockVeiculoRepository.findById.mockResolvedValue(null);
 
-    await expect(useCase.execute(VEICULO_ID_INEXISTENTE)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      useCase.execute(VEICULO_ID_INEXISTENTE),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

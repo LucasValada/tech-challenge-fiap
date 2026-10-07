@@ -33,9 +33,17 @@ const orcamentoData: OrcamentoEmailData = {
   valorTotal: 230,
 };
 
-function corpoDaChamada(chamada = 0): { to: string; subject: string; text: string } {
-  const init = fetchMock.mock.calls[chamada][1] as RequestInit;
-  return JSON.parse(init.body as string);
+function corpoDaChamada(chamada = 0): {
+  to: string;
+  subject: string;
+  text: string;
+} {
+  const [, init] = fetchMock.mock.calls[chamada] as [unknown, RequestInit];
+  return JSON.parse(init.body as string) as {
+    to: string;
+    subject: string;
+    text: string;
+  };
 }
 
 describe('NestMailerEmailSender', () => {
@@ -66,9 +74,9 @@ describe('NestMailerEmailSender', () => {
       const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
       expect(url).toBe(MAIL_URL);
       expect(init.method).toBe('POST');
-      expect(
-        (init.headers as Record<string, string>)['x-mail-api-token'],
-      ).toBe(MAIL_TOKEN);
+      expect((init.headers as Record<string, string>)['x-mail-api-token']).toBe(
+        MAIL_TOKEN,
+      );
 
       const payload = corpoDaChamada();
       expect(payload.to).toBe(orcamentoData.clienteEmail);
@@ -153,9 +161,7 @@ describe('NestMailerEmailSender', () => {
       it('não lança quando o envio falha (best-effort)', async () => {
         fetchMock.mockRejectedValueOnce(new Error('network down'));
 
-        await expect(
-          sender[metodo](baseNotificacao),
-        ).resolves.toBeUndefined();
+        await expect(sender[metodo](baseNotificacao)).resolves.toBeUndefined();
       });
     },
   );

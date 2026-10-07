@@ -1,7 +1,6 @@
 import { randomInt } from 'node:crypto';
 
-const CHARS =
-  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
 export function generateRandomPassword(length = 8): string {
   let password = '';

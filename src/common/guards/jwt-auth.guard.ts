@@ -32,7 +32,8 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     _info: unknown,
     context: ExecutionContext,
   ): TUser {
-    if (err) throw err;
+    // O passport entrega o erro como `unknown`; só Error é relançado como está.
+    if (err) throw err instanceof Error ? err : new UnauthorizedException();
     if (!user) throw new UnauthorizedException();
 
     const rolesPermitidos = this.reflector.getAllAndOverride<
@@ -40,9 +41,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     >(ROLES_KEY, [context.getHandler(), context.getClass()]) ?? ['admin'];
 
     if (!rolesPermitidos.includes((user as AuthenticatedUser).tipo)) {
-      throw new ForbiddenException(
-        'Token não autorizado para este recurso.',
-      );
+      throw new ForbiddenException('Token não autorizado para este recurso.');
     }
 
     return user as TUser;
