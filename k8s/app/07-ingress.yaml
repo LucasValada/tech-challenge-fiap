@@ -11,6 +11,13 @@ metadata:
   name: oficina-api
   namespace: oficina
   annotations:
+    # ALB compartilhado com o Billing e o Execution: o group.name junta os três
+    # Ingresses no mesmo balanceador. O group.order alto faz a regra genérica `/`
+    # do OS ser avaliada por último; sem isso ela capturaria /billing e /execution
+    # (com ordens iguais, o desempate é alfabético por namespace, e `oficina` vem
+    # antes de `oficina-billing`).
+    alb.ingress.kubernetes.io/group.name: oficina
+    alb.ingress.kubernetes.io/group.order: "100"
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/healthcheck-path: /health

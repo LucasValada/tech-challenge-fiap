@@ -64,7 +64,9 @@ specs/
 .agents/
 
 # Terraform
-infra/.terraform/
+.terraform/
+*.tfstate
+*.tfstate.*
 infra/*.tfstate
 infra/*.tfstate.*
 infra/oficina-cluster-config
