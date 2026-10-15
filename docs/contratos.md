@@ -1,6 +1,6 @@
 # Contratos entre os microsserviços — Fase 4
 
-> **Versão 1, para revisão do grupo** (passo 1.2 do plano de ação). Os nomes de filas, mensagens e rotas já estão definidos pelas convenções da seção 2. Depois de aprovado, este documento é a referência para os três serviços trabalharem em paralelo; qualquer mudança passa por PR aqui.
+> **Versão 1.1, para revisão do grupo** (passo 1.2 do plano de ação; mudanças na seção 9). Os nomes de filas, mensagens e rotas já estão definidos pelas convenções da seção 2. Depois de aprovado, este documento é a referência para os três serviços trabalharem em paralelo; qualquer mudança passa por PR aqui.
 
 Serviços: **OS Service** (este repositório, orquestrador da Saga), **Billing Service** e **Execution Service**.
 
@@ -78,7 +78,7 @@ Os itens e preços de `GerarOrcamento` são os snapshots das linhas da OS (`nome
 | `OrcamentoAprovado` | Billing | `{ orcamentoId, origem: "CLIENTE" \| "SISTEMA_EXTERNO" }` |
 | `OrcamentoRecusado` | Billing | `{ orcamentoId, origem: "CLIENTE" \| "SISTEMA_EXTERNO", motivo }` |
 | `PagamentoConfirmado` | Billing | `{ pagamentoId, valor, pagoEm }` — `pagamentoId` é o id do pagamento no Mercado Pago |
-| `PagamentoRecusado` | Billing | `{ detalhe }` — o `status_detail` do Mercado Pago, por exemplo `cc_rejected_other_reason` |
+| `PagamentoRecusado` | Billing | `{ detalhe }` — o `status_detail` do Mercado Pago, por exemplo `cc_rejected_other_reason`. **Informativo:** o link continua valendo e o cliente pode tentar de novo (outro cartão ou outro meio); a OS só avança com `PagamentoConfirmado` |
 | `PagamentoEstornado` | Billing | `{ pagamentoId, estornadoEm }` |
 | `ReparoConcluido` | Execution | `{ concluidoEm }` |
 | `ExecucaoFalhou` | Execution | `{ etapa: "DIAGNOSTICO" \| "REPARO", motivo }` |
@@ -98,7 +98,7 @@ O que o OS Service faz ao receber cada resposta. As transições de status da OS
 | `AGUARDANDO_APROVACAO` | `OrcamentoAprovado` | — | `AGUARDANDO_PAGAMENTO` |
 | `AGUARDANDO_APROVACAO` | `OrcamentoRecusado` | **compensa:** devolve o estoque | `CANCELADA` |
 | `AGUARDANDO_PAGAMENTO` | `PagamentoConfirmado` | publica `IniciarReparo` | `EM_EXECUCAO` |
-| `AGUARDANDO_PAGAMENTO` | `PagamentoRecusado` | **compensa:** publica `CancelarOrcamento` e devolve o estoque | `CANCELADA` |
+| `AGUARDANDO_PAGAMENTO` | `PagamentoRecusado` | registra a tentativa recusada no histórico; nada é compensado, porque o cliente pode pagar de novo pelo mesmo link | `AGUARDANDO_PAGAMENTO` |
 | `AGUARDANDO_APROVACAO` ou `AGUARDANDO_PAGAMENTO` | Cancelamento pelo funcionário (REST) | **compensa:** publica `CancelarOrcamento` e devolve o estoque | `CANCELADA` |
 | `EM_EXECUCAO` | `ReparoConcluido` | envia o e-mail de finalização (Lambda `/mail`) | `FINALIZADA` |
 | `EM_EXECUCAO` | `ExecucaoFalhou` (`REPARO`) | **compensa:** publica `EstornarPagamento` e devolve o estoque | `CANCELADA` |
@@ -114,7 +114,8 @@ Regras que acompanham a tabela:
 - **Linhas travadas depois do diagnóstico.** Serviços e itens podem ser lançados em `RECEBIDA` e em `EM_DIAGNOSTICO` até chegar `DiagnosticoConcluido`. A partir daí ficam travados, porque o orçamento foi gerado com aquela cópia; editar depois faria o cliente aprovar e pagar um valor diferente do total da OS. Isso substitui a regra atual (`garantirOSMutavel`), que permite editar também em `AGUARDANDO_APROVACAO`.
 - **Cancelamento.** Nos status em que o mecânico atua (`RECEBIDA`, `EM_DIAGNOSTICO` e `EM_EXECUCAO`), a OS é cancelada pela rota `falhar` do Execution, que gera `ExecucaoFalhou`. Nos dois status em que a OS espera o cliente (`AGUARDANDO_APROVACAO` e `AGUARDANDO_PAGAMENTO`), quem cancela é o funcionário, pela rota do OS.
 - **Histórico.** Toda transição grava em `HistoricoStatusOS`, que exige um `usuarioId`. Nas transições disparadas pela Saga vale o padrão do ADR-001: o `usuarioId` é o `usuarioCriadorId` da OS e a `observacao` identifica o ator real, por exemplo "Billing: orçamento aprovado pelo cliente" ou "…pelo sistema externo", a partir do campo `origem`.
-- **Sem expiração automática.** O link de pagamento tem prazo no Mercado Pago, e depois dele o cliente não consegue pagar. O Mercado Pago não avisa quando um link expira, então uma OS parada esperando o cliente (aprovação ou pagamento) é cancelada pelo funcionário, com as mesmas compensações.
+- **Pagamento recusado não encerra a OS.** No Checkout Pro, o link continua aceitando pagamento depois de uma recusa, e o cliente pode tentar com outro cartão ou outro meio. Por isso a OS só sai de `AGUARDANDO_PAGAMENTO` com `PagamentoConfirmado` ou com o cancelamento pelo funcionário. Cada tentativa recusada fica no histórico da OS.
+- **Sem expiração automática.** O link de pagamento tem prazo no Mercado Pago, e depois dele o cliente não consegue pagar. O Mercado Pago não avisa quando um link expira, então uma OS parada esperando o cliente (aprovação ou pagamento) é cancelada pelo funcionário, com as mesmas compensações. É também o caminho quando o cliente desiste depois de pagamentos recusados.
 
 ## 7. APIs REST
 
@@ -168,3 +169,10 @@ Ciclo de uma tarefa: `PENDENTE` → `EM_ANDAMENTO` → `CONCLUIDA`, ou `FALHOU` 
 | OS | PostgreSQL | Clientes, veículos, usuários, catálogo, estoque, OS, linhas, histórico e estado da saga | — |
 | Billing | PostgreSQL próprio | Orçamentos, pagamentos e estornos | Cliente (id, nome, e-mail) e linhas do orçamento, vindos de `GerarOrcamento` |
 | Execution | DynamoDB | Tarefas de diagnóstico e reparo | Código da OS, veículo e itens a executar, vindos dos comandos |
+
+## 9. Mudanças
+
+| Versão | Data | Mudança |
+|---|---|---|
+| 1 | 06-out-2026 | Primeira versão |
+| 1.1 | 13-out-2026 | `PagamentoRecusado` deixa de cancelar a OS: o cliente pode tentar de novo pelo mesmo link, e a OS só avança com `PagamentoConfirmado`. O cancelamento de uma OS esperando pagamento passa a ser só pelo funcionário (seção 6) |
