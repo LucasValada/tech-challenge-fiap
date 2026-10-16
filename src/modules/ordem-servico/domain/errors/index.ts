@@ -100,29 +100,26 @@ export class TransicaoInvalidaError extends Error {
   }
 }
 
-export class OSSemItensParaOrcamentoError extends Error {
-  name = 'OSSemItensParaOrcamentoError';
-  constructor() {
+/** Cancelamento pelo funcionário fora dos status em que a OS espera o cliente. */
+export class CancelamentoNaoPermitidoError extends Error {
+  name = 'CancelamentoNaoPermitidoError';
+  constructor(public statusAtual: string) {
     super(
-      'A OS precisa ter pelo menos um serviço ou peça/insumo para enviar o orçamento',
+      `O funcionário só cancela OS em AGUARDANDO_APROVACAO ou AGUARDANDO_PAGAMENTO (status atual: ${statusAtual}); ` +
+        'nos status em que o mecânico atua, a falha é registrada pela rota falhar do Execution',
     );
   }
 }
 
-export class OSStatusInvalidoParaOrcamentoError extends Error {
-  name = 'OSStatusInvalidoParaOrcamentoError';
+/**
+ * Só uma OS cancelada pode ser excluída: no meio da Saga, a exclusão deixaria
+ * orçamento, pagamento e tarefas órfãos nos outros serviços.
+ */
+export class OSNaoCanceladaError extends Error {
+  name = 'OSNaoCanceladaError';
   constructor(public statusAtual: string) {
     super(
-      `O orçamento só pode ser enviado quando a OS está em EM_DIAGNOSTICO (status atual: ${statusAtual})`,
-    );
-  }
-}
-
-export class OSStatusInvalidoParaAprovacaoError extends Error {
-  name = 'OSStatusInvalidoParaAprovacaoError';
-  constructor(public statusAtual: string) {
-    super(
-      `O orçamento só pode ser aprovado quando a OS está em AGUARDANDO_APROVACAO (status atual: ${statusAtual})`,
+      `Só uma OS CANCELADA pode ser excluída (status atual: ${statusAtual})`,
     );
   }
 }

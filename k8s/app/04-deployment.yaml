@@ -80,11 +80,6 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: MAIL_LAMBDA_TOKEN
-            - name: WEBHOOK_ORCAMENTO_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: app-secret
-                  key: WEBHOOK_ORCAMENTO_TOKEN
             # Chave de ingestão do New Relic, sincronizada do SSM pelo CD.
             #
             # `optional: true` porque telemetria não é requisito de subida: sem a

@@ -11,6 +11,8 @@ import {
 } from '@nestjs/common';
 import { CreateOrdemServicoUseCase } from './create-ordem-servico.use-case';
 import { ServicoIndisponivelError } from '../../domain/errors';
+import { OrdemServico } from '../../domain/entity/OrdemServico';
+import { PUBLICADOR_COMANDOS } from '../saga/mensagens-saga';
 import {
   registrarFalhaOrdemServico,
   registrarOrdemCriada,
@@ -20,6 +22,7 @@ import {
 const mockOrdemRepo = { createComItens: jest.fn() };
 const mockClienteRepo = { findByCpfCnpj: jest.fn() };
 const mockVeiculoRepo = { findByPlaca: jest.fn() };
+const mockPublicador = { publicar: jest.fn() };
 
 const baseDto = {
   cpfCnpj: '529.982.247-25',
@@ -37,6 +40,7 @@ describe('CreateOrdemServicoUseCase', () => {
         { provide: 'ORDEM_SERVICO_REPOSITORY', useValue: mockOrdemRepo },
         { provide: 'CLIENTE_REPOSITORY', useValue: mockClienteRepo },
         { provide: 'VEICULO_REPOSITORY', useValue: mockVeiculoRepo },
+        { provide: PUBLICADOR_COMANDOS, useValue: mockPublicador },
       ],
     }).compile();
 
@@ -71,6 +75,7 @@ describe('CreateOrdemServicoUseCase', () => {
       expect.objectContaining({
         correlationId: expect.stringMatching(/^[0-9a-f-]{36}$/) as string,
       }),
+      expect.any(Function),
     );
   });
 
@@ -177,15 +182,18 @@ describe('CreateOrdemServicoUseCase', () => {
     );
 
     expect(result).toBe(ordemCriada);
-    expect(mockOrdemRepo.createComItens).toHaveBeenCalledWith({
-      correlationId: 'fluxo-da-os',
-      clienteId: 'cliente-1',
-      veiculoId: 'veiculo-1',
-      usuarioCriadorId: 'usuario-1',
-      observacoes: 'OS criada via balcão',
-      servicos: [{ servicoId: 'svc-1', quantidade: 1 }],
-      itens: [{ itemEstoqueId: 'item-1', quantidade: 2 }],
-    });
+    expect(mockOrdemRepo.createComItens).toHaveBeenCalledWith(
+      {
+        correlationId: 'fluxo-da-os',
+        clienteId: 'cliente-1',
+        veiculoId: 'veiculo-1',
+        usuarioCriadorId: 'usuario-1',
+        observacoes: 'OS criada via balcão',
+        servicos: [{ servicoId: 'svc-1', quantidade: 1 }],
+        itens: [{ itemEstoqueId: 'item-1', quantidade: 2 }],
+      },
+      expect.any(Function),
+    );
     expect(registrarOrdemCriada).toHaveBeenCalledWith(
       expect.objectContaining({
         ordemId: 'ordem-1',
@@ -193,5 +201,74 @@ describe('CreateOrdemServicoUseCase', () => {
         quantidadeItens: 1,
       }),
     );
+  });
+
+  it('a abertura publica IniciarDiagnostico, dentro da transação, com o veículo e o fluxo da OS', async () => {
+    mockClienteRepo.findByCpfCnpj.mockResolvedValue({ id: 'cliente-1' });
+    mockVeiculoRepo.findByPlaca.mockResolvedValue({
+      id: 'veiculo-1',
+      clienteId: 'cliente-1',
+      placa: 'ABC1D23',
+      marca: 'Fiat',
+      modelo: 'Uno',
+      ano: 2020,
+    });
+    const criada = new OrdemServico(
+      'cliente-1',
+      'veiculo-1',
+      'usuario-1',
+      'RECEBIDA',
+      'Barulho no motor',
+      0,
+      0,
+      0,
+      'OS-2026-000001',
+      'ordem-1',
+    );
+    criada.correlationId = 'fluxo-da-os';
+    mockOrdemRepo.createComItens.mockImplementation(
+      async (
+        _dados: unknown,
+        antesDoCommit: (o: OrdemServico) => Promise<void>,
+      ) => {
+        await antesDoCommit(criada);
+        return criada;
+      },
+    );
+    mockPublicador.publicar.mockResolvedValue(undefined);
+
+    await useCase.execute('usuario-1', baseDto, 'fluxo-da-os');
+
+    expect(mockPublicador.publicar).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tipo: 'IniciarDiagnostico',
+        osId: 'ordem-1',
+        correlationId: 'fluxo-da-os',
+        payload: {
+          codigo: 'OS-2026-000001',
+          veiculo: {
+            placa: 'ABC1D23',
+            marca: 'Fiat',
+            modelo: 'Uno',
+            ano: 2020,
+          },
+          observacoes: 'Barulho no motor',
+        },
+      }),
+    );
+  });
+
+  it('se a publicação falha, a abertura falha (a OS não fica parada sem ninguém saber)', async () => {
+    mockClienteRepo.findByCpfCnpj.mockResolvedValue({ id: 'cliente-1' });
+    mockVeiculoRepo.findByPlaca.mockResolvedValue({
+      id: 'veiculo-1',
+      clienteId: 'cliente-1',
+    });
+    mockOrdemRepo.createComItens.mockRejectedValue(new Error('SQS fora'));
+
+    await expect(useCase.execute('usuario-1', baseDto)).rejects.toThrow(
+      'SQS fora',
+    );
+    expect(registrarFalhaOrdemServico).toHaveBeenCalled();
   });
 });

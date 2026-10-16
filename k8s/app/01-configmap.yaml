@@ -13,6 +13,14 @@ data:
   # `mail_url`). O token de chamada (MAIL_LAMBDA_TOKEN) vem do Secret app-secret.
   MAIL_LAMBDA_URL: "https://8hkalepe37.execute-api.us-east-1.amazonaws.com/mail"
 
+  # Saga (docs/contratos.md, seção 4; filas criadas pelo terraform/ de cada
+  # serviço). O OS consome as respostas e publica nos comandos do Execution e do
+  # Billing. As credenciais da AWS vêm da role dos nós do EKS, não de variável.
+  AWS_REGION: "us-east-1"
+  SAGA_REPLIES_QUEUE_URL: "https://sqs.us-east-1.amazonaws.com/008363475762/oficina-os-saga-replies"
+  EXECUTION_COMMANDS_QUEUE_URL: "https://sqs.us-east-1.amazonaws.com/008363475762/oficina-execution-commands"
+  BILLING_COMMANDS_QUEUE_URL: "https://sqs.us-east-1.amazonaws.com/008363475762/oficina-billing-commands"
+
   # ─── Observabilidade ──────────────────────────────────────────────────────
   # Nenhuma credencial aqui: a license key vem do Secret `app-secret` (ver
   # 04-deployment.yaml). Este ConfigMap só carrega configuração.

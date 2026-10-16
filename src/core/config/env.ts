@@ -29,5 +29,11 @@ export function validateEnv(): void {
   must('MAIL_LAMBDA_URL');
   must('MAIL_LAMBDA_TOKEN');
 
-  must('WEBHOOK_ORCAMENTO_TOKEN');
+  // Saga (docs/contratos.md, seção 4): a fila de respostas que o OS consome e as
+  // filas de comandos do Execution e do Billing. As credenciais da AWS vêm da
+  // role dos nós do EKS; localmente, AWS_ENDPOINT_URL aponta para o LocalStack.
+  must('AWS_REGION');
+  must('SAGA_REPLIES_QUEUE_URL');
+  must('EXECUTION_COMMANDS_QUEUE_URL');
+  must('BILLING_COMMANDS_QUEUE_URL');
 }

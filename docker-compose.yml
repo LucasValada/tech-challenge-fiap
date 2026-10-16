@@ -50,7 +50,15 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
       MAIL_LAMBDA_URL: ${MAIL_LAMBDA_URL}
       MAIL_LAMBDA_TOKEN: ${MAIL_LAMBDA_TOKEN}
-      WEBHOOK_ORCAMENTO_TOKEN: ${WEBHOOK_ORCAMENTO_TOKEN}
+
+      # Saga: filas no LocalStack (serviço `localstack` abaixo).
+      AWS_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      SAGA_REPLIES_QUEUE_URL: http://localstack:4566/000000000000/oficina-os-saga-replies
+      EXECUTION_COMMANDS_QUEUE_URL: http://localstack:4566/000000000000/oficina-execution-commands
+      BILLING_COMMANDS_QUEUE_URL: http://localstack:4566/000000000000/oficina-billing-commands
 
       # ─── New Relic ──────────────────────────────────────────────────────
       # Todos os valores vêm do .env (ignorado pelo git) — nada de credencial
@@ -75,6 +83,25 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      localstack:
+        condition: service_healthy
+
+  # SQS local com as filas da Saga. Versão fixa: imagens mais novas do
+  # LocalStack podem exigir token de conta.
+  localstack:
+    container_name: oficina-localstack
+    image: localstack/localstack:4.0
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: sqs
+    volumes:
+      - ./localstack/init:/etc/localstack/init/ready.d:ro
+    healthcheck:
+      test: ["CMD", "awslocal", "sqs", "get-queue-url", "--queue-name", "oficina-billing-commands"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
 volumes:
   postgres_data:

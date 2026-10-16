@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import {
   EmailSender,
   NotificacaoStatusEmailData,
-  OrcamentoEmailData,
 } from '../domain/service/email-sender';
 
 @Injectable()
@@ -11,52 +10,6 @@ export class NestMailerEmailSender implements EmailSender {
   private readonly logger = new Logger(NestMailerEmailSender.name);
 
   constructor(private readonly config: ConfigService) {}
-
-  async enviarOrcamento(data: OrcamentoEmailData): Promise<void> {
-    const linhasServicos = data.servicos
-      .map(
-        (s) => `  - ${s.nome} (x${s.quantidade}): R$ ${s.subtotal.toFixed(2)}`,
-      )
-      .join('\n');
-
-    const linhasItens = data.itens
-      .map(
-        (i) => `  - ${i.nome} (x${i.quantidade}): R$ ${i.subtotal.toFixed(2)}`,
-      )
-      .join('\n');
-
-    const texto = [
-      `Olá ${data.clienteNome},`,
-      '',
-      `Segue o orçamento da Ordem de Serviço ${data.codigoOS} referente ao veículo de placa ${data.placa}:`,
-      '',
-      linhasServicos ? `Serviços:\n${linhasServicos}` : '',
-      linhasItens ? `Peças/Insumos:\n${linhasItens}` : '',
-      '',
-      `Valor dos serviços: R$ ${data.valorServicos.toFixed(2)}`,
-      `Valor das peças: R$ ${data.valorPecas.toFixed(2)}`,
-      `Total: R$ ${data.valorTotal.toFixed(2)}`,
-      '',
-      `Para aprovar ou rejeitar o orçamento, autentique-se com o seu CPF para`,
-      `obter o token de acesso e utilize os endpoints protegidos:`,
-      `  Aprovar:  POST /ordens-servico/minhas/{id}/aprovar`,
-      `  Rejeitar: POST /ordens-servico/minhas/{id}/rejeitar`,
-      `Envie o token no header Authorization; o {id} da OS ${data.codigoOS} pode`,
-      `ser obtido em GET /ordens-servico/minhas.`,
-      '',
-      'Atenciosamente,',
-      'Oficina SOAT',
-    ]
-      .filter((l) => l !== undefined)
-      .join('\n');
-
-    await this.enviar(
-      data.clienteEmail,
-      `Orçamento OS ${data.codigoOS} - Oficina SOAT`,
-      texto,
-      `orçamento (OS: ${data.codigoOS})`,
-    );
-  }
 
   async enviarNotificacaoFinalizacao(
     data: NotificacaoStatusEmailData,
