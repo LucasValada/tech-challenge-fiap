@@ -60,6 +60,9 @@ services:
       EXECUTION_COMMANDS_QUEUE_URL: http://localstack:4566/000000000000/oficina-execution-commands
       BILLING_COMMANDS_QUEUE_URL: http://localstack:4566/000000000000/oficina-billing-commands
 
+      # Token das rotas /internal (Lambda de autenticação).
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
+
       # ─── New Relic ──────────────────────────────────────────────────────
       # Todos os valores vêm do .env (ignorado pelo git) — nada de credencial
       # neste arquivo. Sem .env, o agente fica desligado e a chave vazia.

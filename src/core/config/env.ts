@@ -36,4 +36,8 @@ export function validateEnv(): void {
   must('SAGA_REPLIES_QUEUE_URL');
   must('EXECUTION_COMMANDS_QUEUE_URL');
   must('BILLING_COMMANDS_QUEUE_URL');
+
+  // Token das rotas /internal (Lambda de autenticação), gerado no SSM pelo
+  // terraform/ deste repositório.
+  must('INTERNAL_API_TOKEN');
 }

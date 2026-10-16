@@ -1,0 +1,122 @@
+# Os três serviços juntos, para o teste de integração da Saga (teste-saga.sh):
+#   docker compose -p oficina-integracao up -d --build
+#
+# O OS é construído deste repositório. Billing e Execution são construídos dos
+# repositórios deles, cujos caminhos vêm de BILLING_DIR e EXECUTION_DIR (padrão:
+# clonados ao lado deste). No CI, essas imagens virão do ECR.
+#
+# Dependências simuladas: PostgreSQL do OS e do Billing, LocalStack (SQS e
+# DynamoDB, com os recursos dos terraform/) e o simulador do Mercado Pago
+# (WireMock, com as respostas que ficam no repositório do Billing).
+x-ambiente-comum: &ambiente-comum
+  NODE_ENV: development
+  APPLICATION_PORT: "3000"
+  JWT_SECRET: segredo-de-integracao
+  NEW_RELIC_ENABLED: "false"
+  AWS_REGION: us-east-1
+  AWS_ENDPOINT_URL: http://localstack:4566
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+  SAGA_REPLIES_QUEUE_URL: http://localstack:4566/000000000000/oficina-os-saga-replies
+  EXECUTION_COMMANDS_QUEUE_URL: http://localstack:4566/000000000000/oficina-execution-commands
+  BILLING_COMMANDS_QUEUE_URL: http://localstack:4566/000000000000/oficina-billing-commands
+
+services:
+  localstack:
+    # Versão fixa: imagens mais novas do LocalStack podem exigir token de conta.
+    image: localstack/localstack:4.0
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: sqs,dynamodb
+    volumes:
+      - ./localstack:/etc/localstack/init/ready.d:ro
+    healthcheck:
+      test: ["CMD", "awslocal", "dynamodb", "describe-table", "--table-name", "oficina-execution-tarefas"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  mercado-pago:
+    image: wiremock/wiremock:3.9.1
+    ports:
+      - "8089:8080"
+    volumes:
+      - ${BILLING_DIR:-../../../oficina-billing-service}/mercado-pago-simulador/mappings:/home/wiremock/mappings:ro
+
+  postgres-os:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: oficina
+      POSTGRES_PASSWORD: oficina
+      POSTGRES_DB: oficina
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "oficina"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  postgres-billing:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: billing
+      POSTGRES_PASSWORD: billing
+      POSTGRES_DB: billing
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "billing"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  os:
+    build: ../..
+    # Migrations antes de subir, como o Job de migração faz no cluster.
+    command: ["sh", "-c", "npx prisma migrate deploy && exec node -r newrelic dist/src/main.js"]
+    environment:
+      <<: *ambiente-comum
+      NEW_RELIC_APP_NAME: oficina-api
+      DATABASE_URL: postgresql://oficina:oficina@postgres-os:5432/oficina?schema=public
+      JWT_EXPIRES_IN: 1h
+      # Sem Lambda de e-mail na integração: o envio falha rápido e é best-effort.
+      MAIL_LAMBDA_URL: http://127.0.0.1:9/mail
+      MAIL_LAMBDA_TOKEN: sem-lambda
+      INTERNAL_API_TOKEN: token-interno-de-integracao
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres-os:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+
+  billing:
+    build: ${BILLING_DIR:-../../../oficina-billing-service}
+    command: ["sh", "-c", "npx prisma migrate deploy && exec node -r newrelic dist/main.js"]
+    environment:
+      <<: *ambiente-comum
+      NEW_RELIC_APP_NAME: oficina-billing
+      DATABASE_URL: postgresql://billing:billing@postgres-billing:5432/billing?schema=public
+      WEBHOOK_ORCAMENTO_TOKEN: token-webhook-de-integracao
+      MERCADO_PAGO_API_URL: http://mercado-pago:8080
+      MERCADO_PAGO_ACCESS_TOKEN: TEST-simulador
+    ports:
+      - "3001:3000"
+    depends_on:
+      postgres-billing:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      mercado-pago:
+        condition: service_started
+
+  execution:
+    build: ${EXECUTION_DIR:-../../../oficina-execution-service}
+    environment:
+      <<: *ambiente-comum
+      NEW_RELIC_APP_NAME: oficina-execution
+      DYNAMODB_TABLE_TAREFAS: oficina-execution-tarefas
+    ports:
+      - "3002:3000"
+    depends_on:
+      localstack:
+        condition: service_healthy

@@ -1,10 +1,21 @@
-# Tech Challenge FIAP - SOAT Oficina
+# Tech Challenge FIAP - SOAT Oficina — OS Service
 
-Sistema de gerenciamento de oficina mecânica desenvolvido para o Tech Challenge FIAP SOAT. Este é o **repositório da aplicação principal** (API NestJS que roda em Kubernetes) — um dos **quatro repositórios** da solução (ver [Solução em 4 repositórios](#solução-em-4-repositórios)).
+Sistema de gerenciamento de oficina mecânica desenvolvido para o Tech Challenge FIAP SOAT. Na **Fase 4**, a aplicação foi dividida em três microsserviços, e este repositório é o **OS Service**: abertura, status e histórico das ordens de serviço, clientes, veículos, catálogo e estoque, e o **orquestrador da Saga** que coordena o Billing e o Execution (ver [Fase 4: microsserviços e Saga](#fase-4-microsserviços-e-saga)). As seções seguintes, da Fase 3, descrevem a plataforma na AWS e o interior desta API, atualizadas para a Fase 4.
 
 A API cobre a gestão de clientes, veículos, serviços, peças/insumos e ordens de serviço, com **autenticação dupla** (funcionário por email/senha e cliente por **CPF via função serverless**), envio de orçamento por email, acompanhamento público de OS e observabilidade (health, logs JSON com correlação). Roda na **AWS** — **EKS** (Kubernetes gerenciado), **RDS PostgreSQL** (banco gerenciado), imagem no **ECR**, segredos no **SSM**, com um **API Gateway** na frente (roteando a autenticação e as notificações para **Lambdas serverless** e as rotas protegidas para o **ALB → EKS**) — tudo provisionado via **Terraform** e entregue por **CI/CD com deploy automático**.
 ## Índice
 
+- [Fase 4: microsserviços e Saga](#fase-4-microsserviços-e-saga)
+  - [Diagrama geral](#diagrama-geral)
+  - [Por que esta divisão](#por-que-esta-divisão)
+  - [Saga orquestrada](#saga-orquestrada)
+  - [Ciclo da OS](#ciclo-da-os)
+  - [Caminho feliz](#caminho-feliz)
+  - [Transições e compensações](#transições-e-compensações)
+  - [Garantias](#garantias)
+  - [Rastreamento distribuído](#rastreamento-distribuído)
+  - [Rota interna da Lambda de autenticação](#rota-interna-da-lambda-de-autenticação)
+  - [Teste de integração dos três serviços](#teste-de-integração-dos-três-serviços)
 - [Objetivos](#objetivos)
 - [Solução em 4 repositórios](#solução-em-4-repositórios)
 - [Vídeo demonstrativo](#vídeo-demonstrativo)
@@ -32,20 +43,230 @@ A API cobre a gestão de clientes, veículos, serviços, peças/insumos e ordens
 - [Scripts disponíveis](#scripts-disponíveis)
 - [Infraestrutura e deploy na AWS (EKS)](#infraestrutura-e-deploy-na-aws-eks)
 
+## Fase 4: microsserviços e Saga
+
+Na Fase 4 a oficina foi dividida em **três microsserviços independentes**, cada um com repositório, banco e infraestrutura próprios. Este repositório é o **OS Service**, que também é o **orquestrador da Saga**. Os contratos entre os serviços (filas, mensagens, transições e rotas) estão em [`docs/contratos.md`](docs/contratos.md).
+
+| Serviço | Repositório | Responsabilidade | Banco |
+|---|---|---|---|
+| **OS Service** (este) | [`tech-challenge-fiap`](https://github.com/LucasValada/tech-challenge-fiap) | Abertura, status e histórico da OS; clientes, veículos, catálogo e estoque; **orquestra a Saga** | PostgreSQL (RDS) |
+| **Billing Service** | [`oficina-billing-service`](https://github.com/fiap-soat-oficina-tech-challenge/oficina-billing-service) | Orçamento, aprovação (cliente ou sistema externo), pagamento no Mercado Pago (Checkout Pro) e estorno | PostgreSQL (RDS próprio) |
+| **Execution Service** | [`oficina-execution-service`](https://github.com/fiap-soat-oficina-tech-challenge/oficina-execution-service) | Fila de diagnóstico e reparo do mecânico | DynamoDB |
+
+A plataforma da Fase 3 continua: VPC e EKS ([`tc3-infra-k8s`](https://github.com/tiagostorch/tc3-infra-k8s)), o RDS do OS ([`tc3-infra-db`](https://github.com/tiagostorch/tc3-infra-db)) e o API Gateway com as Lambdas de autenticação e de e-mail ([`tc3-auth-lambda`](https://github.com/tiagostorch/tc3-auth-lambda)). Os três serviços rodam no mesmo cluster, cada um no seu namespace, atrás do mesmo ALB.
+
+### Diagrama geral
+
+```mermaid
+graph TB
+    Cliente["Cliente / Funcionário / Mecânico"]
+    Externo["Sistema externo<br/>(aprovação de orçamento)"]
+    MP["Mercado Pago<br/>(Checkout Pro)"]
+
+    subgraph AWS["AWS"]
+        GW["API Gateway<br/>/auth · /mail → Lambdas<br/>/#123;proxy+#125; → ALB"]
+        LAuth["Lambda auth (CPF)"]
+        LMail["Lambda e-mail"]
+        ALB["ALB compartilhado<br/>/ → OS · /billing → Billing · /execution → Execution"]
+
+        subgraph EKS["EKS"]
+            OS["<b>OS Service</b><br/>orquestrador da Saga"]
+            BI["<b>Billing Service</b>"]
+            EX["<b>Execution Service</b>"]
+        end
+
+        subgraph SQS["Amazon SQS (cada fila com DLQ)"]
+            QR[["oficina-os-saga-replies"]]
+            QB[["oficina-billing-commands"]]
+            QE[["oficina-execution-commands"]]
+        end
+
+        DBOS[("PostgreSQL<br/>OS")]
+        DBBI[("PostgreSQL<br/>Billing")]
+        DDB[("DynamoDB<br/>tarefas")]
+    end
+
+    Cliente --> GW
+    Externo --> GW
+    GW --> LAuth
+    GW --> LMail
+    GW --> ALB
+    ALB --> OS
+    ALB --> BI
+    ALB --> EX
+    LAuth -->|"POST /internal/clientes/busca"| ALB
+
+    OS -->|"comandos"| QB
+    OS -->|"comandos"| QE
+    QB --> BI
+    QE --> EX
+    BI -->|"respostas"| QR
+    EX -->|"respostas"| QR
+    QR --> OS
+
+    OS --- DBOS
+    BI --- DBBI
+    EX --- DDB
+    BI -->|"preferência · consulta · estorno"| MP
+    MP -->|"aviso de pagamento (webhook)"| BI
+    OS -->|"e-mail"| LMail
+    BI -->|"e-mail"| LMail
+```
+
+Nenhum serviço acessa o banco de outro. O que um precisa saber do outro chega numa mensagem, como cópia, ou por uma chamada REST.
+
+### Por que esta divisão
+
+A divisão segue a sugerida pelo enunciado e separa as áreas que mudam por motivos diferentes:
+
+- **OS Service:** fica com o que o atendimento usa. Abertura, status e histórico da OS, e também clientes, veículos, catálogo de serviços e estoque, que são consultados e alterados junto com a OS (a baixa de estoque acontece ao lançar o item). Separar o estoque criaria mais uma Saga sem ganho para o desafio.
+- **Billing Service:** concentra o dinheiro (orçamento, aprovação, pagamento e estorno) e a integração com o Mercado Pago. Uma falha do Mercado Pago não derruba a abertura nem a execução de OS.
+- **Execution Service:** isola a fila do mecânico, que tem outro ritmo e outro formato de dado (tarefas autocontidas, lidas por status). É o lugar natural do banco NoSQL.
+
+Tecnologias: os três usam NestJS e TypeScript, a mesma stack da Fase 3, então o grupo reaproveita o padrão de módulos, os testes e a observabilidade. Mensageria em **Amazon SQS**: gerenciado, já na conta, com DLQ e entrega "pelo menos uma vez", que os consumidores tratam com idempotência. **PostgreSQL** onde há transação e dinheiro (OS e Billing) e **DynamoDB** onde os dados são documentos por chave (Execution).
+
+### Saga orquestrada
+
+A Saga é **orquestrada**: o OS Service é o orquestrador central. Ele publica um comando para o serviço da etapa (fila de comandos dele) e reage à resposta (fila `oficina-os-saga-replies`). Billing e Execution nunca falam entre si.
+
+**Por que orquestrada, e não coreografada:**
+
+- **O fluxo tem dono.** A OS já é a entidade que atravessa todas as etapas e guarda o status e o histórico. Com o orquestrador, a sequência e as compensações ficam num lugar só ([`ProcessarRespostaSagaUseCase`](src/modules/ordem-servico/application/use-case/processar-resposta-saga.use-case.ts)), em vez de espalhadas por reações em três serviços.
+- **Compensações explícitas.** Cada falha tem uma linha na tabela de transições com a compensação correspondente. Na coreografia, descobrir quem compensa o quê exige ler os três serviços.
+- **Menos acoplamento entre os participantes.** Billing e Execution só conhecem os próprios comandos e a fila de respostas. Não precisam saber da existência um do outro.
+- **Rastreamento simples.** Toda mensagem nasce ou termina no OS, com o `correlationId` da OS.
+
+O custo é o orquestrador concentrar a lógica do fluxo. Com três serviços e um fluxo linear, esse custo é pequeno.
+
+### Ciclo da OS
+
+```mermaid
+stateDiagram-v2
+    [*] --> RECEBIDA: abertura (publica IniciarDiagnostico)
+    RECEBIDA --> EM_DIAGNOSTICO: DiagnosticoIniciado
+    EM_DIAGNOSTICO --> AGUARDANDO_APROVACAO: OrcamentoEnviado
+    AGUARDANDO_APROVACAO --> AGUARDANDO_PAGAMENTO: OrcamentoAprovado
+    AGUARDANDO_PAGAMENTO --> EM_EXECUCAO: PagamentoConfirmado (publica IniciarReparo)
+    EM_EXECUCAO --> FINALIZADA: ReparoConcluido
+    FINALIZADA --> ENTREGUE: entrega (API)
+
+    RECEBIDA --> CANCELADA: ExecucaoFalhou (diagnóstico)
+    EM_DIAGNOSTICO --> CANCELADA: ExecucaoFalhou (diagnóstico) ou GeracaoOrcamentoFalhou
+    AGUARDANDO_APROVACAO --> CANCELADA: OrcamentoRecusado ou cancelamento pelo funcionário
+    AGUARDANDO_PAGAMENTO --> CANCELADA: cancelamento pelo funcionário
+    EM_EXECUCAO --> CANCELADA: ExecucaoFalhou (reparo)
+    ENTREGUE --> [*]
+    CANCELADA --> [*]
+```
+
+Toda passagem para `CANCELADA` é uma compensação: devolve o estoque e grava o motivo. Um pagamento recusado **não** cancela a OS: o link do Mercado Pago continua valendo, e o cliente pode tentar de novo.
+
+### Caminho feliz
+
+```mermaid
+sequenceDiagram
+    actor F as Funcionário
+    actor M as Mecânico
+    actor C as Cliente
+    participant OS as OS Service
+    participant EX as Execution
+    participant BI as Billing
+    participant MP as Mercado Pago
+
+    F->>OS: POST /ordens-servico
+    OS-)EX: IniciarDiagnostico
+    M->>EX: iniciar diagnóstico
+    EX-)OS: DiagnosticoIniciado → EM_DIAGNOSTICO
+    M->>OS: lança serviços e itens (baixa de estoque)
+    M->>EX: concluir diagnóstico
+    EX-)OS: DiagnosticoConcluido (trava as linhas)
+    OS-)BI: GerarOrcamento (cópia das linhas e preços)
+    BI-)OS: OrcamentoEnviado → AGUARDANDO_APROVACAO
+    C->>BI: POST /billing/orcamentos/{id}/aprovar
+    BI->>MP: cria o link de pagamento
+    BI-)OS: OrcamentoAprovado → AGUARDANDO_PAGAMENTO
+    C->>MP: paga pelo link
+    MP->>BI: aviso (webhook) · BI confirma em GET /v1/payments/{id}
+    BI-)OS: PagamentoConfirmado → EM_EXECUCAO
+    OS-)EX: IniciarReparo
+    M->>EX: iniciar e concluir reparo
+    EX-)OS: ReparoConcluido → FINALIZADA (e-mail ao cliente)
+    F->>OS: entrega → ENTREGUE
+```
+
+### Transições e compensações
+
+O que o orquestrador faz ao receber cada resposta (`docs/contratos.md`, seção 6):
+
+| Status da OS | Evento | O OS faz | Novo status |
+|---|---|---|---|
+| — | Abertura (REST) | publica `IniciarDiagnostico` | `RECEBIDA` |
+| `RECEBIDA` | `DiagnosticoIniciado` | — | `EM_DIAGNOSTICO` |
+| `EM_DIAGNOSTICO` | `DiagnosticoConcluido` | trava as linhas e publica `GerarOrcamento` | `EM_DIAGNOSTICO` |
+| `EM_DIAGNOSTICO` | `OrcamentoEnviado` | — | `AGUARDANDO_APROVACAO` |
+| `EM_DIAGNOSTICO` | `GeracaoOrcamentoFalhou` | **compensa:** devolve o estoque | `CANCELADA` |
+| `AGUARDANDO_APROVACAO` | `OrcamentoAprovado` | — | `AGUARDANDO_PAGAMENTO` |
+| `AGUARDANDO_APROVACAO` | `OrcamentoRecusado` | **compensa:** devolve o estoque | `CANCELADA` |
+| `AGUARDANDO_APROVACAO` ou `AGUARDANDO_PAGAMENTO` | Cancelamento pelo funcionário (REST) | **compensa:** publica `CancelarOrcamento` (o Billing expira o link e estorna, se houver pagamento) e devolve o estoque | `CANCELADA` |
+| `AGUARDANDO_PAGAMENTO` | `PagamentoRecusado` | registra no histórico; o cliente tenta de novo | `AGUARDANDO_PAGAMENTO` |
+| `AGUARDANDO_PAGAMENTO` | `PagamentoConfirmado` | publica `IniciarReparo` | `EM_EXECUCAO` |
+| `EM_EXECUCAO` | `ReparoConcluido` | e-mail de finalização | `FINALIZADA` |
+| `RECEBIDA` ou `EM_DIAGNOSTICO` | `ExecucaoFalhou` (diagnóstico) | **compensa:** devolve o estoque | `CANCELADA` |
+| `EM_EXECUCAO` | `ExecucaoFalhou` (reparo) | **compensa:** publica `EstornarPagamento` e devolve o estoque | `CANCELADA` |
+| `CANCELADA` | `PagamentoEstornado` | registra no histórico | `CANCELADA` |
+| `FINALIZADA` | Entrega (REST) | e-mail de entrega | `ENTREGUE` |
+
+Uma resposta em outro status (repetida ou atrasada) é descartada com um aviso no log. Se o cliente pagar enquanto a OS é cancelada, o `PagamentoConfirmado` é descartado aqui, e o Billing estorna ao processar o `CancelarOrcamento`. Nenhuma OS cancelada fica com dinheiro retido.
+
+### Garantias
+
+- **Idempotência pelo estado.** O SQS entrega cada mensagem pelo menos uma vez. Cada resposta só vale num status, e a transição grava com o status lido no filtro (`UPDATE ... WHERE status = <lido>`). Uma resposta repetida não muda nada, e uma corrida com outra ação devolve a mensagem para a fila. Não há tabela de mensagens processadas.
+- **Gravar e publicar juntos.** O próximo comando é publicado **dentro** da transação do banco, antes do commit. Se a publicação falha, nada é gravado (a abertura da OS falha, ou a resposta volta para a fila). É a alternativa enxuta ao outbox transacional.
+- **Linhas travadas.** Serviços e itens só podem ser lançados até o diagnóstico concluído, porque o orçamento é gerado com aquela cópia. Depois disso a edição responde 409, e a trava é conferida dentro da transação da edição.
+- **Falha técnica vira nova tentativa.** Se o banco cai, a mensagem não é apagada: o SQS reenvia e, depois de 5 tentativas, a move para a DLQ `oficina-os-saga-replies-dlq`. Falha de negócio chega como resposta de falha e vira compensação.
+- **Histórico com o ator real.** As transições da Saga usam o criador da OS como usuário (ADR-001) e dizem na observação quem agiu ("Billing: …", "Execution: …").
+
+### Rastreamento distribuído
+
+O `correlationId` nasce na abertura da OS: é o header `x-correlation-id` da requisição ou o id gerado pelo pino-http. Ele fica gravado na OS e vai em toda mensagem. Os três serviços escrevem esse id nos logs JSON ao consumir as mensagens, então **filtrar por `correlationId` no New Relic mostra o fluxo de uma OS nos três serviços**, como validado no fórum da disciplina. Ver [Observabilidade](#observabilidade).
+
+### Rota interna da Lambda de autenticação
+
+`POST /internal/clientes/busca` (CPF no corpo, header `x-internal-token`) devolve `{ id, nome, status }`. Com ela, a Lambda de autenticação por CPF deixa de ler o banco do OS. O token é gerado pelo [`terraform/ssm.tf`](terraform/ssm.tf) e guardado só no SSM. A troca na Lambda ([`tc3-auth-lambda`](https://github.com/tiagostorch/tc3-auth-lambda)) é feita na etapa de integração na AWS.
+
+### Teste de integração dos três serviços
+
+[`test/integracao/`](test/integracao/) sobe OS, Billing e Execution juntos com Docker Compose. As dependências são os dois PostgreSQL, o LocalStack (SQS e DynamoDB) e o simulador do Mercado Pago (WireMock). Depois, percorre a Saga só pelas APIs públicas:
+
+```bash
+cd test/integracao
+BILLING_DIR=<repo do Billing> EXECUTION_DIR=<repo do Execution> \
+  docker compose -p oficina-integracao up -d --build
+bash teste-saga.sh
+docker compose -p oficina-integracao down -v
+```
+
+São 45 verificações em quatro cenários:
+
+1. o caminho feliz até a entrega, com uma tentativa de pagamento recusada antes da aprovada;
+2. a falha no reparo com estorno;
+3. o cancelamento pelo funcionário com o link expirado;
+4. o mesmo `correlationId` nos logs dos três serviços.
+
 ## Objetivos
 
 - Substituir o controle manual por planilhas por um sistema integrado
-- Permitir criação e acompanhamento de ordens de serviço com fluxo de status completo (RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → EM_EXECUCAO → FINALIZADA → ENTREGUE)
-- Gerar orçamentos automaticamente com base nos serviços e peças incluídos na OS
-- Enviar orçamento ao cliente por email para aprovação
-- Permitir que o cliente acompanhe e aprove a OS via API pública (sem autenticação)
+- Permitir criação e acompanhamento de ordens de serviço com fluxo de status completo (RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → AGUARDANDO_PAGAMENTO → EM_EXECUCAO → FINALIZADA → ENTREGUE, ou CANCELADA por compensação)
+- Gerar orçamentos automaticamente com base nos serviços e peças incluídos na OS (Billing, na Fase 4)
+- Enviar orçamento ao cliente por email para aprovação e cobrar pelo Mercado Pago (Billing)
+- Permitir que o cliente acompanhe a OS pela consulta pública e pelas rotas autenticadas por CPF
 - Controlar estoque de peças e insumos com alerta de estoque mínimo
 - Monitorar tempo médio de execução dos serviços
 - Prover infraestrutura reprodutível via Terraform e Kubernetes, com deploy automatizado por pipeline CI/CD
 
 ## Solução em 4 repositórios
 
-A Fase 3 exige a segregação da solução em **quatro repositórios git independentes**, cada um com seu próprio CI/CD e deploy automático para a nuvem. **Este repositório é o nº 4 (aplicação principal).**
+A Fase 3 exigiu a segregação da solução em **quatro repositórios git independentes**, cada um com seu próprio CI/CD e deploy automático para a nuvem. **Este repositório é o nº 4 (aplicação principal)**, que na Fase 4 virou o OS Service. Os repositórios 1 a 3 continuam como plataforma; o Billing e o Execution têm repositórios próprios (ver [Fase 4](#fase-4-microsserviços-e-saga)).
 
 | # | Repositório | Papel | Stack |
 |---|---|---|---|
@@ -92,6 +313,8 @@ src/infra/database/prisma/repositories/
 
 ## Arquitetura
 
+Os diagramas desta seção mostram a plataforma na AWS e o interior do OS Service. A visão com os três serviços está no [Diagrama geral](#diagrama-geral).
+
 ### Diagrama de Componentes — visão de nuvem
 
 Visão de alto nível de toda a solução na AWS: o cliente entra pelo **API Gateway**, que roteia a **autenticação** (`/auth`) e as **notificações** (`/mail`) para **Lambdas serverless** e as rotas protegidas para o **ALB → pods no EKS**; a aplicação e a Lambda de auth usam o **RDS** (banco gerenciado) e compartilham segredos pelo **SSM**; a imagem vem do **ECR**; a Lambda de e-mail cuida do SMTP; e a observabilidade (New Relic) coleta métricas, logs e traces.
@@ -99,12 +322,12 @@ Visão de alto nível de toda a solução na AWS: o cliente entra pelo **API Gat
 ```mermaid
 graph TB
     Cliente["Cliente / Funcionário<br/>browser · curl · Postman"]
-    Webhook["Sistema externo<br/>aprovação de orçamento"]
+    Webhook["Sistema externo<br/>aprovação de orçamento<br/>(atendido pelo Billing na Fase 4)"]
     SMTP["SMTP<br/>Ethereal / SES<br/>(usado pela Lambda de e-mail)"]
     Obs["Observabilidade<br/>New Relic — métricas, APM,<br/>dashboards, alertas + logs JSON"]
 
     subgraph AWS["AWS · us-east-1"]
-        GW["<b>API Gateway</b> (HTTP v2)<br/>POST /auth → Lambda auth<br/>POST /mail → Lambda e-mail<br/>ANY /&#123;proxy+&#125; → ALB (VPC Link)"]
+        GW["<b>API Gateway</b> (HTTP v2)<br/>POST /auth → Lambda auth<br/>POST /mail → Lambda e-mail<br/>ANY /#123;proxy+#125; → ALB (VPC Link)"]
         ECR["<b>ECR</b><br/>imagem da API"]
         SSM["<b>SSM Parameter Store</b><br/>JWT_SECRET, DATABASE_URL,<br/>MAIL_API_TOKEN (SecureString)"]
 
@@ -134,7 +357,7 @@ graph TB
     Pods -->|"POST /mail — notificação (best-effort)"| GW
     LambdaMail -->|"envia e-mail"| SMTP
     LambdaMail -->|"lê token + SMTP"| SSM
-    Webhook -->|"POST /webhooks/orcamento"| ALB
+    Webhook -->|"POST /billing/webhooks/orcamento"| ALB
     Pods -.->|"métricas · logs · traces"| Obs
 ```
 
@@ -157,17 +380,18 @@ graph TB
     end
 
     subgraph Externos["Sistemas externos"]
-        Webhook["<b>Sistema Externo de Aprovação</b><br/><i>[External System]</i><br/>Envia decisão de orçamento via<br/>POST /webhooks/orcamento com<br/>X-Webhook-Token"]
-        MailLambda["<b>Lambda de Notificações</b><br/><i>[External System]</i><br/>Recebe POST /mail (via API Gateway)<br/>e envia e-mails de orçamento,<br/>finalização e entrega via SMTP"]
+        Saga["<b>Billing e Execution Services</b><br/><i>[Microsserviços da Fase 4]</i><br/>Recebem comandos e respondem<br/>pelas filas SQS da Saga"]
+        MailLambda["<b>Lambda de Notificações</b><br/><i>[External System]</i><br/>Recebe POST /mail (via API Gateway)<br/>e envia e-mails de finalização<br/>e entrega via SMTP"]
     end
 
     Clientes -->|"HTTPS / REST<br/>JSON + JWT (privado) ou<br/>código+placa (público)"| API
-    Webhook -->|"POST /webhooks/orcamento<br/>JSON + X-Webhook-Token"| API
+    API -->|"comandos (Amazon SQS)"| Saga
+    Saga -->|"respostas (Amazon SQS)"| API
     API -->|"reads/writes<br/>TCP 5432 via Prisma"| DB
     API -->|"POST /mail<br/>JSON + x-mail-api-token"| MailLambda
 
     class Clientes person
-    class Webhook,MailLambda external
+    class Saga,MailLambda external
     class API container
     class DB database
 ```
@@ -190,13 +414,13 @@ graph TB
 
         subgraph InterfaceLayer["Camada Interface — src/modules/&lt;m&gt;/interface"]
             direction LR
-            Controllers["<b>Controllers + Guards</b><br/><i>[Component: NestJS Controller]</i><br/>JwtAuthGuard, WebhookTokenGuard"]
+            Controllers["<b>Controllers + Guards</b><br/><i>[Component: NestJS Controller]</i><br/>JwtAuthGuard, InternalTokenGuard<br/>+ RespostasSagaConsumer (fila SQS)"]
             DTOs["<b>DTOs de entrada e resposta</b><br/><i>[Component: class-validator]</i><br/>Validação declarativa de payload"]
         end
 
         subgraph ApplicationLayer["Camada Application — src/modules/&lt;m&gt;/application"]
             direction LR
-            UseCases["<b>Use Cases</b><br/><i>[Component: @Injectable NestJS]</i><br/>1 classe = 1 responsabilidade,<br/>método execute"]
+            UseCases["<b>Use Cases</b><br/><i>[Component: @Injectable NestJS]</i><br/>1 classe = 1 responsabilidade,<br/>método execute — inclui o<br/>orquestrador da Saga"]
             Mappers["<b>Mappers de resposta</b><br/><i>[Component: TypeScript]</i><br/>toUserResponse etc"]
             Shared["<b>Shared helpers</b><br/><i>[Component: TypeScript]</i><br/>traduzirErroDominio, etc"]
         end
@@ -219,6 +443,7 @@ graph TB
             direction LR
             PrismaSvc["<b>PrismaService</b><br/><i>[Component: pg.Pool + PrismaPg adapter]</i><br/>Bootstrap do Prisma Client"]
             PrismaRepos["<b>Prisma Repositories</b><br/><i>[Component: Prisma Client 7]</i><br/>src/infra/database/prisma/repositories"]
+            Publicador["<b>PublicadorComandosSqs</b><br/><i>[Component: AWS SDK v3]</i><br/>src/infra/mensageria"]
         end
     end
 
@@ -226,6 +451,7 @@ graph TB
         direction TB
         DB[("<b>PostgreSQL 17</b><br/><i>[ContainerDb: Banco relacional]</i>")]
         MailLambda["<b>Lambda de Notificações</b><br/><i>[External System]</i><br/>Envia e-mail via SMTP"]
+        SQSExt["<b>Amazon SQS</b><br/><i>[External System]</i><br/>filas de comandos e de respostas"]
     end
 
     Cliente -->|"HTTPS / REST"| Controllers
@@ -238,6 +464,7 @@ graph TB
     DomainSvc -->|"opera sobre"| Entities
 
     PrismaRepos -.->|"implementa"| Repos
+    Publicador -.->|"implementa (PublicadorComandos)"| Repos
     Bcrypt -.->|"implementa (PasswordHasher)"| Repos
     Jwt -.->|"implementa (TokenIssuer)"| Repos
     Mailer -.->|"implementa (EmailSender)"| Repos
@@ -245,11 +472,12 @@ graph TB
     PrismaRepos -->|"usa Prisma Client"| PrismaSvc
     PrismaSvc -->|"TCP 5432 / pg driver"| DB
     Mailer -->|"POST /mail (HTTP + token)"| MailLambda
+    Publicador -->|"SendMessage"| SQSExt
 
     class Cliente person
     class DB database
-    class MailLambda external
-    class Controllers,DTOs,UseCases,Mappers,Shared,Entities,DomainSvc,Repos,Bcrypt,Jwt,Mailer,PrismaSvc,PrismaRepos component
+    class MailLambda,SQSExt external
+    class Controllers,DTOs,UseCases,Mappers,Shared,Entities,DomainSvc,Repos,Bcrypt,Jwt,Mailer,PrismaSvc,PrismaRepos,Publicador component
 ```
 
 ### Infraestrutura provisionada na AWS
@@ -274,7 +502,8 @@ graph TB
             RDS[("RDS PostgreSQL<br/>db.t4g.micro · subnet privada · TLS")]
         end
         ECR["ECR — imagem da API"]
-        SSM["SSM /tc3-oficina/homolog/*<br/>DATABASE_URL · JWT_SECRET · MAIL_API_TOKEN<br/>NEW_RELIC_LICENSE_KEY (SecureString)"]
+        SSM["SSM /tc3-oficina/homolog/*<br/>DATABASE_URL · JWT_SECRET · MAIL_API_TOKEN<br/>INTERNAL_API_TOKEN · NEW_RELIC_LICENSE_KEY (SecureString)"]
+        SQS["SQS — filas da Saga<br/>(terraform/ de cada serviço)"]
     end
 
     Ingress --> Svc --> Deploy
@@ -284,6 +513,7 @@ graph TB
     Deploy -.->|secretKeyRef| Sec
     Deploy -->|"SQL/TLS 5432"| RDS
     Deploy -->|pull imagem| ECR
+    Deploy -->|"comandos e respostas"| SQS
     Sec -.->|sincronizado de| SSM
     Job -->|aplica migrations| RDS
     MS -.->|coleta métricas| Deploy
@@ -325,6 +555,8 @@ graph LR
 - **Ecossistema maduro:** integração consolidada com Prisma 7 (via driver adapter `@prisma/adapter-pg`) e documentação abrangente.
 
 Na Fase 3 o banco passou de Postgres-em-cluster para **RDS PostgreSQL gerenciado** (subnet privada, TLS obrigatório, backups e métricas geridos pela AWS), provisionado no repositório [`tc3-infra-db`](https://github.com/tiagostorch/tc3-infra-db). A modelagem também foi **melhorada** (campo `status` em `Cliente`, snapshots imutáveis nas linhas da OS, numeração sequencial anual e políticas de exclusão explícitas).
+
+Na Fase 4 este PostgreSQL passou a ser **só do OS Service**. O Billing tem o próprio PostgreSQL e o Execution usa DynamoDB; nenhum serviço lê o banco de outro (ver [Fase 4](#fase-4-microsserviços-e-saga)).
 
 > **Justificativa formal completa + ajustes no modelo relacional:** ver **[RFC-003 — Escolha do banco de dados](docs/rfc/RFC-003-escolha-do-banco.md)**.
 
@@ -380,8 +612,12 @@ erDiagram
         uuid clienteId FK
         uuid veiculoId FK
         uuid usuarioCriadorId FK
-        enum status "6 estados"
+        enum status "8 estados"
         decimal valorTotal
+        string correlationId "fluxo da Saga"
+        datetime diagnosticoConcluidoAt "trava as linhas"
+        datetime canceladaAt
+        string motivoCancelamento
     }
     OSServicos {
         uuid id PK
@@ -433,7 +669,8 @@ erDiagram
 | **Container** | Docker (multi-stage, non-root) · Docker Compose (local) |
 | **Nuvem (AWS)** | **EKS** (Kubernetes 1.3x) · **RDS PostgreSQL** · **Lambda + API Gateway** · **ECR** · **SSM** · **ALB** |
 | **IaC / CI-CD** | Terraform · GitHub Actions (OIDC, deploy no EKS) |
-| **Testes** | Jest (unit) · Testcontainers (e2e com Postgres real) |
+| **Mensageria (Saga)** | Amazon SQS (AWS SDK v3) · LocalStack no ambiente local |
+| **Testes** | Jest (unit) · Testcontainers (e2e com Postgres real) · Docker Compose com os três serviços (integração) |
 
 ## Pré-requisitos
 
@@ -454,11 +691,11 @@ cd tech-challenge-fiap
 cp .env.example .env
 # Edite o .env com suas credenciais (ver seção abaixo)
 
-# 3. Subir todos os serviços (Postgres + API)
+# 3. Subir todos os serviços (Postgres + LocalStack + API)
 docker compose up -d
 ```
 
-O compose cuida de tudo: sobe o Postgres, aguarda o healthcheck, aplica as migrations no serviço one-shot `migrate` e só então inicia a API (mesmo papel do Job `db-migration` no cluster). O usuário admin padrão (`admin@oficina.com` / `senha123`) é criado por uma migration, sem necessidade de seed manual.
+O compose cuida de tudo: sobe o Postgres e o LocalStack (SQS com as filas da Saga, criadas por `localstack/init/criar-recursos.sh`), aguarda os healthchecks, aplica as migrations no serviço one-shot `migrate` e só então inicia a API (mesmo papel do Job `db-migration` no cluster). Sozinho, o OS publica os comandos nas filas, mas ninguém os consome; para ver a Saga completa, use o [teste de integração dos três serviços](#teste-de-integração-dos-três-serviços). O usuário admin padrão (`admin@oficina.com` / `senha123`) é criado por uma migration, sem necessidade de seed manual.
 
 A API estará disponível em `http://localhost:3000` e o Swagger UI em `http://localhost:3000/api`.
 
@@ -471,8 +708,8 @@ npm install
 # 2. Configurar variáveis de ambiente
 cp .env.example .env
 
-# 3. Subir apenas o banco PostgreSQL
-docker compose up postgres -d
+# 3. Subir o banco PostgreSQL e o LocalStack (filas da Saga)
+docker compose up postgres localstack -d
 
 # 4. Gerar o Prisma Client e aplicar migrations
 npx prisma generate
@@ -500,7 +737,12 @@ Copie `.env.example` para `.env` e preencha:
 | `JWT_EXPIRES_IN` | não | Expiração do token (default: `1h`) |
 | `MAIL_LAMBDA_URL` | sim | URL da Lambda de notificações (rota `/mail` do API Gateway) para onde o app envia os e-mails |
 | `MAIL_LAMBDA_TOKEN` | sim | Token de chamada da Lambda de e-mail (header `x-mail-api-token`) |
-| `WEBHOOK_ORCAMENTO_TOKEN` | sim | Token compartilhado para autenticar `POST /webhooks/orcamento` |
+| `AWS_REGION` | sim | Região das filas da Saga |
+| `SAGA_REPLIES_QUEUE_URL` | sim | Fila de respostas que o OS consome (`oficina-os-saga-replies`) |
+| `EXECUTION_COMMANDS_QUEUE_URL` | sim | Fila de comandos do Execution (`oficina-execution-commands`) |
+| `BILLING_COMMANDS_QUEUE_URL` | sim | Fila de comandos do Billing (`oficina-billing-commands`) |
+| `AWS_ENDPOINT_URL` | só local | Aponta o SDK para o LocalStack; no cluster as credenciais vêm da role dos nós do EKS |
+| `INTERNAL_API_TOKEN` | sim | Token das rotas `/internal` (header `x-internal-token`), usado pela Lambda de autenticação |
 | `LOG_LEVEL` | não | Nível do pino (default: `info`) |
 | `NEW_RELIC_ENABLED` | não | Liga o agente de APM, as métricas customizadas e a injeção de `trace.id`/`span.id` no log (default na imagem: `false`) |
 | `NEW_RELIC_LICENSE_KEY` | com o agente ligado | Chave de ingestão do New Relic. **Só no `.env` (ignorado pelo git) ou no Secret do cluster** — nunca no `.env.example` |
@@ -516,7 +758,7 @@ As notificações por e-mail são enviadas por uma **Lambda serverless** — ver
 
 ## Notificações por e-mail (Lambda)
 
-O envio de e-mail (orçamento, finalização e entrega) **não é feito pelo app**: ele faz um `POST` autenticado para a **Lambda de notificações** — que fica no repositório [`tc3-auth-lambda`](https://github.com/tiagostorch/tc3-auth-lambda), **o mesmo da autenticação por CPF** (as duas Lambdas convivem lá, atrás do mesmo API Gateway) —, na rota `/mail`, e ela cuida do SMTP. O envio é **best-effort** — uma falha é registrada no log e **não bloqueia** a transição de status da OS (com timeout de 15s).
+O envio de e-mail (finalização e entrega; na Fase 4 o orçamento e o link de pagamento são enviados pelo Billing) **não é feito pelo app**: ele faz um `POST` autenticado para a **Lambda de notificações** — que fica no repositório [`tc3-auth-lambda`](https://github.com/tiagostorch/tc3-auth-lambda), **o mesmo da autenticação por CPF** (as duas Lambdas convivem lá, atrás do mesmo API Gateway) —, na rota `/mail`, e ela cuida do SMTP. O envio é **best-effort** — uma falha é registrada no log e **não bloqueia** a transição de status da OS (com timeout de 15s).
 
 Duas variáveis controlam a integração:
 
@@ -527,10 +769,10 @@ Duas variáveis controlam a integração:
 
 A configuração de **SMTP** (host, usuário, senha — Ethereal para testes, ou um provedor real como Amazon SES/SendGrid) vive **na Lambda** (parâmetros no SSM), **não no app**. Ou seja, trocar o provedor de e-mail não toca no código nem no deploy da aplicação.
 
-**Local:** aponte `MAIL_LAMBDA_URL`/`MAIL_LAMBDA_TOKEN` para a Lambda deployada, ou deixe valores quaisquer — o envio falha best-effort, sem quebrar o fluxo. Ao disparar um e-mail (`POST /ordens-servico/:id/enviar-orcamento` ou uma transição para `FINALIZADA`/`ENTREGUE`), o log registra o resultado:
+**Local:** aponte `MAIL_LAMBDA_URL`/`MAIL_LAMBDA_TOKEN` para a Lambda deployada, ou deixe valores quaisquer — o envio falha best-effort, sem quebrar o fluxo. Ao disparar um e-mail (a finalização, quando chega o `ReparoConcluido` da Saga, ou a entrega), o log registra o resultado:
 
 ```
-LOG [NestMailerEmailSender] Email enviado via Lambda: orçamento (OS: OS-2026-000001) para cliente@teste.com
+LOG [NestMailerEmailSender] Email enviado via Lambda: notificação de finalização (OS: OS-2026-000001) para cliente@teste.com
 ```
 
 ## Autenticação
@@ -557,7 +799,7 @@ O token administrativo carrega `{ sub, email }` e é resolvido como `tipo: "admi
 O cliente da oficina autentica **pelo CPF**, através de uma **função serverless (AWS Lambda)** exposta no API Gateway. Ela vive no repositório [`tc3-auth-lambda`](https://github.com/tiagostorch/tc3-auth-lambda) — **o mesmo repositório que também hospeda a Lambda de notificações por e-mail** (`/mail`); são duas funções no mesmo projeto, atrás do mesmo API Gateway. O fluxo:
 
 1. Cliente envia o CPF → `POST /auth` (API Gateway → Lambda)
-2. A Lambda valida os dígitos do CPF, consulta o cliente no banco e verifica se está **ATIVO**
+2. A Lambda valida os dígitos do CPF, consulta o cliente e verifica se está **ATIVO** (na Fase 4, a consulta passa a ser pela rota interna `POST /internal/clientes/busca`, e a Lambda deixa de ler o banco do OS — ver [Rota interna](#rota-interna-da-lambda-de-autenticação))
 3. A Lambda assina um JWT **HS256** com o **mesmo segredo** que a aplicação usa para validar (compartilhado via AWS SSM Parameter Store) e devolve o token
 4. O cliente usa esse token nas rotas protegidas por CPF
 
@@ -603,7 +845,7 @@ sequenceDiagram
 
     rect rgb(240, 255, 245)
     Note over C,DB: Fase 2 — Consumo de rota protegida
-    C->>GW: POST /ordens-servico/minhas/:id/aprovar (Bearer token)
+    C->>GW: GET /ordens-servico/minhas/:id (Bearer token)
     GW->>APP: encaminha (proxy)
     APP->>APP: JwtStrategy valida assinatura/expiração e resolve tipo=cliente
     APP->>APP: JwtAuthGuard (@Roles 'cliente') + ownership (ordem.clienteId == sub)
@@ -614,8 +856,8 @@ sequenceDiagram
     else OS de outro cliente
         APP-->>C: 404
     else autorizado
-        APP->>DB: transiciona AGUARDANDO_APROVACAO → EM_EXECUCAO
-        APP-->>C: 200 OS atualizada
+        APP->>DB: lê a OS com linhas e histórico
+        APP-->>C: 200 OS detalhada
     end
     end
 ```
@@ -634,10 +876,12 @@ curl -X POST https://<api-gateway>/auth \
 curl https://<api-gateway>/ordens-servico/minhas \
   -H 'Authorization: Bearer <jwt-cliente>'
 
-# 3. Aprovar o orçamento da própria OS (AGUARDANDO_APROVACAO → EM_EXECUCAO)
-curl -X POST https://<api-gateway>/ordens-servico/minhas/<osId>/aprovar \
+# 3. Aprovar o orçamento da própria OS (Billing Service, na Fase 4)
+curl https://<api-gateway>/billing/orcamentos?osId=<osId> \
   -H 'Authorization: Bearer <jwt-cliente>'
-# → 200 (OS em EM_EXECUCAO) | 403 token admin | 404 OS de outro cliente
+curl -X POST https://<api-gateway>/billing/orcamentos/<orcamentoId>/aprovar \
+  -H 'Authorization: Bearer <jwt-cliente>'
+# → 200 com o linkPagamento do Mercado Pago | 403 token admin | 404 orçamento de outro cliente
 ```
 
 > A distinção admin/cliente é feita na `JwtStrategy` (pela presença de `tipo: "cliente"` vs `email` no payload) e o controle de acesso no `JwtAuthGuard` + decorator `@Roles`. Ver a [RFC-001](docs/rfc/RFC-001-estrategia-autenticacao.md) para a estratégia completa — alternativas consideradas, consequências e riscos.
@@ -727,19 +971,19 @@ Rotas administrativas (papel `admin` por padrão; token de cliente recebe **403*
 
 | Método | Rota | Descrição |
 |---|---|---|
-| GET | `/ordens-servico` | Listar OS ativas: ordenadas por prioridade de status (`EM_EXECUCAO > AGUARDANDO_APROVACAO > EM_DIAGNOSTICO > RECEBIDA`) e mais antigas primeiro dentro do mesmo status. Excluí OS `FINALIZADA` e `ENTREGUE`. |
+| GET | `/ordens-servico` | Listar OS ativas: ordenadas por prioridade de status (`EM_EXECUCAO > AGUARDANDO_PAGAMENTO > AGUARDANDO_APROVACAO > EM_DIAGNOSTICO > RECEBIDA`) e mais antigas primeiro dentro do mesmo status. Exclui OS `FINALIZADA`, `ENTREGUE` e `CANCELADA`. |
 | GET | `/ordens-servico/:id` | Buscar por ID (com detalhes, linhas e histórico) |
-| POST | `/ordens-servico` | Criar por CPF/CNPJ + placa, com serviços e peças opcionais (baixa atômica de estoque) |
+| POST | `/ordens-servico` | Criar por CPF/CNPJ + placa, com serviços e peças opcionais (baixa atômica de estoque). Inicia a Saga: publica `IniciarDiagnostico`. O header `x-correlation-id` vira o fluxo da OS |
 | PUT | `/ordens-servico/:id` | Atualizar observações |
-| DELETE | `/ordens-servico/:id` | Deletar (cascade nas linhas filhas) |
-| POST | `/ordens-servico/:id/servicos` | Adicionar serviço à OS |
+| DELETE | `/ordens-servico/:id` | Deletar, só OS `CANCELADA` (409 nas demais: a exclusão deixaria a Saga órfã) |
+| POST | `/ordens-servico/:id/servicos` | Adicionar serviço à OS. As rotas de serviços e itens só valem em `RECEBIDA` e `EM_DIAGNOSTICO`, até o diagnóstico concluído (409 depois) |
 | PUT | `/ordens-servico/:id/servicos/:linhaId` | Atualizar quantidade de serviço |
 | DELETE | `/ordens-servico/:id/servicos/:linhaId` | Remover serviço da OS |
 | POST | `/ordens-servico/:id/itens-estoque` | Adicionar item de estoque (com baixa atômica) |
 | PUT | `/ordens-servico/:id/itens-estoque/:linhaId` | Atualizar quantidade de item (ajusta estoque por delta) |
 | DELETE | `/ordens-servico/:id/itens-estoque/:linhaId` | Remover item (restitui estoque) |
-| POST | `/ordens-servico/:id/enviar-orcamento` | Enviar orçamento ao cliente por email (transiciona `EM_DIAGNOSTICO` → `AGUARDANDO_APROVACAO`) |
-| POST | `/ordens-servico/:id/transicao-status` | Transicionar status (avanço linear ou rollback de 1 passo, com validação de máquina de estados) |
+| POST | `/ordens-servico/:id/cancelar` | Cancelar OS que espera o cliente (`AGUARDANDO_APROVACAO` ou `AGUARDANDO_PAGAMENTO`), com `{ motivo }`: devolve o estoque e publica `CancelarOrcamento` |
+| POST | `/ordens-servico/:id/transicao-status` | Registrar a entrega (`FINALIZADA` → `ENTREGUE`). As demais transições vêm da Saga (409) |
 
 ### Ordens de Serviço — Cliente (autenticação por CPF)
 Rotas protegidas por token de cliente (`@Roles('cliente')`) **e** por propriedade: o cliente só opera as próprias OS. Token admin recebe **403**; OS de outro cliente retorna **404**.
@@ -748,18 +992,20 @@ Rotas protegidas por token de cliente (`@Roles('cliente')`) **e** por propriedad
 |---|---|---|
 | GET | `/ordens-servico/minhas` | Listar as próprias OS (filtradas pelo `clienteId` do token), das mais recentes às mais antigas |
 | GET | `/ordens-servico/minhas/:id` | Detalhar uma OS própria (linhas, totais e histórico de status) |
-| POST | `/ordens-servico/minhas/:id/aprovar` | Aprovar o orçamento da própria OS (transiciona `AGUARDANDO_APROVACAO` → `EM_EXECUCAO`) |
-| POST | `/ordens-servico/minhas/:id/rejeitar` | Rejeitar o orçamento da própria OS (rollback `AGUARDANDO_APROVACAO` → `EM_DIAGNOSTICO`) |
+
+A aprovação e a recusa do orçamento saíram daqui na Fase 4: são feitas no Billing, em `POST /billing/orcamentos/{id}/aprovar` e `/recusar`.
 
 ### Acompanhamento Público (sem JWT)
 | Método | Rota | Descrição |
 |---|---|---|
 | GET | `/public/ordens-servico/:codigo?placa=` | Consultar OS pelo código e placa (dupla checagem, sem dados sensíveis de terceiros) |
 
-### Webhook Externo
+### Interno (Lambda de autenticação)
 | Método | Rota | Descrição |
 |---|---|---|
-| POST | `/webhooks/orcamento` | Receber decisão externa de aprovação (`aprovado: true` → `EM_EXECUCAO`) ou recusa (`aprovado: false` → rollback para `EM_DIAGNOSTICO`). Autenticado por header `X-Webhook-Token`. |
+| POST | `/internal/clientes/busca` | Busca o cliente pelo CPF (no corpo) e devolve `{ id, nome, status }`. Autenticado pelo header `x-internal-token` |
+
+O webhook externo de aprovação de orçamento passou para o Billing: `POST /billing/webhooks/orcamento`, com o mesmo corpo.
 
 ### Relatórios (JWT)
 | Método | Rota | Descrição |
@@ -769,27 +1015,24 @@ Rotas protegidas por token de cliente (`@Roles('cliente')`) **e** por propriedad
 ## Fluxo da Ordem de Serviço
 
 ```
-RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → EM_EXECUCAO → FINALIZADA → ENTREGUE
+RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → AGUARDANDO_PAGAMENTO → EM_EXECUCAO → FINALIZADA → ENTREGUE
+                                                                             (ou CANCELADA, por compensação)
 ```
 
-1. **RECEBIDA:** OS criada com cliente (CPF/CNPJ) e veículo (placa)
-2. **EM_DIAGNOSTICO:** mecânico avalia e adiciona serviços/peças necessários
-3. **AGUARDANDO_APROVACAO:** orçamento enviado ao cliente por email (endpoint `enviar-orcamento`), aguardando a decisão do cliente. O cliente pode **rejeitar** (autenticado por CPF, `POST /ordens-servico/minhas/:id/rejeitar`), fazendo rollback para `EM_DIAGNOSTICO` para ajuste e reenvio
-4. **EM_EXECUCAO:** cliente **aprova** o orçamento autenticado por CPF (`POST /ordens-servico/minhas/:id/aprovar`). Alternativas: webhook externo (`aprovado: true`, integração máquina-a-máquina) ou avanço manual pelo admin
-5. **FINALIZADA:** serviço concluído (email automático ao cliente com `finalizadaAt`)
-6. **ENTREGUE:** veículo devolvido ao cliente (email automático de confirmação com `entregueAt`)
+Na Fase 4 as transições vêm da Saga, a partir das respostas do Billing e do Execution. O ciclo completo, os eventos de cada transição e as compensações estão em [Ciclo da OS](#ciclo-da-os) e [Transições e compensações](#transições-e-compensações). Pela API, o funcionário só registra a entrega e cancela OS que esperam o cliente.
 
-Cada transição registra um `HistoricoStatusOS` com data, usuário e observação. Os e-mails são enviados pela Lambda de notificações e são best-effort: uma falha no envio não bloqueia a transição de status.
+Cada transição registra um `HistoricoStatusOS` com data, usuário e observação. As transições da Saga usam o criador da OS como usuário e dizem na observação quem agiu (ADR-001). Os e-mails são enviados pela Lambda de notificações e são best-effort: uma falha no envio não bloqueia a transição de status.
 
 ### Diagrama de sequência — abertura de OS
 
-Fluxo do `POST /ordens-servico`: um funcionário abre a OS por **CPF/CNPJ + placa**, opcionalmente já com serviços e peças. O cliente e o veículo são validados primeiro; a criação em si — validação de serviços/itens, geração do código, criação das linhas com snapshots, baixa de estoque e totais — roda dentro de uma **única transação atômica** (`createComItens`), que reverte por completo se qualquer item estiver indisponível.
+Fluxo do `POST /ordens-servico`: um funcionário abre a OS por **CPF/CNPJ + placa**, opcionalmente já com serviços e peças. O cliente e o veículo são validados primeiro; a criação em si — validação de serviços/itens, geração do código, criação das linhas com snapshots, baixa de estoque, totais e a publicação do primeiro comando da Saga — roda dentro de uma **única transação atômica** (`createComItens`), que reverte por completo se qualquer item estiver indisponível ou se a publicação falhar.
 
 ```mermaid
 sequenceDiagram
     actor F as Funcionário (admin)
     participant API as API (NestJS · EKS)
     participant DB as RDS (PostgreSQL)
+    participant SQS as SQS (oficina-execution-commands)
 
     F->>API: POST /ordens-servico (Bearer admin)<br/>{ cpfCnpj, placa, servicos[], itens[] }
     API->>API: JwtAuthGuard (admin) · valida DTO · normaliza CPF/placa
@@ -809,9 +1052,12 @@ sequenceDiagram
     API->>DB: gera código (OSCodigoCounter do ano) · cria OS (RECEBIDA)
     API->>DB: cria linhas (OSServicos/OSItemEstoque) com snapshots · baixa de estoque
     API->>DB: calcula/grava totais · HistoricoStatusOS inicial
+    API-)SQS: IniciarDiagnostico (antes do commit)
     end
     alt item/serviço indisponível ou estoque insuficiente
         API-->>F: 422 (transação revertida)
+    else publicação falhou
+        API-->>F: 500 (transação revertida)
     else sucesso
         API-->>F: 201 { id, codigo, status: RECEBIDA, valorTotal }
     end
@@ -836,7 +1082,8 @@ há CloudWatch no caminho.
 |---|---|
 | `level`, `timestamp`, `servico` | Configuração do pino em `src/app.module.ts` — os nomes seguem o que o New Relic indexa nativamente |
 | `environment`, `project` | Tags padrão, lidas de `NEW_RELIC_LABELS` (a mesma variável das tags da entidade no APM) |
-| `correlationId` | id da requisição no pino-http (`quietReqLogger`); reaproveita o `x-correlation-id` recebido ou gera um |
+| `correlationId` | Nas requisições, o id do pino-http (`quietReqLogger`), que reaproveita o `x-correlation-id` recebido ou gera um. No consumo das respostas da Saga, o `correlationId` do envelope da mensagem (`contexto-fluxo.ts`), que é o da OS |
+| `osId` | Só no consumo de mensagens: a OS da mensagem |
 | `trace.id`, `span.id`, `entity.*` | `mixin` chamando `newrelic.getLinkingMetadata()` — liga o log ao trace distribuído; com um `traceparent` W3C recebido, o `trace.id` é o do cliente |
 | `evento` + campos em `snake_case` | Evento de negócio emitido pelo caso de uso |
 
@@ -848,9 +1095,14 @@ no `docker compose` no serviço `migrate`. Assim o stdout da API é só JSON e o
 Node recebe o SIGTERM direto (desligamento gracioso, com flush do agente).
 
 **Métricas customizadas** (APM, `Custom/OrdemServico/*`): criação de OS, tempo
-em cada status (medido no commit de toda transição — manual, envio de
-orçamento, decisão do cliente e webhook), lead time até a entrega e falhas por
-etapa. Detalhes, nomes e consultas NRQL em `tc3-infra-k8s/OBSERVABILIDADE.md`.
+em cada status (medido no commit de toda transição — da Saga ou manual —, desde a
+primeira entrada do status atual no histórico), lead time até a entrega e falhas
+por etapa. Detalhes, nomes e consultas NRQL em `tc3-infra-k8s/OBSERVABILIDADE.md`.
+
+**Fluxo distribuído:** o `correlationId` nasce na abertura da OS, fica gravado
+nela e vai em toda mensagem da Saga. O Billing e o Execution escrevem o mesmo id
+nos seus logs, então filtrar por ele no New Relic mostra a OS nos três serviços
+(ver [Rastreamento distribuído](#rastreamento-distribuído)).
 
 Eventos de negócio (`registrarEvento` / `registrarFalha`, em
 `src/common/observability/`) saem pelo mesmo logger da requisição, e por isso
@@ -875,11 +1127,11 @@ no repositório de infraestrutura, em `tc3-infra-k8s/OBSERVABILIDADE.md`.
 
 ## Testes
 
-Cobertura atual: **344 testes unitários** (88 suites) + **62 testes end-to-end** (9 suites, com Postgres real via Testcontainers).
+Resultado atual:
 
-- Statements: **69.41%**
-- Branches: **60.28%**
-- Functions: **66.5%**
+- **438 testes unitários** (103 suítes), com o Jest exigindo pelo menos 80% de linhas e instruções (`coverageThreshold`): **82,4% de linhas**, 82,3% de instruções, 63,1% de branches e 75,1% de funções. Ficam fora da conta o código gerado do Prisma, os `*.module.ts`, `index.ts` e `main.ts`. O orquestrador da Saga tem um teste por linha da [tabela de transições](#transições-e-compensações).
+- **66 testes end-to-end** (10 suítes) com PostgreSQL real (Testcontainers). As respostas do Billing e do Execution são simuladas na fronteira da fila (`responderSaga`), e os comandos publicados ficam num publicador em memória (`ctx.comandos`). Cobrem a Saga de ponta a ponta, as compensações (estoque devolvido, cancelamento, estorno pedido), a trava das linhas e a persistência da Saga (`saga-persistencia.e2e-spec.ts`).
+- **Teste de integração com os três serviços** ([`test/integracao/`](test/integracao/)): 45 verificações com OS, Billing e Execution de verdade, LocalStack e o simulador do Mercado Pago (ver [Teste de integração dos três serviços](#teste-de-integração-dos-três-serviços)).
 
 ```bash
 # Todos os testes unitários
@@ -890,6 +1142,9 @@ npm run test:cov
 
 # Testes end-to-end (usa Testcontainers, requer Docker rodando)
 npm run test:e2e
+
+# Integração com os três serviços (requer Docker e os repositórios do Billing e do Execution)
+cd test/integracao && docker compose -p oficina-integracao up -d --build && bash teste-saga.sh
 
 # Teste específico
 npx jest src/path/to/file.spec.ts
@@ -956,7 +1211,9 @@ Dois workflows em `.github/workflows/`, cada um com seu `concurrency`. Actions p
 | `app/07-ingress.yaml` | Ingress ALB internet-facing (healthcheck `/health`) |
 | `app/08-pdb.yaml` | PodDisruptionBudget `minAvailable: 1` |
 
-> O `Secret` **não é versionado**: o pipeline o monta no momento do deploy a partir do **SSM Parameter Store** (`DATABASE_URL`, `JWT_SECRET`, `NEW_RELIC_LICENSE_KEY` e `MAIL_API_TOKEN` → `MAIL_LAMBDA_TOKEN`) mais o `WEBHOOK_ORCAMENTO_TOKEN` (GitHub secret). O `JWT_SECRET` e o `MAIL_API_TOKEN` são os **mesmos** que as Lambdas de auth e de e-mail usam — por isso vêm do SSM, e não chumbados. As migrations ficam a cargo do **Job** (a imagem só faz `start`); ver [ADR-002](docs/adr/ADR-002-uso-de-hpa.md) sobre o HPA e a [RFC-001](docs/rfc/RFC-001-estrategia-autenticacao.md) sobre o segredo compartilhado.
+> O `Secret` **não é versionado**: o pipeline o monta no momento do deploy a partir do **SSM Parameter Store** (`DATABASE_URL`, `JWT_SECRET`, `NEW_RELIC_LICENSE_KEY`, `MAIL_API_TOKEN` → `MAIL_LAMBDA_TOKEN` e `INTERNAL_API_TOKEN`, gerado pelo `terraform/` deste repositório). As URLs das filas da Saga ficam no ConfigMap, e o acesso às filas vem da role dos nós do EKS (política em `terraform/iam.tf`). O `JWT_SECRET` e o `MAIL_API_TOKEN` são os **mesmos** que as Lambdas de auth e de e-mail usam — por isso vêm do SSM, e não chumbados. As migrations ficam a cargo do **Job** (a imagem só faz `start`); ver [ADR-002](docs/adr/ADR-002-uso-de-hpa.md) sobre o HPA e a [RFC-001](docs/rfc/RFC-001-estrategia-autenticacao.md) sobre o segredo compartilhado.
+
+> **Pendência para a etapa de integração na AWS:** o smoke test do `cd.yml` abre uma OS de teste, e na Fase 4 isso coloca uma tarefa de diagnóstico na fila real do mecânico. Além disso, a limpeza do smoke não consegue mais excluir a OS, porque só OS `CANCELADA` pode ser excluída. O smoke test precisa ser revisto junto com o deploy dos três serviços.
 
 ### Operar o cluster manualmente (kubectl)
 
