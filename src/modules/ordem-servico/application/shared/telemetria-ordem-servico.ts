@@ -6,6 +6,7 @@ import {
   registrarMetrica,
 } from '../../../../common/observability';
 import { StatusOrdemServico } from '../../domain/entity/OrdemServico';
+import { TipoTransicaoOS } from '../../domain/repository/ordem-servico.repository';
 
 /**
  * Telemetria de negócio da ordem de serviço.
@@ -26,7 +27,7 @@ import { StatusOrdemServico } from '../../domain/entity/OrdemServico';
  * (newrelic-dashboard.tf / newrelic-alertas.tf). O agente prefixa `Custom/`:
  * no New Relic eles aparecem como `Custom/OrdemServico/...`.
  *
- * Cardinalidade controlada: o único segmento variável é o status (6 valores do
+ * Cardinalidade controlada: o único segmento variável é o status (8 valores do
  * enum) ou a etapa (2 valores). ID de ordem nunca entra em nome de métrica —
  * cada ordem viraria uma série nova.
  */
@@ -74,7 +75,7 @@ export interface TransicaoDeStatus {
   /** Ausente só em ordens anteriores ao histórico de status. */
   statusAnterior?: StatusOrdemServico;
   statusNovo: StatusOrdemServico;
-  tipoTransicao: 'AVANCO' | 'ROLLBACK';
+  tipoTransicao: TipoTransicaoOS;
   usuarioId: string;
   /** Tempo que a ordem passou em `statusAnterior`. */
   segundosNoStatus?: number;

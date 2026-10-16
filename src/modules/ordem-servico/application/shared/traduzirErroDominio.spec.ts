@@ -9,6 +9,8 @@ import {
   EstoqueInsuficienteError,
   ItemEstoqueIndisponivelError,
   LinhaNaoEncontradaError,
+  LinhasTravadasError,
+  OrdemServicoAlteradaError,
   OSImutavelError,
   ServicoIndisponivelError,
   TransicaoInvalidaError,
@@ -65,6 +67,16 @@ describe('traduzirErroDominio', () => {
     {
       nome: 'TransicaoInvalidaError → 409',
       erro: new TransicaoInvalidaError('RECEBIDA', 'ENTREGUE'),
+      esperado: ConflictException,
+    },
+    {
+      nome: 'LinhasTravadasError → 409',
+      erro: new LinhasTravadasError(),
+      esperado: ConflictException,
+    },
+    {
+      nome: 'OrdemServicoAlteradaError → 409',
+      erro: new OrdemServicoAlteradaError('os-1', ['EM_DIAGNOSTICO']),
       esperado: ConflictException,
     },
   ];

@@ -15,6 +15,8 @@ const AVANCOS: Record<StatusOrdemServico, StatusOrdemServico | null> = {
   EM_EXECUCAO: 'FINALIZADA',
   FINALIZADA: 'ENTREGUE',
   ENTREGUE: null,
+  AGUARDANDO_PAGAMENTO: null,
+  CANCELADA: null,
 };
 
 const ROLLBACKS: Record<StatusOrdemServico, StatusOrdemServico | null> = {
@@ -24,6 +26,8 @@ const ROLLBACKS: Record<StatusOrdemServico, StatusOrdemServico | null> = {
   EM_EXECUCAO: 'AGUARDANDO_APROVACAO',
   FINALIZADA: 'EM_EXECUCAO',
   ENTREGUE: null,
+  AGUARDANDO_PAGAMENTO: null,
+  CANCELADA: null,
 };
 
 export function classificarTransicao(

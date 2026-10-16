@@ -63,6 +63,33 @@ export class OSImutavelError extends Error {
   }
 }
 
+/**
+ * As linhas foram travadas na conclusão do diagnóstico: o orçamento foi gerado
+ * com aquela cópia, e mudar depois faria o cliente aprovar e pagar um valor
+ * diferente do total da OS (docs/contratos.md, seção 6).
+ */
+export class LinhasTravadasError extends Error {
+  name = 'LinhasTravadasError';
+  constructor() {
+    super(
+      'Serviços e itens não podem mais ser alterados: o diagnóstico foi concluído e o orçamento foi gerado com eles',
+    );
+  }
+}
+
+/** O status da OS mudou entre a leitura e a gravação (outra ação chegou antes). */
+export class OrdemServicoAlteradaError extends Error {
+  name = 'OrdemServicoAlteradaError';
+  constructor(
+    public ordemId: string,
+    public statusEsperados: string[],
+  ) {
+    super(
+      `A OS ${ordemId} não está mais em ${statusEsperados.join(' ou ')}: outra ação chegou antes`,
+    );
+  }
+}
+
 export class TransicaoInvalidaError extends Error {
   name = 'TransicaoInvalidaError';
   constructor(

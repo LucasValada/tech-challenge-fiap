@@ -54,6 +54,26 @@ describe('CreateOrdemServicoUseCase', () => {
     expect(mockOrdemRepo.createComItens).not.toHaveBeenCalled();
   });
 
+  it('sem correlationId da requisição, a OS ganha um próprio', async () => {
+    mockClienteRepo.findByCpfCnpj.mockResolvedValue({
+      id: 'cliente-1',
+      cpfCnpj: '52998224725',
+    });
+    mockVeiculoRepo.findByPlaca.mockResolvedValue({
+      id: 'veiculo-1',
+      clienteId: 'cliente-1',
+    });
+    mockOrdemRepo.createComItens.mockResolvedValue({ id: 'ordem-1' });
+
+    await useCase.execute('usuario-1', baseDto);
+
+    expect(mockOrdemRepo.createComItens).toHaveBeenCalledWith(
+      expect.objectContaining({
+        correlationId: expect.stringMatching(/^[0-9a-f-]{36}$/) as string,
+      }),
+    );
+  });
+
   it('lança NotFoundException quando veículo não encontrado', async () => {
     mockClienteRepo.findByCpfCnpj.mockResolvedValue({
       id: 'cliente-1',
@@ -146,14 +166,19 @@ describe('CreateOrdemServicoUseCase', () => {
     const ordemCriada = { id: 'ordem-1' };
     mockOrdemRepo.createComItens.mockResolvedValue(ordemCriada);
 
-    const result = await useCase.execute('usuario-1', {
-      ...baseDto,
-      servicos: [{ servicoId: 'svc-1', quantidade: 1 }],
-      itens: [{ itemEstoqueId: 'item-1', quantidade: 2 }],
-    });
+    const result = await useCase.execute(
+      'usuario-1',
+      {
+        ...baseDto,
+        servicos: [{ servicoId: 'svc-1', quantidade: 1 }],
+        itens: [{ itemEstoqueId: 'item-1', quantidade: 2 }],
+      },
+      'fluxo-da-os',
+    );
 
     expect(result).toBe(ordemCriada);
     expect(mockOrdemRepo.createComItens).toHaveBeenCalledWith({
+      correlationId: 'fluxo-da-os',
       clienteId: 'cliente-1',
       veiculoId: 'veiculo-1',
       usuarioCriadorId: 'usuario-1',

@@ -3,6 +3,8 @@ import { OSServicoLinha } from '../entity/OSServicoLinha';
 import { OSItemEstoqueLinha } from '../entity/OSItemEstoqueLinha';
 
 export interface CreateOrdemServicoComItensData {
+  /** Fluxo da OS na Saga (docs/contratos.md, seção 1). */
+  correlationId: string;
   clienteId: string;
   veiculoId: string;
   usuarioCriadorId: string;
@@ -19,6 +21,50 @@ export interface AdicionarServicoData {
 export interface AdicionarItemEstoqueData {
   itemEstoqueId: string;
   quantidade: number;
+}
+
+/**
+ * Roda dentro da transação, depois das gravações e antes do commit: é onde a
+ * Saga publica a mensagem. Se lançar, nada é gravado (docs/contratos.md,
+ * "gravar e publicar na mesma transação").
+ */
+export type AntesDoCommit<T> = (dados: T) => Promise<void>;
+
+/** Tipo da transição, para a telemetria; as compensações da Saga são COMPENSACAO. */
+export type TipoTransicaoOS = 'AVANCO' | 'ROLLBACK' | 'COMPENSACAO';
+
+export interface OpcoesTransicao {
+  /**
+   * Só transiciona se a OS ainda estiver num destes status (concorrência
+   * otimista). Se outra ação mudou a OS antes, lança OrdemServicoAlteradaError e
+   * nada é gravado.
+   */
+  statusEsperados?: StatusOrdemServico[];
+  /** Compensação: devolve ao estoque as quantidades dos itens da OS. */
+  devolverEstoque?: boolean;
+  /** Gravado quando a transição é para CANCELADA. */
+  motivoCancelamento?: string;
+  antesDoCommit?: AntesDoCommit<OrdemServico>;
+}
+
+/** Cópia das linhas e do cliente que vai no comando GerarOrcamento. */
+export interface SnapshotOrcamento {
+  ordem: OrdemServico;
+  cliente: { id: string; nome: string; email: string | null };
+  servicos: {
+    servicoId: string;
+    nome: string;
+    precoUnitario: number;
+    quantidade: number;
+    subtotal: number;
+  }[];
+  itens: {
+    itemEstoqueId: string;
+    nome: string;
+    precoUnitario: number;
+    quantidade: number;
+    subtotal: number;
+  }[];
 }
 
 export interface UpdateOrdemServicoData {
@@ -65,6 +111,10 @@ export interface OrdemServicoDetalhadaView {
   updatedAt: Date;
   finalizadaAt: Date | null;
   entregueAt: Date | null;
+  correlationId: string;
+  diagnosticoConcluidoAt: Date | null;
+  canceladaAt: Date | null;
+  motivoCancelamento: string | null;
   cliente: { id: string; nome: string; cpfCnpj: string };
   veiculo: {
     id: string;
@@ -148,7 +198,11 @@ export interface OrdemServicoRepository {
     placa: string,
   ): Promise<PublicOrdemServicoView | null>;
 
-  createComItens(data: CreateOrdemServicoComItensData): Promise<OrdemServico>;
+  /** Abre a OS; `antesDoCommit` publica o primeiro comando da Saga. */
+  createComItens(
+    data: CreateOrdemServicoComItensData,
+    antesDoCommit?: AntesDoCommit<OrdemServico>,
+  ): Promise<OrdemServico>;
 
   update(id: string, data: UpdateOrdemServicoData): Promise<OrdemServico>;
 
@@ -183,10 +237,32 @@ export interface OrdemServicoRepository {
   transicionarStatus(
     ordemId: string,
     novoStatus: StatusOrdemServico,
-    tipoTransicao: 'AVANCO' | 'ROLLBACK',
+    tipoTransicao: TipoTransicaoOS,
     usuarioId: string,
     observacao: string | null,
+    opcoes?: OpcoesTransicao,
   ): Promise<OrdemServico>;
+
+  /**
+   * Registra um acontecimento no histórico sem mudar o status (por exemplo,
+   * uma tentativa de pagamento recusada).
+   */
+  registrarNoHistorico(
+    ordemId: string,
+    usuarioId: string,
+    observacao: string,
+  ): Promise<void>;
+
+  /**
+   * Conclui o diagnóstico: trava as linhas e entrega a cópia delas a
+   * `antesDoCommit`, que publica o pedido de orçamento. Só age com a OS em
+   * EM_DIAGNOSTICO e as linhas ainda abertas; devolve false se já tinha sido
+   * concluído (resposta repetida) ou se a OS não está nesse ponto.
+   */
+  concluirDiagnostico(
+    ordemId: string,
+    antesDoCommit: AntesDoCommit<SnapshotOrcamento>,
+  ): Promise<boolean>;
 
   contarLinhas(ordemId: string): Promise<{ servicos: number; itens: number }>;
 

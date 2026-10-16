@@ -9,13 +9,17 @@ import { OSItemEstoqueLinha } from '../../../../modules/ordem-servico/domain/ent
 import {
   AdicionarItemEstoqueData,
   AdicionarServicoData,
+  AntesDoCommit,
   CreateOrdemServicoComItensData,
+  OpcoesTransicao,
   OrdemServicoDetalhadaView,
   OrdemServicoRepository,
   PublicOrdemServicoView,
   RelatorioTempoMedioFiltros,
   RelatorioTempoMedioView,
+  SnapshotOrcamento,
   TempoMedioServicoView,
+  TipoTransicaoOS,
   UpdateOrdemServicoData,
 } from '../../../../modules/ordem-servico/domain/repository/ordem-servico.repository';
 import { OrdemServicoModel } from '../../../../generated/prisma/models';
@@ -24,10 +28,13 @@ import {
   EstoqueInsuficienteError,
   ItemEstoqueIndisponivelError,
   LinhaNaoEncontradaError,
+  LinhasTravadasError,
+  OrdemServicoAlteradaError,
   ServicoIndisponivelError,
 } from '../../../../modules/ordem-servico/domain/errors';
 import { calcularSubtotal } from '../../../../modules/ordem-servico/domain/services/calcularTotaisOS';
 import { gerarCodigoOSSequencial } from '../../../../modules/ordem-servico/domain/services/gerarCodigoOSSequencial';
+import { inicioDoStatusAtual } from '../../../../modules/ordem-servico/domain/services/inicioDoStatusAtual';
 import {
   STATUS_EXCLUIDOS_DA_LISTAGEM,
   prioridadeStatusListagem,
@@ -166,6 +173,10 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
       updatedAt: ordem.updatedAt,
       finalizadaAt: ordem.finalizadaAt ?? null,
       entregueAt: ordem.entregueAt ?? null,
+      correlationId: ordem.correlationId,
+      diagnosticoConcluidoAt: ordem.diagnosticoConcluidoAt ?? null,
+      canceladaAt: ordem.canceladaAt ?? null,
+      motivoCancelamento: ordem.motivoCancelamento ?? null,
       cliente: {
         id: ordem.cliente.id,
         nome: ordem.cliente.nome,
@@ -289,6 +300,7 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
 
   async createComItens(
     data: CreateOrdemServicoComItensData,
+    antesDoCommit?: AntesDoCommit<OrdemServico>,
   ): Promise<OrdemServico> {
     return this.prisma.$transaction(async (tx) => {
       const ano = new Date().getFullYear();
@@ -305,6 +317,7 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
       const ordem = await tx.ordemServico.create({
         data: {
           codigo,
+          correlationId: data.correlationId,
           clienteId: data.clienteId,
           veiculoId: data.veiculoId,
           usuarioCriadorId: data.usuarioCriadorId,
@@ -380,10 +393,11 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
         },
       });
 
-      const finalOrdem = await tx.ordemServico.findUniqueOrThrow({
-        where: { id: ordem.id },
-      });
-      return this.toEntity(finalOrdem);
+      const finalOrdem = this.toEntity(
+        await tx.ordemServico.findUniqueOrThrow({ where: { id: ordem.id } }),
+      );
+      if (antesDoCommit) await antesDoCommit(finalOrdem);
+      return finalOrdem;
     });
   }
 
@@ -409,6 +423,7 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
     data: AdicionarServicoData,
   ): Promise<OSServicoLinha> {
     return this.prisma.$transaction(async (tx) => {
+      await this.garantirLinhasAbertas(tx, ordemId);
       const svc = await tx.servicos.findFirst({
         where: { id: data.servicoId, ativo: true },
       });
@@ -441,6 +456,7 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
 
   async removerServico(ordemId: string, linhaId: string): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
+      await this.garantirLinhasAbertas(tx, ordemId);
       const linha = await tx.oSServicos.findUnique({ where: { id: linhaId } });
       if (!linha || linha.ordemServicoId !== ordemId) {
         throw new LinhaNaoEncontradaError(linhaId);
@@ -456,6 +472,7 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
     quantidade: number,
   ): Promise<OSServicoLinha> {
     return this.prisma.$transaction(async (tx) => {
+      await this.garantirLinhasAbertas(tx, ordemId);
       const linha = await tx.oSServicos.findUnique({ where: { id: linhaId } });
       if (!linha || linha.ordemServicoId !== ordemId) {
         throw new LinhaNaoEncontradaError(linhaId);
@@ -487,6 +504,7 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
     data: AdicionarItemEstoqueData,
   ): Promise<OSItemEstoqueLinha> {
     return this.prisma.$transaction(async (tx) => {
+      await this.garantirLinhasAbertas(tx, ordemId);
       const item = await tx.itemEstoque.findFirst({
         where: { id: data.itemEstoqueId, ativo: true },
       });
@@ -540,6 +558,7 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
 
   async removerItemEstoque(ordemId: string, linhaId: string): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
+      await this.garantirLinhasAbertas(tx, ordemId);
       const linha = await tx.oSItemEstoque.findUnique({
         where: { id: linhaId },
       });
@@ -561,6 +580,7 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
     quantidade: number,
   ): Promise<OSItemEstoqueLinha> {
     return this.prisma.$transaction(async (tx) => {
+      await this.garantirLinhasAbertas(tx, ordemId);
       const linha = await tx.oSItemEstoque.findUnique({
         where: { id: linhaId },
       });
@@ -623,36 +643,46 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
   }
 
   /**
-   * Único ponto por onde toda mudança de status passa — transição manual,
-   * envio de orçamento, decisão do cliente e webhook de orçamento. Por isso a
-   * telemetria da transição é emitida aqui, e não em cada caso de uso: um
-   * quinto caminho que surja amanhã já nasce medido, em vez de abrir um buraco
-   * silencioso no painel de tempo por status.
+   * Único ponto por onde toda mudança de status passa — a entrega manual e as
+   * transições disparadas pela Saga. Por isso a telemetria da transição é
+   * emitida aqui, e não em cada caso de uso: um caminho novo que surja amanhã já
+   * nasce medido, em vez de abrir um buraco silencioso no painel de tempo por
+   * status.
    *
    * A duração sai do histórico, não do `updatedAt`: qualquer edição da ordem
-   * mexe no `updatedAt`, enquanto o histórico só recebe registro em transição.
-   * A entrada mais recente, lida dentro da mesma transação, marca quando a
-   * ordem entrou no status de onde está saindo agora.
+   * mexe no `updatedAt`, enquanto o histórico só recebe registro de status. O
+   * início do status atual é a primeira entrada da sequência mais recente com
+   * esse status — entradas informativas (como uma tentativa de pagamento
+   * recusada) repetem o status e não podem zerar a contagem.
+   *
+   * As opções servem à Saga: só transicionar se a OS ainda estiver no status
+   * lido, devolver o estoque na compensação e publicar a mensagem antes do
+   * commit (docs/contratos.md, seção 1).
    */
   async transicionarStatus(
     ordemId: string,
     novoStatus: StatusOrdemServico,
-    tipoTransicao: 'AVANCO' | 'ROLLBACK',
+    tipoTransicao: TipoTransicaoOS,
     usuarioId: string,
     observacao: string | null,
+    opcoes: OpcoesTransicao = {},
   ): Promise<OrdemServico> {
-    const { ordem, entradaAnterior, entradaNova } =
+    const { ordem, inicioDoStatusAnterior, entradaNova } =
       await this.persistirTransicao(
         ordemId,
         novoStatus,
         tipoTransicao,
         usuarioId,
         observacao,
+        opcoes,
       ).catch((erro: unknown) => {
-        registrarFalhaOrdemServico('transicao_status', erro, {
-          ordem_id: ordemId,
-          status_novo: novoStatus,
-        });
+        // Corrida com outra ação não é falha do sistema: quem chamou decide.
+        if (!(erro instanceof OrdemServicoAlteradaError)) {
+          registrarFalhaOrdemServico('transicao_status', erro, {
+            ordem_id: ordemId,
+            status_novo: novoStatus,
+          });
+        }
         throw erro;
       });
 
@@ -662,12 +692,12 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
     registrarTransicaoDeStatus({
       ordemId,
       codigo: ordem.codigo,
-      statusAnterior: entradaAnterior?.status,
+      statusAnterior: inicioDoStatusAnterior?.status,
       statusNovo: novoStatus,
       tipoTransicao,
       usuarioId,
       segundosNoStatus: segundosEntre(
-        entradaAnterior?.createdAt,
+        inicioDoStatusAnterior?.createdAt,
         entradaNova.createdAt,
       ),
       segundosDesdeAbertura: segundosEntre(
@@ -676,41 +706,61 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
       ),
     });
 
-    return this.toEntity(ordem);
+    return ordem;
   }
 
   private persistirTransicao(
     ordemId: string,
     novoStatus: StatusOrdemServico,
-    tipoTransicao: 'AVANCO' | 'ROLLBACK',
+    tipoTransicao: TipoTransicaoOS,
     usuarioId: string,
     observacao: string | null,
+    opcoes: OpcoesTransicao,
   ) {
     return this.prisma.$transaction(async (tx) => {
-      const entradaAnterior = await tx.historicoStatusOS.findFirst({
+      const historico = await tx.historicoStatusOS.findMany({
         where: { ordemServicoId: ordemId },
         orderBy: { createdAt: 'desc' },
         select: { status: true, createdAt: true },
       });
+      const inicioDoStatusAnterior = inicioDoStatusAtual(historico);
 
-      const updateData: {
-        status: StatusOrdemServico;
-        finalizadaAt?: Date | null;
-        entregueAt?: Date | null;
-      } = { status: novoStatus };
+      const agora = new Date();
+      const updateData: Prisma.OrdemServicoUpdateManyMutationInput = {
+        status: novoStatus,
+      };
 
-      if (tipoTransicao === 'AVANCO') {
-        if (novoStatus === 'FINALIZADA') updateData.finalizadaAt = new Date();
-        if (novoStatus === 'ENTREGUE') updateData.entregueAt = new Date();
-      } else {
+      if (tipoTransicao === 'ROLLBACK') {
         if (novoStatus === 'EM_EXECUCAO') updateData.finalizadaAt = null;
         if (novoStatus === 'FINALIZADA') updateData.entregueAt = null;
+      } else {
+        if (novoStatus === 'FINALIZADA') updateData.finalizadaAt = agora;
+        if (novoStatus === 'ENTREGUE') updateData.entregueAt = agora;
+        if (novoStatus === 'CANCELADA') {
+          updateData.canceladaAt = agora;
+          updateData.motivoCancelamento = opcoes.motivoCancelamento ?? null;
+        }
       }
 
-      const ordem = await tx.ordemServico.update({
-        where: { id: ordemId },
+      // updateMany com o status no filtro: a gravação só acontece se a OS
+      // ainda estiver no status que quem chamou leu.
+      const { count } = await tx.ordemServico.updateMany({
+        where: {
+          id: ordemId,
+          ...(opcoes.statusEsperados && {
+            status: { in: opcoes.statusEsperados },
+          }),
+        },
         data: updateData,
       });
+      if (count === 0) {
+        throw new OrdemServicoAlteradaError(
+          ordemId,
+          opcoes.statusEsperados ?? [],
+        );
+      }
+
+      if (opcoes.devolverEstoque) await this.devolverEstoque(tx, ordemId);
 
       const entradaNova = await tx.historicoStatusOS.create({
         data: {
@@ -722,8 +772,113 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
         select: { createdAt: true },
       });
 
-      return { ordem, entradaAnterior, entradaNova };
+      const ordem = this.toEntity(
+        await tx.ordemServico.findUniqueOrThrow({ where: { id: ordemId } }),
+      );
+      if (opcoes.antesDoCommit) await opcoes.antesDoCommit(ordem);
+
+      return { ordem, inicioDoStatusAnterior, entradaNova };
     });
+  }
+
+  async registrarNoHistorico(
+    ordemId: string,
+    usuarioId: string,
+    observacao: string,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const { status } = await tx.ordemServico.findUniqueOrThrow({
+        where: { id: ordemId },
+        select: { status: true },
+      });
+      await tx.historicoStatusOS.create({
+        data: { ordemServicoId: ordemId, status, usuarioId, observacao },
+      });
+    });
+  }
+
+  async concluirDiagnostico(
+    ordemId: string,
+    antesDoCommit: AntesDoCommit<SnapshotOrcamento>,
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      // Trava as linhas: a partir daqui as edições de serviços e itens são
+      // recusadas (garantirLinhasAbertas). O filtro torna a conclusão única.
+      const { count } = await tx.ordemServico.updateMany({
+        where: {
+          id: ordemId,
+          status: 'EM_DIAGNOSTICO',
+          diagnosticoConcluidoAt: null,
+        },
+        data: { diagnosticoConcluidoAt: new Date() },
+      });
+      if (count === 0) return false;
+
+      const ordem = await tx.ordemServico.findUniqueOrThrow({
+        where: { id: ordemId },
+        include: {
+          cliente: { select: { id: true, nome: true, email: true } },
+          osServicos: { orderBy: { createdAt: 'asc' } },
+          osItensEstoque: { orderBy: { createdAt: 'asc' } },
+        },
+      });
+
+      await antesDoCommit({
+        ordem: this.toEntity(ordem),
+        cliente: {
+          id: ordem.cliente.id,
+          nome: ordem.cliente.nome,
+          email: ordem.cliente.email ?? null,
+        },
+        servicos: ordem.osServicos.map((s) => ({
+          servicoId: s.servicoId,
+          nome: s.nomeSnapshot,
+          precoUnitario: Number(s.precoUnitario),
+          quantidade: s.quantidade,
+          subtotal: Number(s.subtotal),
+        })),
+        itens: ordem.osItensEstoque.map((i) => ({
+          itemEstoqueId: i.itemEstoqueId,
+          nome: i.nomeSnapshot,
+          precoUnitario: Number(i.precoUnitario),
+          quantidade: i.quantidade,
+          subtotal: Number(i.subtotal),
+        })),
+      });
+      return true;
+    });
+  }
+
+  /**
+   * Compensação do estoque: devolve as quantidades de todos os itens da OS. As
+   * linhas continuam na OS, como registro do que tinha sido lançado. Roda dentro
+   * da transação da passagem para CANCELADA, que só acontece uma vez.
+   */
+  private async devolverEstoque(tx: Tx, ordemId: string): Promise<void> {
+    const linhas = await tx.oSItemEstoque.findMany({
+      where: { ordemServicoId: ordemId },
+      select: { itemEstoqueId: true, quantidade: true },
+    });
+    for (const linha of linhas) {
+      await tx.itemEstoque.update({
+        where: { id: linha.itemEstoqueId },
+        data: { quantidadeEstoque: { increment: linha.quantidade } },
+      });
+    }
+  }
+
+  /**
+   * Recusa a edição de linhas depois da conclusão do diagnóstico. O UPDATE
+   * condicional também trava a linha da OS até o fim da transação: uma
+   * conclusão de diagnóstico que chegue no meio espera esta edição terminar, e
+   * o orçamento sai com a linha nova.
+   */
+  private async garantirLinhasAbertas(tx: Tx, ordemId: string): Promise<void> {
+    const { count } = await tx.ordemServico.updateMany({
+      where: { id: ordemId, diagnosticoConcluidoAt: null },
+      data: { updatedAt: new Date() },
+    });
+    if (count === 0) throw new LinhasTravadasError();
   }
 
   private async recalcularTotais(tx: Tx, ordemId: string): Promise<void> {
@@ -875,6 +1030,10 @@ export class PrismaOrdemServicoRepository implements OrdemServicoRepository {
       raw.updatedAt,
       raw.finalizadaAt ?? null,
       raw.entregueAt ?? null,
+      raw.correlationId,
+      raw.diagnosticoConcluidoAt ?? null,
+      raw.canceladaAt ?? null,
+      raw.motivoCancelamento ?? null,
     );
   }
 }

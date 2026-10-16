@@ -164,7 +164,17 @@ describe('OrdemServicoController', () => {
     const result = await controller.create(fakeRequest('usuario-x'), dto);
 
     expect(result).toBe(ordemCriada);
-    expect(create.execute).toHaveBeenCalledWith('usuario-x', dto);
+    expect(create.execute).toHaveBeenCalledWith('usuario-x', dto, undefined);
+  });
+
+  it('POST /ordens-servico → usa o id da requisição como correlationId da OS', async () => {
+    const dto = { cpfCnpj: '529.982.247-25', placa: 'ABC1D23' };
+    create.execute.mockResolvedValue({ id: 'ordem-1' });
+    const req = Object.assign(fakeRequest('usuario-x'), { id: 'fluxo-1' });
+
+    await controller.create(req, dto);
+
+    expect(create.execute).toHaveBeenCalledWith('usuario-x', dto, 'fluxo-1');
   });
 
   it('PUT /ordens-servico/:id → update', async () => {
