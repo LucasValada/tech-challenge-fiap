@@ -80,6 +80,12 @@ spec:
                 secretKeyRef:
                   name: app-secret
                   key: MAIL_LAMBDA_TOKEN
+            # Token das rotas /internal (Lambda de autenticação), do SSM.
+            - name: INTERNAL_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret
+                  key: INTERNAL_API_TOKEN
             # Chave de ingestão do New Relic, sincronizada do SSM pelo CD.
             #
             # `optional: true` porque telemetria não é requisito de subida: sem a

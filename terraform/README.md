@@ -4,6 +4,7 @@ Terraform dos recursos AWS que pertencem a este serviço:
 
 - Fila `oficina-os-saga-replies` (respostas da Saga) e a DLQ `oficina-os-saga-replies-dlq`
 - Política de acesso anexada à role dos nós do EKS: consumir a própria fila e publicar em `oficina-execution-commands` e `oficina-billing-commands`
+- Token das rotas `/internal` (`random_password`), guardado só no SSM em `/tc3-oficina/homolog/INTERNAL_API_TOKEN` (`ssm.tf`). O CD do OS monta o Secret do Kubernetes a partir dele, e a Lambda de autenticação (`tc3-auth-lambda`) lê o mesmo parâmetro para chamar `POST /internal/clientes/busca`
 
 O banco do OS continua em [`tc3-infra-db`](https://github.com/tiagostorch/tc3-infra-db), que cuida só dele, e a imagem continua no ECR de `tc3-infra-k8s`.
 

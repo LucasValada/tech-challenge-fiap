@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ClienteController } from './interface/controller/cliente.controller';
+import { ClienteInternoController } from './interface/controller/cliente-interno.controller';
+import { BuscarClientePorCpfUseCase } from './application/use-case/buscar-cliente-por-cpf.use-case';
 import { PrismaClienteRepository } from '../../infra/database/prisma/repositories/prisma.cliente.repository';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CreateClienteUseCase } from './application/use-case/create-cliente.use-case';
@@ -10,13 +12,14 @@ import { DeleteClienteUseCase } from './application/use-case/delete-cliente.use-
 
 @Module({
   imports: [PrismaModule],
-  controllers: [ClienteController],
+  controllers: [ClienteController, ClienteInternoController],
   providers: [
     CreateClienteUseCase,
     GetAllClientesUseCase,
     GetClienteByIdUseCase,
     UpdateClienteUseCase,
     DeleteClienteUseCase,
+    BuscarClientePorCpfUseCase,
     { provide: 'CLIENTE_REPOSITORY', useClass: PrismaClienteRepository },
   ],
   exports: ['CLIENTE_REPOSITORY'],
