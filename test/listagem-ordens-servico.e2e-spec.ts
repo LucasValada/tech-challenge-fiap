@@ -6,7 +6,7 @@ import {
   criarServicoFixture,
   criarVeiculoFixture,
   limparRecursos,
-  transicionarStatus,
+  levarAte,
 } from './helpers/os-fixtures';
 
 interface OrdemListada {
@@ -54,26 +54,18 @@ describe('GET /ordens-servico — ordenação e filtro (Fase 2)', () => {
 
     const osDiagnostico = (await criarOS(ctx, cpfCnpj, placas[2])).id;
     osIds.push(osDiagnostico);
-    await transicionarStatus(ctx, osDiagnostico, 'EM_DIAGNOSTICO');
+    await levarAte(ctx, osDiagnostico, 'EM_DIAGNOSTICO');
 
     const osAguardando = (await criarOS(ctx, cpfCnpj, placas[3])).id;
     osIds.push(osAguardando);
-    await transicionarStatus(ctx, osAguardando, 'EM_DIAGNOSTICO');
-    await transicionarStatus(ctx, osAguardando, 'AGUARDANDO_APROVACAO');
+    await levarAte(ctx, osAguardando, 'AGUARDANDO_APROVACAO');
 
     const osFinalizada = (await criarOS(ctx, cpfCnpj, placas[4])).id;
     osIds.push(osFinalizada);
     const servicoId = await criarServicoFixture(ctx, 'LST Servico');
     servicoIds.push(servicoId);
     await adicionarServicoNaOS(ctx, osFinalizada, servicoId, 1);
-    for (const status of [
-      'EM_DIAGNOSTICO',
-      'AGUARDANDO_APROVACAO',
-      'EM_EXECUCAO',
-      'FINALIZADA',
-    ]) {
-      await transicionarStatus(ctx, osFinalizada, status);
-    }
+    await levarAte(ctx, osFinalizada, 'FINALIZADA');
 
     const res = await authRequest(ctx, 'get', '/ordens-servico').expect(200);
     const ordens: OrdemListada[] = res.body.ordens;

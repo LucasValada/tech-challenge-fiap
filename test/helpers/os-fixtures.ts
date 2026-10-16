@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { E2eContext, authRequest } from '../setup-e2e';
+import { E2eContext, authRequest, responderSaga } from '../setup-e2e';
 
 export interface ClienteFixtureDto {
   nome: string;
@@ -65,13 +65,39 @@ export async function criarOS(
   return { id: res.body.id as string, codigo: res.body.codigo as string };
 }
 
-export async function transicionarStatus(
+type StatusAlcancavel =
+  | 'EM_DIAGNOSTICO'
+  | 'AGUARDANDO_APROVACAO'
+  | 'AGUARDANDO_PAGAMENTO'
+  | 'EM_EXECUCAO'
+  | 'FINALIZADA'
+  | 'ENTREGUE';
+
+/**
+ * Leva uma OS recém-aberta até o status pedido pelos passos da Saga: cada
+ * passo é a resposta que o Billing ou o Execution daria. A entrega é a única
+ * transição feita pela API.
+ */
+export async function levarAte(
   ctx: E2eContext,
   osId: string,
-  status: string,
+  alvo: StatusAlcancavel,
 ): Promise<void> {
+  // [status depois da resposta (null: não muda), resposta, payload]
+  const passos: [StatusAlcancavel | null, string, Record<string, unknown>][] = [
+    ['EM_DIAGNOSTICO', 'DiagnosticoIniciado', {}],
+    [null, 'DiagnosticoConcluido', {}],
+    ['AGUARDANDO_APROVACAO', 'OrcamentoEnviado', { orcamentoId: 'orc-e2e' }],
+    ['AGUARDANDO_PAGAMENTO', 'OrcamentoAprovado', { origem: 'CLIENTE' }],
+    ['EM_EXECUCAO', 'PagamentoConfirmado', { pagamentoId: '9001' }],
+    ['FINALIZADA', 'ReparoConcluido', {}],
+  ];
+  for (const [statusDepois, tipo, payload] of passos) {
+    await responderSaga(ctx, osId, tipo, payload);
+    if (statusDepois === alvo) return;
+  }
   await authRequest(ctx, 'post', `/ordens-servico/${osId}/transicao-status`)
-    .send({ status })
+    .send({ status: 'ENTREGUE' })
     .expect(200);
 }
 

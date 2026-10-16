@@ -4,6 +4,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { PrismaModule } from './modules/prisma/prisma.module';
+import { AwsModule } from './common/aws/aws.module';
 import { HealthModule } from './modules/health/health.module';
 import { UserModule } from './modules/user/user.module';
 import { AuthModule } from './modules/auth';
@@ -123,6 +124,7 @@ import { TelemetriaShutdown } from './common/observability/telemetria-shutdown';
         ],
       },
     }),
+    AwsModule,
     HealthModule,
     UserModule,
     PrismaModule,

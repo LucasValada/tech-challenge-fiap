@@ -20,6 +20,11 @@ import {
   normalizarPlaca,
 } from '../../domain/services/normalizadores';
 import { CreateOrdemServicoDto } from '../dto/ordem-servico.dto';
+import { iniciarDiagnostico } from '../saga/comandos-saga';
+import {
+  PUBLICADOR_COMANDOS,
+  type PublicadorComandos,
+} from '../saga/mensagens-saga';
 import { traduzirErroDominio } from '../shared/traduzirErroDominio';
 import {
   registrarFalhaOrdemServico,
@@ -36,9 +41,16 @@ export class CreateOrdemServicoUseCase {
     private readonly clienteRepository: ClienteRepository,
     @Inject('VEICULO_REPOSITORY')
     private readonly veiculoRepository: VeiculoRepository,
+    @Inject(PUBLICADOR_COMANDOS)
+    private readonly publicador: PublicadorComandos,
   ) {}
 
   /**
+   * Abre a OS e inicia a Saga: o comando IniciarDiagnostico é publicado dentro
+   * da transação da abertura, antes do commit. Se a publicação falhar, a OS não
+   * é criada (e o estoque baixado volta), em vez de ficar parada em RECEBIDA sem
+   * ninguém saber dela.
+   *
    * @param correlationId Fluxo da OS na Saga. Vem do id da requisição de
    *   abertura (header `x-correlation-id` ou gerado pelo pino-http), então os
    *   logs da abertura e de todas as mensagens da OS ficam com o mesmo id.
@@ -78,15 +90,19 @@ export class CreateOrdemServicoUseCase {
     let ordem: OrdemServico;
 
     try {
-      ordem = await this.ordemServicoRepository.createComItens({
-        correlationId,
-        clienteId: cliente.id,
-        veiculoId: veiculo.id,
-        usuarioCriadorId,
-        observacoes: dto.observacoes ?? null,
-        servicos: dto.servicos ?? [],
-        itens: dto.itens ?? [],
-      });
+      ordem = await this.ordemServicoRepository.createComItens(
+        {
+          correlationId,
+          clienteId: cliente.id,
+          veiculoId: veiculo.id,
+          usuarioCriadorId,
+          observacoes: dto.observacoes ?? null,
+          servicos: dto.servicos ?? [],
+          itens: dto.itens ?? [],
+        },
+        (criada) =>
+          this.publicador.publicar(iniciarDiagnostico(criada, veiculo)),
+      );
     } catch (e) {
       const traduzido = traduzirErroDominio(e);
       const contexto = { cliente_id: cliente.id, veiculo_id: veiculo.id };

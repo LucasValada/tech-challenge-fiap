@@ -16,3 +16,4 @@ test
 infra
 k8s
 .github
+localstack

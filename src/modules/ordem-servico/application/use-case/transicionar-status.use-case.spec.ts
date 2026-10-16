@@ -1,24 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException } from '@nestjs/common';
 import { TransicionarStatusUseCase } from './transicionar-status.use-case';
-import { StatusOrdemServico } from '../../domain/entity/OrdemServico';
+import { NotificadorStatusOS } from '../shared/notificador-status-os';
+import { OrdemServicoAlteradaError } from '../../domain/errors';
 
 const mockOrdemRepo = {
   findById: jest.fn(),
   transicionarStatus: jest.fn(),
-  findByIdComDetalhes: jest.fn(),
 };
-const mockClienteRepo = { findById: jest.fn() };
-const mockEmailSender = {
-  enviarNotificacaoFinalizacao: jest.fn(),
-  enviarNotificacaoEntrega: jest.fn(),
-};
-
-const detalhesMinimos = {
-  codigo: 'OS-2026-000001',
-  cliente: { id: 'cliente-1', nome: 'João' },
-  veiculo: { placa: 'ABC1D23' },
-};
+const mockNotificador = { notificar: jest.fn() };
 
 describe('TransicionarStatusUseCase', () => {
   let useCase: TransicionarStatusUseCase;
@@ -28,8 +18,7 @@ describe('TransicionarStatusUseCase', () => {
       providers: [
         TransicionarStatusUseCase,
         { provide: 'ORDEM_SERVICO_REPOSITORY', useValue: mockOrdemRepo },
-        { provide: 'CLIENTE_REPOSITORY', useValue: mockClienteRepo },
-        { provide: 'EMAIL_SENDER', useValue: mockEmailSender },
+        { provide: NotificadorStatusOS, useValue: mockNotificador },
       ],
     }).compile();
 
@@ -37,101 +26,74 @@ describe('TransicionarStatusUseCase', () => {
     jest.clearAllMocks();
   });
 
-  const mockTransicaoOk = (statusOrigem: StatusOrdemServico) => {
-    mockOrdemRepo.findById.mockResolvedValue({ status: statusOrigem });
-    mockOrdemRepo.transicionarStatus.mockResolvedValue({
-      status: statusOrigem,
-    });
-    mockOrdemRepo.findByIdComDetalhes.mockResolvedValue(detalhesMinimos);
-  };
+  it('registra a entrega a partir de FINALIZADA e avisa o cliente', async () => {
+    mockOrdemRepo.findById.mockResolvedValue({ status: 'FINALIZADA' });
+    const entregue = { id: 'ordem-1', status: 'ENTREGUE' };
+    mockOrdemRepo.transicionarStatus.mockResolvedValue(entregue);
 
-  it('delega ao repositório quando o avanço linear é válido', async () => {
-    mockOrdemRepo.findById.mockResolvedValue({ status: 'RECEBIDA' });
-    const atualizada = { status: 'EM_DIAGNOSTICO' };
-    mockOrdemRepo.transicionarStatus.mockResolvedValue(atualizada);
-
-    const result = await useCase.execute('ordem-1', 'usuario-1', {
-      status: 'EM_DIAGNOSTICO',
-      observacao: 'iniciando diagnóstico',
+    const resultado = await useCase.execute('ordem-1', 'usuario-1', {
+      status: 'ENTREGUE',
+      observacao: 'Cliente retirou o veículo',
     });
 
-    expect(result).toBe(atualizada);
+    expect(resultado).toBe(entregue);
     expect(mockOrdemRepo.transicionarStatus).toHaveBeenCalledWith(
       'ordem-1',
-      'EM_DIAGNOSTICO',
+      'ENTREGUE',
       'AVANCO',
       'usuario-1',
-      'iniciando diagnóstico',
+      'Cliente retirou o veículo',
+      { statusEsperados: ['FINALIZADA'] },
+    );
+    expect(mockNotificador.notificar).toHaveBeenCalledWith(
+      'ordem-1',
+      'ENTREGUE',
     );
   });
 
-  it('lança ConflictException quando tenta pular passos', async () => {
-    mockOrdemRepo.findById.mockResolvedValue({ status: 'RECEBIDA' });
-
-    await expect(
-      useCase.execute('ordem-1', 'usuario-1', { status: 'FINALIZADA' }),
-    ).rejects.toBeInstanceOf(ConflictException);
-    expect(mockOrdemRepo.transicionarStatus).not.toHaveBeenCalled();
-  });
-
-  it('dispara enviarNotificacaoFinalizacao em transição para FINALIZADA', async () => {
-    mockTransicaoOk('EM_EXECUCAO');
-    mockClienteRepo.findById.mockResolvedValue({ email: 'joao@email.com' });
-
-    await useCase.execute('ordem-1', 'usuario-1', { status: 'FINALIZADA' });
-
-    expect(mockEmailSender.enviarNotificacaoFinalizacao).toHaveBeenCalledWith({
-      clienteNome: 'João',
-      clienteEmail: 'joao@email.com',
-      codigoOS: 'OS-2026-000001',
-      placa: 'ABC1D23',
-    });
-    expect(mockEmailSender.enviarNotificacaoEntrega).not.toHaveBeenCalled();
-  });
-
-  it('dispara enviarNotificacaoEntrega em transição para ENTREGUE', async () => {
-    mockTransicaoOk('FINALIZADA');
-    mockClienteRepo.findById.mockResolvedValue({ email: 'joao@email.com' });
+  it('sem observação, grava null', async () => {
+    mockOrdemRepo.findById.mockResolvedValue({ status: 'FINALIZADA' });
+    mockOrdemRepo.transicionarStatus.mockResolvedValue({});
 
     await useCase.execute('ordem-1', 'usuario-1', { status: 'ENTREGUE' });
 
-    expect(mockEmailSender.enviarNotificacaoEntrega).toHaveBeenCalledWith({
-      clienteNome: 'João',
-      clienteEmail: 'joao@email.com',
-      codigoOS: 'OS-2026-000001',
-      placa: 'ABC1D23',
-    });
-    expect(mockEmailSender.enviarNotificacaoFinalizacao).not.toHaveBeenCalled();
+    expect(mockOrdemRepo.transicionarStatus).toHaveBeenCalledWith(
+      'ordem-1',
+      'ENTREGUE',
+      'AVANCO',
+      'usuario-1',
+      null,
+      { statusEsperados: ['FINALIZADA'] },
+    );
   });
 
-  it('não dispara email em transições que não são FINALIZADA nem ENTREGUE', async () => {
-    mockTransicaoOk('RECEBIDA');
+  it.each([
+    ['RECEBIDA', 'EM_DIAGNOSTICO'],
+    ['EM_EXECUCAO', 'FINALIZADA'],
+    ['AGUARDANDO_APROVACAO', 'EM_EXECUCAO'],
+    ['ENTREGUE', 'FINALIZADA'],
+  ] as const)(
+    'recusa com 409 a transição %s → %s, que é da Saga',
+    async (de, para) => {
+      mockOrdemRepo.findById.mockResolvedValue({ status: de });
 
-    await useCase.execute('ordem-1', 'usuario-1', { status: 'EM_DIAGNOSTICO' });
+      await expect(
+        useCase.execute('ordem-1', 'usuario-1', { status: para }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(mockOrdemRepo.transicionarStatus).not.toHaveBeenCalled();
+      expect(mockNotificador.notificar).not.toHaveBeenCalled();
+    },
+  );
 
-    expect(mockEmailSender.enviarNotificacaoFinalizacao).not.toHaveBeenCalled();
-    expect(mockEmailSender.enviarNotificacaoEntrega).not.toHaveBeenCalled();
-    expect(mockClienteRepo.findById).not.toHaveBeenCalled();
-  });
-
-  it('não dispara email quando o cliente não tem email cadastrado', async () => {
-    mockTransicaoOk('EM_EXECUCAO');
-    mockClienteRepo.findById.mockResolvedValue({ email: null });
-
-    await useCase.execute('ordem-1', 'usuario-1', { status: 'FINALIZADA' });
-
-    expect(mockEmailSender.enviarNotificacaoFinalizacao).not.toHaveBeenCalled();
-  });
-
-  it('falha silenciosamente no email sem bloquear a transição', async () => {
-    mockTransicaoOk('EM_EXECUCAO');
-    mockClienteRepo.findById.mockResolvedValue({ email: 'joao@email.com' });
-    mockEmailSender.enviarNotificacaoFinalizacao.mockRejectedValue(
-      new Error('SMTP down'),
+  it('outra ação mudou a OS no meio: 409 e nenhum e-mail', async () => {
+    mockOrdemRepo.findById.mockResolvedValue({ status: 'FINALIZADA' });
+    mockOrdemRepo.transicionarStatus.mockRejectedValue(
+      new OrdemServicoAlteradaError('ordem-1', ['FINALIZADA']),
     );
 
     await expect(
-      useCase.execute('ordem-1', 'usuario-1', { status: 'FINALIZADA' }),
-    ).resolves.toBeDefined();
+      useCase.execute('ordem-1', 'usuario-1', { status: 'ENTREGUE' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(mockNotificador.notificar).not.toHaveBeenCalled();
   });
 });

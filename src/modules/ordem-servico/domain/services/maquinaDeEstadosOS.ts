@@ -1,60 +1,32 @@
 import { StatusOrdemServico } from '../entity/OrdemServico';
 
-export type TipoTransicao = 'AVANCO' | 'ROLLBACK';
-
 export interface ResultadoTransicao {
   valida: boolean;
-  tipo?: TipoTransicao;
   motivo?: string;
 }
 
-const AVANCOS: Record<StatusOrdemServico, StatusOrdemServico | null> = {
-  RECEBIDA: 'EM_DIAGNOSTICO',
-  EM_DIAGNOSTICO: 'AGUARDANDO_APROVACAO',
-  AGUARDANDO_APROVACAO: 'EM_EXECUCAO',
-  EM_EXECUCAO: 'FINALIZADA',
+/**
+ * Na Fase 4 as transições da OS são disparadas pela Saga, a partir das
+ * respostas do Billing e do Execution (ProcessarRespostaSagaUseCase, com a
+ * tabela de docs/contratos.md, seção 6). Pela rota de transição só sobra o que
+ * nenhum outro serviço sabe: a entrega do veículo ao cliente.
+ */
+const TRANSICOES_MANUAIS: Partial<
+  Record<StatusOrdemServico, StatusOrdemServico>
+> = {
   FINALIZADA: 'ENTREGUE',
-  ENTREGUE: null,
-  AGUARDANDO_PAGAMENTO: null,
-  CANCELADA: null,
 };
 
-const ROLLBACKS: Record<StatusOrdemServico, StatusOrdemServico | null> = {
-  RECEBIDA: null,
-  EM_DIAGNOSTICO: 'RECEBIDA',
-  AGUARDANDO_APROVACAO: 'EM_DIAGNOSTICO',
-  EM_EXECUCAO: 'AGUARDANDO_APROVACAO',
-  FINALIZADA: 'EM_EXECUCAO',
-  ENTREGUE: null,
-  AGUARDANDO_PAGAMENTO: null,
-  CANCELADA: null,
-};
-
-export function classificarTransicao(
+export function classificarTransicaoManual(
   de: StatusOrdemServico,
   para: StatusOrdemServico,
 ): ResultadoTransicao {
-  if (de === para) {
-    return {
-      valida: false,
-      motivo: `Transição já está no status ${de}`,
-    };
-  }
-
-  if (AVANCOS[de] === para) {
-    return { valida: true, tipo: 'AVANCO' };
-  }
-
-  if (ROLLBACKS[de] === para) {
-    return { valida: true, tipo: 'ROLLBACK' };
-  }
+  if (TRANSICOES_MANUAIS[de] === para) return { valida: true };
 
   return {
     valida: false,
-    motivo: `Transição ${de} → ${para} não permitida`,
+    motivo:
+      `Transição ${de} → ${para} não é feita pela API: só a entrega ` +
+      '(FINALIZADA → ENTREGUE) é manual; as demais vêm da Saga',
   };
-}
-
-export function ehStatusTerminal(status: StatusOrdemServico): boolean {
-  return AVANCOS[status] === null && ROLLBACKS[status] === null;
 }

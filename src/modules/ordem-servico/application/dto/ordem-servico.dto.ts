@@ -4,10 +4,12 @@ import {
   ArrayMinSize,
   IsArray,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
   Matches,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -102,4 +104,16 @@ export class UpdateOrdemServicoDto {
   @IsOptional()
   @IsString()
   observacoes?: string;
+}
+
+export class CancelarOrdemServicoDto {
+  @ApiProperty({
+    description: 'Por que a OS foi cancelada',
+    example: 'Cliente desistiu do serviço',
+    maxLength: 500,
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(500)
+  motivo!: string;
 }

@@ -23,6 +23,7 @@ import { JwtAuthGuard } from '../../../../common/guards';
 import { Roles } from '../../../../common/decorators';
 import { AuthenticatedUser } from '../../../auth/domain/types';
 import {
+  CancelarOrdemServicoDto,
   CreateOrdemServicoDto,
   UpdateOrdemServicoDto,
 } from '../../application/dto/ordem-servico.dto';
@@ -33,7 +34,6 @@ import { TransicionarStatusDto } from '../../application/dto/transicionar-status
 import { GetAllOrdensServicoUseCase } from '../../application/use-case/get-all-ordens-servico.use-case';
 import { GetMinhasOrdensServicoUseCase } from '../../application/use-case/get-minhas-ordens-servico.use-case';
 import { GetMinhaOrdemServicoUseCase } from '../../application/use-case/get-minha-ordem-servico.use-case';
-import { DecidirOrcamentoClienteUseCase } from '../../application/use-case/decidir-orcamento-cliente.use-case';
 import { GetOrdemServicoByIdUseCase } from '../../application/use-case/get-ordem-servico-by-id.use-case';
 import { CreateOrdemServicoUseCase } from '../../application/use-case/create-ordem-servico.use-case';
 import { UpdateOrdemServicoUseCase } from '../../application/use-case/update-ordem-servico.use-case';
@@ -44,7 +44,7 @@ import { RemoverServicoOSUseCase } from '../../application/use-case/remover-serv
 import { AdicionarItemEstoqueOSUseCase } from '../../application/use-case/adicionar-item-estoque-os.use-case';
 import { AtualizarQuantidadeItemEstoqueUseCase } from '../../application/use-case/atualizar-quantidade-item-estoque.use-case';
 import { RemoverItemEstoqueOSUseCase } from '../../application/use-case/remover-item-estoque-os.use-case';
-import { EnviarOrcamentoUseCase } from '../../application/use-case/enviar-orcamento.use-case';
+import { CancelarOrdemServicoUseCase } from '../../application/use-case/cancelar-ordem-servico.use-case';
 import { TransicionarStatusUseCase } from '../../application/use-case/transicionar-status.use-case';
 
 @ApiTags('Ordens de Serviço')
@@ -56,7 +56,6 @@ export class OrdemServicoController {
     private readonly getAllOrdensServicoUseCase: GetAllOrdensServicoUseCase,
     private readonly getMinhasOrdensServicoUseCase: GetMinhasOrdensServicoUseCase,
     private readonly getMinhaOrdemServicoUseCase: GetMinhaOrdemServicoUseCase,
-    private readonly decidirOrcamentoClienteUseCase: DecidirOrcamentoClienteUseCase,
     private readonly getOrdemServicoByIdUseCase: GetOrdemServicoByIdUseCase,
     private readonly createOrdemServicoUseCase: CreateOrdemServicoUseCase,
     private readonly updateOrdemServicoUseCase: UpdateOrdemServicoUseCase,
@@ -67,7 +66,7 @@ export class OrdemServicoController {
     private readonly adicionarItemEstoqueOSUseCase: AdicionarItemEstoqueOSUseCase,
     private readonly atualizarQuantidadeItemEstoqueUseCase: AtualizarQuantidadeItemEstoqueUseCase,
     private readonly removerItemEstoqueOSUseCase: RemoverItemEstoqueOSUseCase,
-    private readonly enviarOrcamentoUseCase: EnviarOrcamentoUseCase,
+    private readonly cancelarOrdemServicoUseCase: CancelarOrdemServicoUseCase,
     private readonly transicionarStatusUseCase: TransicionarStatusUseCase,
   ) {}
 
@@ -75,9 +74,9 @@ export class OrdemServicoController {
   @ApiOperation({
     summary: 'Listar ordens de serviço ativas',
     description:
-      'Retorna apenas OS em andamento (exclui FINALIZADA e ENTREGUE). ' +
+      'Retorna apenas OS em andamento (exclui FINALIZADA, ENTREGUE e CANCELADA). ' +
       'Ordenadas por prioridade de status ' +
-      '(EM_EXECUCAO > AGUARDANDO_APROVACAO > EM_DIAGNOSTICO > RECEBIDA) ' +
+      '(EM_EXECUCAO > AGUARDANDO_PAGAMENTO > AGUARDANDO_APROVACAO > EM_DIAGNOSTICO > RECEBIDA) ' +
       'e, dentro do mesmo status, mais antigas primeiro (createdAt ASC).',
   })
   @ApiResponse({
@@ -139,74 +138,6 @@ export class OrdemServicoController {
     return this.getMinhaOrdemServicoUseCase.execute(req.user.id, id);
   }
 
-  @Post('minhas/:id/aprovar')
-  @Roles('cliente')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary:
-      'Cliente aprova o orçamento da própria OS (auth por CPF; ' +
-      'AGUARDANDO_APROVACAO → EM_EXECUCAO)',
-    description:
-      'Rota protegida por autenticação via CPF. Apenas o cliente dono da OS ' +
-      '(token emitido pela Lambda) pode aprovar; tokens administrativos recebem 403.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Orçamento aprovado, OS atualizada',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Token não autorizado para este recurso',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'OS não encontrada ou não pertence ao cliente',
-  })
-  @ApiResponse({
-    status: 409,
-    description: 'OS não está em AGUARDANDO_APROVACAO',
-  })
-  async aprovarMinhaOrdem(
-    @Req() req: Request & { user: AuthenticatedUser },
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
-    return this.decidirOrcamentoClienteUseCase.execute(req.user.id, id, true);
-  }
-
-  @Post('minhas/:id/rejeitar')
-  @Roles('cliente')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary:
-      'Cliente rejeita o orçamento da própria OS (auth por CPF; ' +
-      'AGUARDANDO_APROVACAO → EM_DIAGNOSTICO)',
-    description:
-      'Rota protegida por autenticação via CPF. Apenas o cliente dono da OS ' +
-      'pode rejeitar; a OS volta para EM_DIAGNOSTICO. Tokens administrativos recebem 403.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Orçamento recusado, OS atualizada',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Token não autorizado para este recurso',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'OS não encontrada ou não pertence ao cliente',
-  })
-  @ApiResponse({
-    status: 409,
-    description: 'OS não está em AGUARDANDO_APROVACAO',
-  })
-  async rejeitarMinhaOrdem(
-    @Req() req: Request & { user: AuthenticatedUser },
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
-    return this.decidirOrcamentoClienteUseCase.execute(req.user.id, id, false);
-  }
-
   @Get(':id')
   @ApiOperation({
     summary: 'Buscar OS por ID com linhas, totais e histórico de status',
@@ -225,6 +156,10 @@ export class OrdemServicoController {
   @ApiOperation({
     summary:
       'Criar nova OS por CPF/CNPJ + placa, opcionalmente com serviços e peças',
+    description:
+      'Abre a OS em RECEBIDA e inicia a Saga: o diagnóstico entra na fila do ' +
+      'mecânico (Execution). O header x-correlation-id, se enviado, vira o ' +
+      'correlationId da OS em todas as mensagens e logs.',
   })
   @ApiResponse({
     status: 201,
@@ -266,12 +201,17 @@ export class OrdemServicoController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Deletar ordem de serviço' })
+  @ApiOperation({
+    summary: 'Deletar ordem de serviço (só CANCELADA)',
+    description:
+      'Excluir uma OS no meio da Saga deixaria orçamento, pagamento e tarefas órfãos nos outros serviços.',
+  })
   @ApiResponse({
     status: 204,
     description: 'Ordem de serviço deletada com sucesso',
   })
   @ApiResponse({ status: 404, description: 'Ordem de serviço não encontrada' })
+  @ApiResponse({ status: 409, description: 'A OS não está CANCELADA' })
   async delete(@Param('id', ParseUUIDPipe) id: string) {
     await this.deleteOrdemServicoUseCase.execute(id);
   }
@@ -281,7 +221,11 @@ export class OrdemServicoController {
   @ApiOperation({ summary: 'Adicionar serviço à OS' })
   @ApiResponse({ status: 201, description: 'Linha de serviço criada' })
   @ApiResponse({ status: 404, description: 'OS não encontrada' })
-  @ApiResponse({ status: 409, description: 'OS imutável no status atual' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Linhas travadas: só até a conclusão do diagnóstico (RECEBIDA ou EM_DIAGNOSTICO)',
+  })
   @ApiResponse({ status: 422, description: 'Serviço inativo ou inexistente' })
   async adicionarServico(
     @Param('id', ParseUUIDPipe) id: string,
@@ -294,7 +238,11 @@ export class OrdemServicoController {
   @ApiOperation({ summary: 'Atualizar quantidade de uma linha de serviço' })
   @ApiResponse({ status: 200, description: 'Linha atualizada' })
   @ApiResponse({ status: 404, description: 'OS ou linha não encontrada' })
-  @ApiResponse({ status: 409, description: 'OS imutável no status atual' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Linhas travadas: só até a conclusão do diagnóstico (RECEBIDA ou EM_DIAGNOSTICO)',
+  })
   async atualizarQuantidadeServico(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('linhaId', ParseUUIDPipe) linhaId: string,
@@ -312,7 +260,11 @@ export class OrdemServicoController {
   @ApiOperation({ summary: 'Remover serviço da OS' })
   @ApiResponse({ status: 204, description: 'Linha removida' })
   @ApiResponse({ status: 404, description: 'OS ou linha não encontrada' })
-  @ApiResponse({ status: 409, description: 'OS imutável no status atual' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Linhas travadas: só até a conclusão do diagnóstico (RECEBIDA ou EM_DIAGNOSTICO)',
+  })
   async removerServico(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('linhaId', ParseUUIDPipe) linhaId: string,
@@ -327,7 +279,11 @@ export class OrdemServicoController {
   })
   @ApiResponse({ status: 201, description: 'Linha de item criada' })
   @ApiResponse({ status: 404, description: 'OS não encontrada' })
-  @ApiResponse({ status: 409, description: 'OS imutável no status atual' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Linhas travadas: só até a conclusão do diagnóstico (RECEBIDA ou EM_DIAGNOSTICO)',
+  })
   @ApiResponse({
     status: 422,
     description: 'Item inativo ou estoque insuficiente',
@@ -346,7 +302,11 @@ export class OrdemServicoController {
   })
   @ApiResponse({ status: 200, description: 'Linha atualizada' })
   @ApiResponse({ status: 404, description: 'OS ou linha não encontrada' })
-  @ApiResponse({ status: 409, description: 'OS imutável no status atual' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Linhas travadas: só até a conclusão do diagnóstico (RECEBIDA ou EM_DIAGNOSTICO)',
+  })
   @ApiResponse({
     status: 422,
     description: 'Estoque insuficiente para o delta',
@@ -370,7 +330,11 @@ export class OrdemServicoController {
   })
   @ApiResponse({ status: 204, description: 'Linha removida' })
   @ApiResponse({ status: 404, description: 'OS ou linha não encontrada' })
-  @ApiResponse({ status: 409, description: 'OS imutável no status atual' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Linhas travadas: só até a conclusão do diagnóstico (RECEBIDA ou EM_DIAGNOSTICO)',
+  })
   async removerItemEstoque(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('linhaId', ParseUUIDPipe) linhaId: string,
@@ -378,51 +342,49 @@ export class OrdemServicoController {
     await this.removerItemEstoqueOSUseCase.execute(id, linhaId);
   }
 
-  @Post(':id/enviar-orcamento')
+  @Post(':id/cancelar')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      'Enviar orçamento da OS para aprovação do cliente (transiciona EM_DIAGNOSTICO → AGUARDANDO_APROVACAO)',
+    summary: 'Cancelar OS que espera o cliente (aprovação ou pagamento)',
+    description:
+      'Compensação da Saga: devolve o estoque e manda o Billing cancelar o ' +
+      'orçamento, que expira o link de pagamento e estorna se o cliente tiver ' +
+      'pago no meio. Nos status em que o mecânico atua, a OS é cancelada pela ' +
+      'rota falhar do Execution.',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Orçamento enviado, OS detalhada retornada',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'OS não encontrada',
-  })
+  @ApiResponse({ status: 200, description: 'OS cancelada' })
+  @ApiResponse({ status: 404, description: 'OS não encontrada' })
   @ApiResponse({
     status: 409,
-    description: 'OS não está em EM_DIAGNOSTICO',
+    description:
+      'A OS não está em AGUARDANDO_APROVACAO nem AGUARDANDO_PAGAMENTO',
   })
-  @ApiResponse({
-    status: 422,
-    description: 'OS não possui serviços ou peças cadastrados',
-  })
-  async enviarOrcamento(
+  async cancelar(
     @Req() req: Request & { user: AuthenticatedUser },
     @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CancelarOrdemServicoDto,
   ) {
-    return this.enviarOrcamentoUseCase.execute(id, req.user.id);
+    return this.cancelarOrdemServicoUseCase.execute(
+      id,
+      req.user.id,
+      dto.motivo,
+    );
   }
 
   @Post(':id/transicao-status')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Transicionar status da OS (avanço linear ou rollback de 1 passo)',
+    summary: 'Registrar a entrega do veículo (FINALIZADA → ENTREGUE)',
     description:
-      'Avanço linear (RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → ' +
-      'EM_EXECUCAO → FINALIZADA → ENTREGUE) ou rollback de 1 passo. ' +
-      'Transições para FINALIZADA e ENTREGUE disparam, em best-effort, ' +
-      'email de notificação ao cliente quando ele possui email cadastrado ' +
-      '(falha no envio não bloqueia a transição).',
+      'As demais transições vêm da Saga, a partir das respostas do Billing e do ' +
+      'Execution. A entrega dispara, em best-effort, e-mail ao cliente quando ele ' +
+      'tem e-mail cadastrado (falha no envio não bloqueia a transição).',
   })
-  @ApiResponse({ status: 200, description: 'Status transicionado' })
+  @ApiResponse({ status: 200, description: 'OS entregue' })
   @ApiResponse({ status: 404, description: 'OS não encontrada' })
   @ApiResponse({
     status: 409,
-    description: 'Transição inválida pela máquina de estados',
+    description: 'Transição que não é a entrega, ou a OS não está FINALIZADA',
   })
   async transicionarStatus(
     @Req() req: Request & { user: AuthenticatedUser },

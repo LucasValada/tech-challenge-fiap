@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SQSClient } from '@aws-sdk/client-sqs';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ClienteModule } from '../cliente/cliente.module';
 import { VeiculoModule } from '../veiculo/veiculo.module';
@@ -18,16 +19,18 @@ import { RemoverServicoOSUseCase } from './application/use-case/remover-servico-
 import { AdicionarItemEstoqueOSUseCase } from './application/use-case/adicionar-item-estoque-os.use-case';
 import { AtualizarQuantidadeItemEstoqueUseCase } from './application/use-case/atualizar-quantidade-item-estoque.use-case';
 import { RemoverItemEstoqueOSUseCase } from './application/use-case/remover-item-estoque-os.use-case';
-import { EnviarOrcamentoUseCase } from './application/use-case/enviar-orcamento.use-case';
+import { CancelarOrdemServicoUseCase } from './application/use-case/cancelar-ordem-servico.use-case';
+import { ProcessarRespostaSagaUseCase } from './application/use-case/processar-resposta-saga.use-case';
+import { NotificadorStatusOS } from './application/shared/notificador-status-os';
+import { PUBLICADOR_COMANDOS } from './application/saga/mensagens-saga';
+import { RespostasSagaConsumer } from './interface/consumer/respostas-saga.consumer';
+import { PublicadorComandosSqs } from '../../infra/mensageria/publicador-comandos.sqs';
 import { TransicionarStatusUseCase } from './application/use-case/transicionar-status.use-case';
 import { ConsultarOrdemServicoPublicaUseCase } from './application/use-case/consultar-ordem-servico-publica.use-case';
-import { DecidirOrcamentoClienteUseCase } from './application/use-case/decidir-orcamento-cliente.use-case';
 import { RelatorioTempoMedioUseCase } from './application/use-case/relatorio-tempo-medio.use-case';
-import { ProcessarWebhookOrcamentoUseCase } from './application/use-case/processar-webhook-orcamento.use-case';
 import { OrdemServicoController } from './interface/controller/ordem-servico.controller';
 import { PublicOrdemServicoController } from './interface/controller/public-ordem-servico.controller';
 import { RelatorioOrdemServicoController } from './interface/controller/relatorio-ordem-servico.controller';
-import { WebhookOrcamentoController } from './interface/controller/webhook-orcamento.controller';
 import { PrismaOrdemServicoRepository } from '../../infra/database/prisma/repositories/prisma.ordem-servico.repository';
 
 @Module({
@@ -43,13 +46,11 @@ import { PrismaOrdemServicoRepository } from '../../infra/database/prisma/reposi
     OrdemServicoController,
     PublicOrdemServicoController,
     RelatorioOrdemServicoController,
-    WebhookOrcamentoController,
   ],
   providers: [
     GetAllOrdensServicoUseCase,
     GetMinhasOrdensServicoUseCase,
     GetMinhaOrdemServicoUseCase,
-    DecidirOrcamentoClienteUseCase,
     GetOrdemServicoByIdUseCase,
     CreateOrdemServicoUseCase,
     UpdateOrdemServicoUseCase,
@@ -60,11 +61,22 @@ import { PrismaOrdemServicoRepository } from '../../infra/database/prisma/reposi
     AdicionarItemEstoqueOSUseCase,
     AtualizarQuantidadeItemEstoqueUseCase,
     RemoverItemEstoqueOSUseCase,
-    EnviarOrcamentoUseCase,
+    CancelarOrdemServicoUseCase,
+    ProcessarRespostaSagaUseCase,
+    NotificadorStatusOS,
+    RespostasSagaConsumer,
     TransicionarStatusUseCase,
     ConsultarOrdemServicoPublicaUseCase,
     RelatorioTempoMedioUseCase,
-    ProcessarWebhookOrcamentoUseCase,
+    {
+      provide: PUBLICADOR_COMANDOS,
+      inject: [SQSClient],
+      useFactory: (sqs: SQSClient) =>
+        new PublicadorComandosSqs(sqs, {
+          execution: process.env.EXECUTION_COMMANDS_QUEUE_URL ?? '',
+          billing: process.env.BILLING_COMMANDS_QUEUE_URL ?? '',
+        }),
+    },
     {
       provide: 'ORDEM_SERVICO_REPOSITORY',
       useClass: PrismaOrdemServicoRepository,

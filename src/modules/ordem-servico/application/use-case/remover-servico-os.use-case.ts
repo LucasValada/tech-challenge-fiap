@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { OrdemServicoRepository } from '../../domain/repository/ordem-servico.repository';
 import { buscarOrdemServicoOuFalhar } from '../../domain/services/buscarOrdemServicoOuFalhar';
-import { garantirOSMutavel } from '../../domain/services/garantirOSMutavel';
+import { garantirLinhasEditaveis } from '../../domain/services/garantirLinhasEditaveis';
 import { traduzirErroDominio } from '../shared/traduzirErroDominio';
 
 @Injectable()
@@ -17,7 +17,7 @@ export class RemoverServicoOSUseCase {
       ordemId,
     );
     try {
-      garantirOSMutavel(ordem.status);
+      garantirLinhasEditaveis(ordem);
       await this.ordemServicoRepository.removerServico(ordemId, linhaId);
     } catch (e) {
       throw traduzirErroDominio(e);

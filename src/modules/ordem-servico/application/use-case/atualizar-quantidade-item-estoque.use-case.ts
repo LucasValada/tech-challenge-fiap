@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { OrdemServicoRepository } from '../../domain/repository/ordem-servico.repository';
 import { OSItemEstoqueLinha } from '../../domain/entity/OSItemEstoqueLinha';
 import { buscarOrdemServicoOuFalhar } from '../../domain/services/buscarOrdemServicoOuFalhar';
-import { garantirOSMutavel } from '../../domain/services/garantirOSMutavel';
+import { garantirLinhasEditaveis } from '../../domain/services/garantirLinhasEditaveis';
 import { traduzirErroDominio } from '../shared/traduzirErroDominio';
 
 @Injectable()
@@ -22,7 +22,7 @@ export class AtualizarQuantidadeItemEstoqueUseCase {
       ordemId,
     );
     try {
-      garantirOSMutavel(ordem.status);
+      garantirLinhasEditaveis(ordem);
       return await this.ordemServicoRepository.atualizarQuantidadeItemEstoque(
         ordemId,
         linhaId,
