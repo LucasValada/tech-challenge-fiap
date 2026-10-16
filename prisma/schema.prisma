@@ -35,6 +35,10 @@ enum StatusOrdemServico {
   EM_EXECUCAO
   FINALIZADA
   ENTREGUE
+  // Fase 4 (Saga): a OS espera o pagamento entre a aprovação e a execução, e
+  // termina em CANCELADA quando a Saga compensa.
+  AGUARDANDO_PAGAMENTO
+  CANCELADA
 }
 
 model Usuario {
@@ -122,6 +126,16 @@ model OrdemServico {
   updatedAt        DateTime           @updatedAt
   finalizadaAt     DateTime?
   entregueAt       DateTime?
+
+  // ─── Saga (Fase 4) ────────────────────────────────────────────────────
+  /// Fluxo da OS: nasce na abertura e vai em toda mensagem trocada com o
+  /// Billing e o Execution, e em todo log dos três serviços.
+  correlationId          String
+  /// Quando o diagnóstico foi concluído: a partir daí as linhas (serviços e
+  /// itens) ficam travadas, porque o orçamento foi gerado com aquela cópia.
+  diagnosticoConcluidoAt DateTime?
+  canceladaAt            DateTime?
+  motivoCancelamento     String?
 
   cliente         Cliente             @relation(fields: [clienteId], references: [id], onDelete: Restrict)
   veiculo         Veiculo             @relation(fields: [veiculoId], references: [id], onDelete: Restrict)

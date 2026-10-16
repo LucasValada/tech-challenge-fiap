@@ -243,7 +243,11 @@ export class OrdemServicoController {
     @Req() req: Request & { user: AuthenticatedUser },
     @Body() dto: CreateOrdemServicoDto,
   ) {
-    return this.createOrdemServicoUseCase.execute(req.user.id, dto);
+    return this.createOrdemServicoUseCase.execute(
+      req.user.id,
+      dto,
+      correlationIdDaRequisicao(req),
+    );
   }
 
   @Put(':id')
@@ -427,4 +431,14 @@ export class OrdemServicoController {
   ) {
     return this.transicionarStatusUseCase.execute(id, req.user.id, dto);
   }
+}
+
+/**
+ * Id da requisição atribuído pelo pino-http (o header `x-correlation-id`, ou um
+ * UUID novo). É o correlationId que a OS leva por toda a Saga. O pino-http
+ * declara `req.id` como string, número ou objeto; aqui ele é sempre a string do
+ * `genReqId` (app.module.ts), e qualquer outra coisa deixa a OS gerar o seu.
+ */
+function correlationIdDaRequisicao(req: Request): string | undefined {
+  return typeof req.id === 'string' && req.id !== '' ? req.id : undefined;
 }

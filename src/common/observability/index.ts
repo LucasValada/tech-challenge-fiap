@@ -8,6 +8,9 @@ export {
 } from './newrelic';
 export type { AtributosErro, MetadadosTrace } from './newrelic';
 
+export { contextoDoFluxo, executarNoFluxo } from './contexto-fluxo';
+export type { ContextoFluxo } from './contexto-fluxo';
+
 export { tagsDeObservabilidade } from './tags';
 export type { TagsObservabilidade } from './tags';
 

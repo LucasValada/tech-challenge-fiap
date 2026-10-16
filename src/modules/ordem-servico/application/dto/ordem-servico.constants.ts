@@ -7,6 +7,8 @@ export const STATUS_VALUES: StatusOrdemServico[] = [
   'EM_EXECUCAO',
   'FINALIZADA',
   'ENTREGUE',
+  'AGUARDANDO_PAGAMENTO',
+  'CANCELADA',
 ];
 
 export const PLACA_REGEX = /^[A-Za-z]{3}-?\d[A-Za-z\d]\d{2}$/;

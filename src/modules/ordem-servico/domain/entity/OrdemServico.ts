@@ -4,7 +4,9 @@ export type StatusOrdemServico =
   | 'AGUARDANDO_APROVACAO'
   | 'EM_EXECUCAO'
   | 'FINALIZADA'
-  | 'ENTREGUE';
+  | 'ENTREGUE'
+  | 'AGUARDANDO_PAGAMENTO'
+  | 'CANCELADA';
 
 export class OrdemServico {
   constructor(
@@ -22,5 +24,11 @@ export class OrdemServico {
     public updatedAt?: Date,
     public finalizadaAt?: Date | null,
     public entregueAt?: Date | null,
+    /** Fluxo da OS na Saga: vai em toda mensagem e em todo log. */
+    public correlationId?: string,
+    /** A partir daqui as linhas ficam travadas (o orçamento usa essa cópia). */
+    public diagnosticoConcluidoAt?: Date | null,
+    public canceladaAt?: Date | null,
+    public motivoCancelamento?: string | null,
   ) {}
 }

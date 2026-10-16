@@ -5,6 +5,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { OrdemServicoRepository } from '../../domain/repository/ordem-servico.repository';
 import { OrdemServico } from '../../domain/entity/OrdemServico';
 import { ClienteRepository } from '../../../cliente/domain/repository/cliente.repository';
@@ -37,9 +38,15 @@ export class CreateOrdemServicoUseCase {
     private readonly veiculoRepository: VeiculoRepository,
   ) {}
 
+  /**
+   * @param correlationId Fluxo da OS na Saga. Vem do id da requisição de
+   *   abertura (header `x-correlation-id` ou gerado pelo pino-http), então os
+   *   logs da abertura e de todas as mensagens da OS ficam com o mesmo id.
+   */
   async execute(
     usuarioCriadorId: string,
     dto: CreateOrdemServicoDto,
+    correlationId: string = randomUUID(),
   ): Promise<OrdemServico> {
     const cpfCnpjNormalizado = normalizarCpfCnpj(dto.cpfCnpj);
     const placa = normalizarPlaca(dto.placa);
@@ -72,6 +79,7 @@ export class CreateOrdemServicoUseCase {
 
     try {
       ordem = await this.ordemServicoRepository.createComItens({
+        correlationId,
         clienteId: cliente.id,
         veiculoId: veiculo.id,
         usuarioCriadorId,
