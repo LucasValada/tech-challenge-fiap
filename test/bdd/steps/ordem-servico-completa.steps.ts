@@ -366,9 +366,11 @@ Then(
   function (this: MundoOficina) {
     // O link do Checkout Pro leva o id da preferência, criada com o id do
     // orçamento como referência externa.
-    assert.match(
-      this.linkPagamento,
-      new RegExp(`^https?://.+${this.orcamentoId}`),
+    const link = new URL(this.linkPagamento);
+    assert.match(link.protocol, /^https?:$/);
+    assert.ok(
+      link.pathname.includes(this.orcamentoId),
+      `link sem o id do orçamento: ${this.linkPagamento}`,
     );
   },
 );
