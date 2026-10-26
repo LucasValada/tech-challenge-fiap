@@ -72,3 +72,6 @@ infra/*.tfstate.*
 infra/oficina-cluster-config
 infra/crash.log
 infra/crash.*.log
+
+# Relatório do BDD (npm run test:bdd)
+test/bdd/relatorio/

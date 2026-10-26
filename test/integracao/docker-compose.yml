@@ -1,9 +1,11 @@
-# Os três serviços juntos, para o teste de integração da Saga (teste-saga.sh):
+# Os três serviços juntos, para o teste de integração da Saga (teste-saga.sh) e
+# para o BDD do fluxo completo (test/bdd/):
 #   docker compose -p oficina-integracao up -d --build
 #
 # O OS é construído deste repositório. Billing e Execution são construídos dos
 # repositórios deles, cujos caminhos vêm de BILLING_DIR e EXECUTION_DIR (padrão:
-# clonados ao lado deste). No CI, essas imagens virão do ECR.
+# clonados ao lado deste). No CI (job BDD do ci.yml), os dois repositórios são
+# baixados na mesma branch de destino e construídos ali.
 #
 # Dependências simuladas: PostgreSQL do OS e do Billing, LocalStack (SQS e
 # DynamoDB, com os recursos dos terraform/) e o simulador do Mercado Pago

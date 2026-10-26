@@ -18,7 +18,8 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:bdd": "cucumber-js --config test/bdd/cucumber.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "^3.1152.0",
@@ -48,6 +49,7 @@
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
+    "@cucumber/cucumber": "^13.3.0",
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.18.0",
     "@nestjs/cli": "^11.0.0",
