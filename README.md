@@ -548,29 +548,38 @@ graph TB
 
 ### Fluxo de deploy (CI/CD)
 
-Dois workflows em `.github/workflows/`. `ci.yml` valida cada mudança; `cd.yml` empacota e faz o **deploy automático no EKS** a cada push em `develop`/`main` (ambas apontam para o mesmo ambiente único). Autenticação na AWS por **OIDC** (sem chave estática); actions pinadas por SHA.
+Dois workflows em `.github/workflows/`. `ci.yml` é o check `Build & Test` de cada PR; `cd.yml` roda a cada push em `develop`/`main` (ambas apontam para o mesmo ambiente único) e usa o próprio `ci.yml` como primeiro estágio, então cada commit é testado uma vez só antes de virar imagem e **deploy automático no EKS**. Autenticação na AWS por **OIDC** (sem chave estática); actions pinadas por SHA.
 
 ```mermaid
 graph LR
+    PR["PR para<br/>develop ou main"]
     Dev["Push/merge em<br/>develop ou main"]
 
-    subgraph CI["ci.yml — Integration (push + PR)"]
-        CIJob["Build & Test<br/>npm ci · prisma generate<br/>testes unitários · build"]
+    subgraph CI["ci.yml — check do PR"]
+        CIJob["Build & Test<br/>npm ci · prisma generate · lint<br/>testes com cobertura (mínimo 80%) · build"]
     end
 
     subgraph CD["cd.yml — Delivery (só push)"]
-        Guard["1 · Test guard<br/>repete os testes"]
+        Guard["1 · CI<br/>o mesmo ci.yml"]
+        Amb{"Ambiente na AWS<br/>role e cluster existem?"}
         Build["2 · Build & Push (ECR)<br/>OIDC · docker build linux/amd64<br/>push no ECR (tag = SHA)"]
         Deploy["3 · Deploy (EKS)<br/>update-kubeconfig<br/>Secret montado do SSM · configmap<br/>Job de migration (aguarda concluir)<br/>apply deployment/service/hpa/ingress/pdb<br/>rollout status + smoke test"]
-        Guard --> Build --> Deploy
+        Pula["Pulado, com aviso"]
+        Guard --> Build
+        Amb -->|sim| Build
+        Amb -->|não| Pula
+        Build --> Deploy
     end
 
-    Dev --> CIJob
+    PR --> CIJob
     Dev --> Guard
+    Dev --> Amb
     Deploy --> EKSc["Cluster EKS<br/>aplicação atualizada e validada"]
 ```
 
-> Diagnóstico em falha: se um step do deploy quebra, um passo `if: failure()` dumpa `kubectl get all`, `describe pods`, eventos e logs do namespace. O **smoke test** exercita, contra o app deployado, health/readiness, login, criação de cliente (com normalização de CPF), abertura de OS com baixa de estoque, consulta pública, 401 e HPA/réplicas.
+O ambiente da AWS só existe nas janelas de integração e demonstração. Sem o secret `AWS_ROLE_ARN` ou sem o cluster `tc3-oficina-homolog`, a imagem e o deploy são pulados com um aviso no resumo da execução, em vez de falhar a cada merge; qualquer outro erro falha o pipeline. O endereço do API Gateway (usado na URL da Lambda de e-mail) também vem do SSM, no parâmetro `API_GATEWAY_URL` publicado pela stack `tc3-auth-lambda`, porque muda quando a plataforma é recriada.
+
+> Diagnóstico em falha: se um step do deploy quebra, um passo `if: failure()` dumpa `kubectl get all`, `describe pods`, eventos e logs do namespace. O **smoke test** exercita, contra o app deployado, health/readiness, login, criação de cliente (com normalização de CPF), abertura de OS com baixa de estoque, consulta pública, 401, a **Saga com o Execution Service** (a OS aberta vira tarefa de diagnóstico na fila do mecânico; a falha registrada no Execution volta pela fila de respostas, cancela a OS e devolve o estoque) e HPA/réplicas. Por isso, na subida do ambiente, o Execution é deployado antes do OS. A OS cancelada é excluída no fim; a tarefa fica no DynamoDB do Execution como `FALHOU`.
 
 ## Justificativa do banco de dados
 

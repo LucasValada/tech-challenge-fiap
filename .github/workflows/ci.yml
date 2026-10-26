@@ -1,13 +1,17 @@
 name: CI
 
+# Nos PRs, este workflow é o check `Build & Test`. No push em develop/main quem
+# o roda é o CD (cd.yml), como primeiro estágio antes da imagem e do deploy:
+# cada commit é testado uma vez só.
 on:
-  push:
-    branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_call:
 
+# Chamado pelo CD, `github.workflow` seria o nome do CD; o grupo usa um nome
+# fixo para não colidir com os grupos do workflow que o chama.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
