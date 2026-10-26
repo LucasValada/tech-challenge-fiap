@@ -248,16 +248,28 @@ jobs:
             echo "--- previous $pod ---"; kubectl logs "$pod" -n "$NAMESPACE" --tail=200 --all-containers=true --previous || true
           done
 
+      # Além do próprio OS, confere a Saga com o Execution na AWS: a OS aberta
+      # vira tarefa de diagnóstico na fila do mecânico, a falha registrada no
+      # Execution volta pela fila de respostas e cancela a OS, com o estoque
+      # devolvido. Por isso o Execution precisa estar no ar antes do deploy do
+      # OS (ordem da etapa de integração).
       - name: Smoke test
         run: |
           set -euo pipefail
           kubectl port-forward -n "$NAMESPACE" svc/oficina-api 3000:3000 >/tmp/pf.log 2>&1 &
           PF_PID=$!
+          kubectl port-forward -n oficina-execution svc/oficina-execution 3002:3000 >/tmp/pf-execution.log 2>&1 &
+          PF_EXECUTION_PID=$!
           API=http://localhost:3000
+          EXECUTION=http://localhost:3002/execution
 
           # A RDS é persistente: dados fixos se acumulam e quebram os próximos
           # runs (409 de CPF/placa/SKU). Então cada run usa dados ÚNICOS e limpa
           # o que criou ao sair — best-effort, mesmo em falha, em ordem de FK.
+          # A OS só pode ser excluída CANCELADA, que é como o fluxo abaixo a
+          # deixa; se o smoke test falhar antes disso, ela fica (com dados
+          # únicos, não atrapalha o próximo run). A tarefa no DynamoDB do
+          # Execution fica como FALHOU: o Execution não tem rota de exclusão.
           cleanup() {
             set +e
             [ -n "${OS_ID:-}" ] && curl -s -o /dev/null -X DELETE "$API/ordens-servico/$OS_ID" -H "${AUTH:-}"
@@ -265,9 +277,26 @@ jobs:
             [ -n "${SERVICO_ID:-}" ] && curl -s -o /dev/null -X DELETE "$API/servicos/$SERVICO_ID" -H "${AUTH:-}"
             [ -n "${VEICULO_ID:-}" ] && curl -s -o /dev/null -X DELETE "$API/veiculos/$VEICULO_ID" -H "${AUTH:-}"
             [ -n "${CLIENTE_ID:-}" ] && curl -s -o /dev/null -X DELETE "$API/cliente/$CLIENTE_ID" -H "${AUTH:-}"
-            kill $PF_PID 2>/dev/null
+            kill $PF_PID $PF_EXECUTION_PID 2>/dev/null
           }
           trap cleanup EXIT
+
+          # A Saga é assíncrona: repete a consulta até o valor esperado
+          # aparecer, por até 30 s. Uso: espera "<descrição>" "<esperado>" comando...
+          espera() {
+            local descricao="$1" esperado="$2" valor=""
+            shift 2
+            for i in $(seq 1 30); do
+              valor=$("$@" || true)
+              [ "$valor" = "$esperado" ] && { echo "$descricao após ${i}s"; return 0; }
+              sleep 1
+            done
+            echo "$descricao: esperado '$esperado', veio '$valor' depois de 30s"
+            return 1
+          }
+          status_os() { curl -sf "$API/ordens-servico/$OS_ID" -H "$AUTH" | jq -r '.status'; }
+          tarefa() { curl -sf "$EXECUTION/tarefas?osId=$OS_ID&tipo=DIAGNOSTICO" -H "$AUTH" | jq -r ".[0].$1"; }
+          estoque() { curl -sf "$API/itens-estoque/$ITEM_ID" -H "$AUTH" | jq -r '.quantidadeEstoque'; }
 
           # Dados únicos por run (CPF válido gerado, placa Mercosul e SKU únicos).
           CPF_DIGITS=$(python3 -c "import random; n=[random.randint(0,9) for _ in range(9)]; f=lambda a:(lambda s:(0 if (s*10)%11==10 else (s*10)%11))(sum(v*(len(a)+1-i) for i,v in enumerate(a))); d1=f(n); d2=f(n+[d1]); print(''.join(map(str,n+[d1,d2])))")
@@ -317,7 +346,16 @@ jobs:
           CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API/cliente"); [ "$CODE" = "401" ] || { echo "esperado 401, veio $CODE"; exit 1; }
           echo "público OK / 401 OK"
 
-          echo "=== 7. HPA e réplicas ==="
+          echo "=== 7. Saga com o Execution: falha no diagnóstico cancela a OS ==="
+          espera "tarefa de diagnóstico na fila do mecânico" PENDENTE tarefa status
+          TAREFA_ID=$(tarefa id)
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$EXECUTION/tarefas/$TAREFA_ID/falhar" -H "$AUTH" \
+            -H "Content-Type: application/json" -d '{"motivo":"Smoke test do deploy"}')
+          [ "$CODE" = "200" ] || { echo "falhar a tarefa: esperado 200, veio $CODE"; exit 1; }
+          espera "OS cancelada pela Saga" CANCELADA status_os
+          espera "estoque devolvido (46+4=50)" 50 estoque
+
+          echo "=== 8. HPA e réplicas ==="
           kubectl get hpa oficina-api-hpa -n "$NAMESPACE" >/dev/null
           AVAIL=$(kubectl get deployment/oficina-api -n "$NAMESPACE" -o jsonpath='{.status.availableReplicas}')
           # O HPA existe para variar a contagem, então fixar um número faz o
