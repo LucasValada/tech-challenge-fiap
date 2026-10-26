@@ -61,6 +61,8 @@ jobs:
       COMPOSE: docker compose -p oficina-bdd -f test/integracao/docker-compose.yml
       BILLING_DIR: ${{ github.workspace }}/oficina-billing-service
       EXECUTION_DIR: ${{ github.workspace }}/oficina-execution-service
+      # O JWT_SECRET dos serviços no compose (segredo de teste, só existe ali).
+      BDD_JWT_SECRET: segredo-de-integracao
 
     steps:
       # Nenhum passo deste job faz push: a credencial do GitHub não fica no

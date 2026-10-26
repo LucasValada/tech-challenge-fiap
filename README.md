@@ -273,8 +273,10 @@ cd test/integracao
 BILLING_DIR=<repo do Billing> EXECUTION_DIR=<repo do Execution> \
   docker compose -p oficina-integracao up -d --build --wait
 cd ../..
-npm run test:bdd      # relatório em test/bdd/relatorio/cucumber.html
+BDD_JWT_SECRET=segredo-de-integracao npm run test:bdd   # relatório em test/bdd/relatorio/cucumber.html
 ```
+
+`BDD_JWT_SECRET` é o `JWT_SECRET` dos serviços no compose: o cenário assina com ele o token do cliente, que em produção vem da Lambda de autenticação por CPF.
 
 No CI, o job **BDD (três serviços)** do `ci.yml` faz o mesmo em todo PR: baixa o Billing e o Execution na branch de destino do PR, constrói os três, roda o cenário e publica o relatório HTML como artefato da execução. No push na `develop` e na `main`, o CD roda o mesmo `ci.yml` antes de publicar a imagem.
 
@@ -1173,7 +1175,7 @@ npm run test:e2e
 cd test/integracao && docker compose -p oficina-integracao up -d --build && bash teste-saga.sh
 
 # BDD do fluxo completo (com o mesmo compose no ar)
-npm run test:bdd
+BDD_JWT_SECRET=segredo-de-integracao npm run test:bdd
 
 # Teste específico
 npx jest src/path/to/file.spec.ts

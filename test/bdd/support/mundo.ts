@@ -19,9 +19,19 @@ export const ENDERECOS = {
   mercadoPago: process.env.BDD_MERCADO_PAGO_URL ?? 'http://localhost:8089',
 };
 
-// O mesmo segredo de JWT dos três serviços no compose. Assina o token do
-// cliente, que em produção vem da Lambda de autenticação por CPF.
-const JWT_SECRET = process.env.BDD_JWT_SECRET ?? 'segredo-de-integracao';
+// Segredo que assina o token do cliente, que em produção vem da Lambda de
+// autenticação por CPF. É o JWT_SECRET dos serviços no ambiente testado (no
+// compose de test/integracao/) e chega por variável de ambiente, como chega aos
+// próprios serviços: a configuração fica no ambiente, não no código.
+function segredoJwt(): string {
+  const segredo = process.env.BDD_JWT_SECRET;
+  if (!segredo) {
+    throw new Error(
+      'BDD_JWT_SECRET ausente: use o JWT_SECRET dos serviços testados (test/integracao/docker-compose.yml)',
+    );
+  }
+  return segredo;
+}
 
 // A Saga é assíncrona: cada etapa espera a mensagem atravessar as filas. 30 s
 // por espera cobre com folga o long polling dos consumidores.
@@ -124,7 +134,7 @@ export class MundoOficina extends World {
       nome: 'Cliente BDD',
       exp: Math.floor(Date.now() / 1000) + 3600,
     });
-    const assinatura = createHmac('sha256', JWT_SECRET)
+    const assinatura = createHmac('sha256', segredoJwt())
       .update(`${cabecalho}.${corpo}`)
       .digest('base64url');
     return `${cabecalho}.${corpo}.${assinatura}`;
@@ -136,6 +146,7 @@ setWorldConstructor(MundoOficina);
 // Os serviços terminam de subir (migrações, filas) depois que o compose
 // responde; o primeiro cenário só começa com os três prontos.
 BeforeAll({ timeout: 130_000 }, async function () {
+  segredoJwt();
   const limite = Date.now() + 120_000;
   for (const url of [
     `${ENDERECOS.os}/health/ready`,
