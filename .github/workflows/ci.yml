@@ -46,16 +46,21 @@ jobs:
   # professor orientou: OS construído deste commit, Billing e Execution
   # construídos dos repositórios deles na mesma branch de destino (develop ou
   # main), dois PostgreSQL, LocalStack (SQS e DynamoDB) e o simulador do
-  # Mercado Pago (compose de test/integracao/).
+  # Mercado Pago (compose de test/integracao/). Os três repositórios ficam lado
+  # a lado, como na máquina de quem desenvolve: dentro da pasta do OS, os outros
+  # dois entrariam no contexto do build da imagem dele.
   bdd:
     name: BDD (três serviços)
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    defaults:
+      run:
+        working-directory: os
     env:
       COMPOSE: docker compose -p oficina-bdd -f test/integracao/docker-compose.yml
-      BILLING_DIR: ${{ github.workspace }}/servicos/oficina-billing-service
-      EXECUTION_DIR: ${{ github.workspace }}/servicos/oficina-execution-service
+      BILLING_DIR: ${{ github.workspace }}/oficina-billing-service
+      EXECUTION_DIR: ${{ github.workspace }}/oficina-execution-service
 
     steps:
       # Nenhum passo deste job faz push: a credencial do GitHub não fica no
@@ -63,6 +68,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          path: os
           persist-credentials: false
 
       - name: Checkout Billing Service
@@ -70,7 +76,7 @@ jobs:
         with:
           repository: fiap-soat-oficina-tech-challenge/oficina-billing-service
           ref: ${{ github.base_ref || github.ref_name }}
-          path: servicos/oficina-billing-service
+          path: oficina-billing-service
           persist-credentials: false
 
       - name: Checkout Execution Service
@@ -78,7 +84,7 @@ jobs:
         with:
           repository: fiap-soat-oficina-tech-challenge/oficina-execution-service
           ref: ${{ github.base_ref || github.ref_name }}
-          path: servicos/oficina-execution-service
+          path: oficina-execution-service
           persist-credentials: false
 
       - name: Setup Node.js 24
@@ -86,6 +92,7 @@ jobs:
         with:
           node-version: "24"
           cache: "npm"
+          cache-dependency-path: os/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -105,7 +112,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: relatorio-bdd
-          path: test/bdd/relatorio/
+          path: os/test/bdd/relatorio/
           if-no-files-found: ignore
 
       - name: Derrubar os serviços
