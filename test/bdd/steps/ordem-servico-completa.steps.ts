@@ -20,7 +20,7 @@ defineParameterType({
   name: 'reais',
   regexp: /R\$ \d{1,3}(?:\.\d{3})*,\d{2}/,
   transformer: (texto: string) =>
-    Number(texto.replace('R$ ', '').replace(/\./g, '').replace(',', '.')),
+    Number(texto.replace('R$ ', '').replaceAll('.', '').replace(',', '.')),
 });
 
 // Formato das respostas usadas pelos passos (Swagger de cada serviço).
@@ -103,12 +103,18 @@ async function iniciarEConcluir(
 ): Promise<void> {
   const atual = await tarefa(mundo, tipo);
   assert.ok(atual, `nenhuma tarefa de ${tipo} para a OS`);
-  for (const acao of ['iniciar', 'concluir']) {
-    await mundo.exigir('POST', `${EXECUTION}/tarefas/${atual.id}/${acao}`, {
-      token: mundo.tokenFuncionario,
-      corpo: {},
-    });
-  }
+  // Em ordem: o Execution só aceita concluir uma tarefa já iniciada.
+  const opcoes = { token: mundo.tokenFuncionario, corpo: {} };
+  await mundo.exigir(
+    'POST',
+    `${EXECUTION}/tarefas/${atual.id}/iniciar`,
+    opcoes,
+  );
+  await mundo.exigir(
+    'POST',
+    `${EXECUTION}/tarefas/${atual.id}/concluir`,
+    opcoes,
+  );
 }
 
 // ─── Contexto ────────────────────────────────────────────────────────────────
@@ -118,17 +124,17 @@ Given(
   async function (this: MundoOficina) {
     // O BeforeAll (support/mundo.ts) já esperou a readiness dos três; aqui fica
     // a confirmação explícita para o relatório do cenário.
-    for (const url of [
+    const urls = [
       `${OS}/health/ready`,
       `${BILLING}/health/ready`,
       `${EXECUTION}/health/ready`,
-    ]) {
-      assert.equal(
-        (await this.requisitar('GET', url)).status,
-        200,
-        `${url} não está pronto`,
-      );
-    }
+    ];
+    const respostas = await Promise.all(
+      urls.map((url) => this.requisitar('GET', url)),
+    );
+    respostas.forEach((resposta, i) =>
+      assert.equal(resposta.status, 200, `${urls[i]} não está pronto`),
+    );
   },
 );
 

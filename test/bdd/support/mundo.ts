@@ -111,15 +111,12 @@ export class MundoOficina extends World {
     consultar: () => Promise<T>,
     esperado: T,
   ): Promise<void> {
-    const limite = Date.now() + LIMITE_ESPERA_MS;
-    let ultimo: T | undefined;
-    while (Date.now() < limite) {
-      ultimo = await consultar();
-      if (ultimo === esperado) return;
-      await aguardar(INTERVALO_ESPERA_MS);
-    }
-    throw new Error(
-      `${descricao}: esperado ${JSON.stringify(esperado)}, veio ${JSON.stringify(ultimo)} depois de ${LIMITE_ESPERA_MS / 1000} s`,
+    await esperarAte(
+      descricao,
+      consultar,
+      esperado,
+      LIMITE_ESPERA_MS,
+      INTERVALO_ESPERA_MS,
     );
   }
 
@@ -147,24 +144,51 @@ setWorldConstructor(MundoOficina);
 // responde; o primeiro cenário só começa com os três prontos.
 BeforeAll({ timeout: 130_000 }, async function () {
   segredoJwt();
-  const limite = Date.now() + 120_000;
-  for (const url of [
+  const urls = [
     `${ENDERECOS.os}/health/ready`,
     `${ENDERECOS.billing}/health/ready`,
     `${ENDERECOS.execution}/health/ready`,
-  ]) {
-    for (;;) {
-      const pronto = await fetch(url).then(
-        (r) => r.ok,
-        () => false,
-      );
-      if (pronto) break;
-      if (Date.now() > limite)
-        throw new Error(`${url} não ficou pronto em 120 s`);
-      await aguardar(1_000);
-    }
-  }
+  ];
+  await Promise.all(
+    urls.map((url) =>
+      esperarAte(
+        `${url} pronto`,
+        () =>
+          fetch(url).then(
+            (r) => r.ok,
+            () => false,
+          ),
+        true,
+        120_000,
+        1_000,
+      ),
+    ),
+  );
 });
+
+/**
+ * Consulta de novo, a cada intervalo, até o valor esperado aparecer ou o limite
+ * passar. As consultas são em sequência de propósito: cada uma só faz sentido
+ * depois que a anterior respondeu.
+ */
+async function esperarAte<T>(
+  descricao: string,
+  consultar: () => Promise<T>,
+  esperado: T,
+  limiteMs: number,
+  intervaloMs: number,
+): Promise<void> {
+  const limite = Date.now() + limiteMs;
+  let ultimo: T | undefined;
+  while (Date.now() < limite) {
+    ultimo = await consultar();
+    if (ultimo === esperado) return;
+    await aguardar(intervaloMs);
+  }
+  throw new Error(
+    `${descricao}: esperado ${JSON.stringify(esperado)}, veio ${JSON.stringify(ultimo)} depois de ${limiteMs / 1000} s`,
+  );
+}
 
 /**
  * Dados únicos por execução (CPF válido, placa e SKU), para o cenário rodar de
@@ -180,13 +204,15 @@ export function cpfAleatorio(): string {
     const resto = (soma * 10) % 11;
     return resto === 10 ? 0 : resto;
   };
-  digitos.push(verificador(digitos));
-  digitos.push(verificador(digitos));
-  return digitos.join('');
+  // O segundo dígito verificador é calculado sobre os nove dígitos mais o
+  // primeiro verificador.
+  const primeiro = verificador(digitos);
+  const segundo = verificador([...digitos, primeiro]);
+  return [...digitos, primeiro, segundo].join('');
 }
 
 export function placaAleatoria(): string {
-  const letra = () => String.fromCharCode(65 + randomInt(26));
+  const letra = () => String.fromCodePoint(65 + randomInt(26));
   return `${letra()}${letra()}${letra()}${randomInt(10)}${letra()}${randomInt(10)}${randomInt(10)}`;
 }
 

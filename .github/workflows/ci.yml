@@ -100,8 +100,10 @@ jobs:
           cache: "npm"
           cache-dependency-path: os/package-lock.json
 
+      # Sem scripts de instalação: o BDD só usa o Cucumber e o ts-node, que não
+      # dependem deles, e nenhum pacote roda código na instalação.
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Subir os três serviços
         run: $COMPOSE up -d --build --wait
