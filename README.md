@@ -253,6 +253,31 @@ São 45 verificações em quatro cenários:
 3. o cancelamento pelo funcionário com o link expirado;
 4. o mesmo `correlationId` nos logs dos três serviços.
 
+### BDD do fluxo completo
+
+O PDF pede pelo menos um fluxo completo testado com BDD, e o professor orientou que o cenário principal suba os três serviços juntos. A funcionalidade [`test/bdd/features/ordem-servico-completa.feature`](test/bdd/features/ordem-servico-completa.feature) descreve em Gherkin, em português, uma OS que vai da abertura à entrega:
+
+1. o funcionário abre a OS e o estoque é baixado;
+2. o Execution põe o diagnóstico na fila e o mecânico o conclui;
+3. o Billing gera o orçamento com o total da OS e o cliente aprova;
+4. o cliente recebe o link do Mercado Pago, que avisa o pagamento aprovado;
+5. o Execution põe o reparo na fila e o mecânico o conclui;
+6. o funcionário registra a entrega.
+
+O histórico da OS precisa mostrar as sete etapas na ordem.
+
+Os passos ([`test/bdd/steps/`](test/bdd/steps/)) chamam só as APIs públicas dos serviços, como fariam o funcionário, o mecânico, o cliente e o Mercado Pago. Cada etapa assíncrona da Saga é esperada consultando de novo até o valor aparecer, por até 30 s, sem pausa fixa. O cenário cria dados únicos (CPF, placa e SKU), então roda de novo no mesmo ambiente sem conflito. Ferramenta: [Cucumber](https://github.com/cucumber/cucumber-js), com os passos em TypeScript.
+
+```bash
+cd test/integracao
+BILLING_DIR=<repo do Billing> EXECUTION_DIR=<repo do Execution> \
+  docker compose -p oficina-integracao up -d --build --wait
+cd ../..
+npm run test:bdd      # relatório em test/bdd/relatorio/cucumber.html
+```
+
+No CI, o job **BDD (três serviços)** do `ci.yml` faz o mesmo em todo PR: baixa o Billing e o Execution na branch de destino do PR, constrói os três, roda o cenário e publica o relatório HTML como artefato da execução. No push na `develop` e na `main`, o CD roda o mesmo `ci.yml` antes de publicar a imagem.
+
 ## Objetivos
 
 - Substituir o controle manual por planilhas por um sistema integrado
@@ -1132,6 +1157,7 @@ Resultado atual:
 - **438 testes unitários** (103 suítes), com o Jest exigindo pelo menos 80% de linhas e instruções (`coverageThreshold`): **82,4% de linhas**, 82,3% de instruções, 63,1% de branches e 75,1% de funções. Ficam fora da conta o código gerado do Prisma, os `*.module.ts`, `index.ts` e `main.ts`. O orquestrador da Saga tem um teste por linha da [tabela de transições](#transições-e-compensações).
 - **66 testes end-to-end** (10 suítes) com PostgreSQL real (Testcontainers). As respostas do Billing e do Execution são simuladas na fronteira da fila (`responderSaga`), e os comandos publicados ficam num publicador em memória (`ctx.comandos`). Cobrem a Saga de ponta a ponta, as compensações (estoque devolvido, cancelamento, estorno pedido), a trava das linhas e a persistência da Saga (`saga-persistencia.e2e-spec.ts`).
 - **Teste de integração com os três serviços** ([`test/integracao/`](test/integracao/)): 45 verificações com OS, Billing e Execution de verdade, LocalStack e o simulador do Mercado Pago (ver [Teste de integração dos três serviços](#teste-de-integração-dos-três-serviços)).
+- **BDD do fluxo completo** ([`test/bdd/`](test/bdd/)): um cenário em Gherkin, com 25 passos, da abertura à entrega, com os três serviços juntos, rodando no CI (ver [BDD do fluxo completo](#bdd-do-fluxo-completo)).
 
 ```bash
 # Todos os testes unitários
@@ -1145,6 +1171,9 @@ npm run test:e2e
 
 # Integração com os três serviços (requer Docker e os repositórios do Billing e do Execution)
 cd test/integracao && docker compose -p oficina-integracao up -d --build && bash teste-saga.sh
+
+# BDD do fluxo completo (com o mesmo compose no ar)
+npm run test:bdd
 
 # Teste específico
 npx jest src/path/to/file.spec.ts
@@ -1163,6 +1192,7 @@ npx jest src/path/to/file.spec.ts
 | `npm test` | Testes unitários |
 | `npm run test:cov` | Testes com cobertura |
 | `npm run test:e2e` | Testes end-to-end |
+| `npm run test:bdd` | BDD do fluxo completo (três serviços no ar pelo compose de `test/integracao/`) |
 
 ---
 
