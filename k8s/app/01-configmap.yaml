@@ -9,9 +9,12 @@ data:
   JWT_EXPIRES_IN: "1h"
 
   # Notificações serverless: o app não fala SMTP direto — faz POST para a Lambda
-  # de e-mail (rota /mail do API Gateway do repositório tc3-auth-lambda, output
-  # `mail_url`). O token de chamada (MAIL_LAMBDA_TOKEN) vem do Secret app-secret.
-  MAIL_LAMBDA_URL: "https://8hkalepe37.execute-api.us-east-1.amazonaws.com/mail"
+  # de e-mail (rota /mail do API Gateway do repositório tc3-auth-lambda). O
+  # endereço muda quando a plataforma é recriada, então o CD troca
+  # API_GATEWAY_URL_PLACEHOLDER pelo parâmetro API_GATEWAY_URL do SSM, publicado
+  # por aquela stack. O token de chamada (MAIL_LAMBDA_TOKEN) vem do Secret
+  # app-secret.
+  MAIL_LAMBDA_URL: "API_GATEWAY_URL_PLACEHOLDER/mail"
 
   # Saga (docs/contratos.md, seção 4; filas criadas pelo terraform/ de cada
   # serviço). O OS consome as respostas e publica nos comandos do Execution e do
