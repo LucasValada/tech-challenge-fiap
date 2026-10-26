@@ -552,7 +552,7 @@ graph LR
 
 O ambiente da AWS só existe nas janelas de integração e demonstração. Sem o secret `AWS_ROLE_ARN` ou sem o cluster `tc3-oficina-homolog`, a imagem e o deploy são pulados com um aviso no resumo da execução, em vez de falhar a cada merge; qualquer outro erro falha o pipeline. O endereço do API Gateway (usado na URL da Lambda de e-mail) também vem do SSM, no parâmetro `API_GATEWAY_URL` publicado pela stack `tc3-auth-lambda`, porque muda quando a plataforma é recriada.
 
-> Diagnóstico em falha: se um step do deploy quebra, um passo `if: failure()` dumpa `kubectl get all`, `describe pods`, eventos e logs do namespace. O **smoke test** exercita, contra o app deployado, health/readiness, login, criação de cliente (com normalização de CPF), abertura de OS com baixa de estoque, consulta pública, 401 e HPA/réplicas.
+> Diagnóstico em falha: se um step do deploy quebra, um passo `if: failure()` dumpa `kubectl get all`, `describe pods`, eventos e logs do namespace. O **smoke test** exercita, contra o app deployado, health/readiness, login, criação de cliente (com normalização de CPF), abertura de OS com baixa de estoque, consulta pública, 401, a **Saga com o Execution Service** (a OS aberta vira tarefa de diagnóstico na fila do mecânico; a falha registrada no Execution volta pela fila de respostas, cancela a OS e devolve o estoque) e HPA/réplicas. Por isso, na subida do ambiente, o Execution é deployado antes do OS. A OS cancelada é excluída no fim; a tarefa fica no DynamoDB do Execution como `FALHOU`.
 
 ## Justificativa do banco de dados
 
