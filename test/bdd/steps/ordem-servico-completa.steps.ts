@@ -1,5 +1,4 @@
 import { strict as assert } from 'node:assert';
-import { randomInt } from 'node:crypto';
 import {
   Given,
   Then,
@@ -357,27 +356,24 @@ Then(
 );
 
 When('o cliente aprova o orçamento', async function (this: MundoOficina) {
-  const aprovado = await this.exigir<{ linkPagamento: string }>(
-    'POST',
-    `${BILLING}/orcamentos/${this.orcamentoId}/aprovar`,
-    {
-      token: this.tokenCliente,
-    },
-  );
-  this.linkPagamento = aprovado.linkPagamento;
+  const aprovado = await this.exigir<{
+    qrCode: { conteudo: string; imagem: string };
+  }>('POST', `${BILLING}/orcamentos/${this.orcamentoId}/aprovar`, {
+    token: this.tokenCliente,
+  });
+  this.qrCode = aprovado.qrCode;
 });
 
 Then(
-  'o cliente recebe o link de pagamento do Mercado Pago',
+  'o cliente recebe o QR Code de pagamento do Mercado Pago',
   function (this: MundoOficina) {
-    // O link do Checkout Pro leva o id da preferência, criada com o id do
-    // orçamento como referência externa.
-    const link = new URL(this.linkPagamento);
-    assert.match(link.protocol, /^https?:$/);
+    // O simulador devolve um QR Code com o id do orçamento, que vai como
+    // referência externa da order; a imagem é o PNG gerado pelo Billing.
     assert.ok(
-      link.pathname.includes(this.orcamentoId),
-      `link sem o id do orçamento: ${this.linkPagamento}`,
+      this.qrCode.conteudo.includes(this.orcamentoId),
+      `QR Code sem o id do orçamento: ${this.qrCode.conteudo}`,
     );
+    assert.match(this.qrCode.imagem, /^data:image\/png;base64,iVBORw0KGgo/);
   },
 );
 
@@ -386,22 +382,26 @@ When(
   async function (this: MundoOficina) {
     const atual = await orcamento(this);
     assert.ok(atual);
-    const pagamentoId = randomInt(1_000_000, 9_999_999);
-    // O simulador passa a responder a consulta do pagamento como o Mercado Pago
-    // faria; o aviso só traz o id, e o Billing confirma consultando a API.
+    // O simulador cria a order com o id ORD-<id do orçamento> e passa a
+    // responder a consulta dela como paga, como o Mercado Pago faria; o aviso
+    // só traz o id, e o Billing confirma consultando a API.
+    const orderId = `ORD-${this.orcamentoId}`;
+    const valor = atual.valorTotal.toFixed(2);
     await this.exigir('POST', `${MERCADO_PAGO}/__admin/mappings`, {
       corpo: {
-        request: { method: 'GET', urlPath: `/v1/payments/${pagamentoId}` },
+        request: { method: 'GET', urlPath: `/v1/orders/${orderId}` },
         response: {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
           jsonBody: {
-            id: pagamentoId,
-            status: 'approved',
+            id: orderId,
+            type: 'qr',
+            status: 'processed',
             status_detail: 'accredited',
             external_reference: this.orcamentoId,
-            transaction_amount: atual.valorTotal,
-            date_approved: new Date().toISOString(),
+            total_amount: valor,
+            total_paid_amount: valor,
+            last_updated_date: new Date().toISOString(),
           },
         },
       },
@@ -411,9 +411,9 @@ When(
       `${BILLING}/webhooks/mercado-pago`,
       {
         corpo: {
-          type: 'payment',
-          action: 'payment.updated',
-          data: { id: String(pagamentoId) },
+          type: 'order',
+          action: 'order.processed',
+          data: { id: orderId },
         },
       },
     );

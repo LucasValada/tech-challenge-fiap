@@ -100,7 +100,8 @@ services:
       DATABASE_URL: postgresql://billing:billing@postgres-billing:5432/billing?schema=public
       WEBHOOK_ORCAMENTO_TOKEN: token-webhook-de-integracao
       MERCADO_PAGO_API_URL: http://mercado-pago:8080
-      MERCADO_PAGO_ACCESS_TOKEN: TEST-simulador
+      MERCADO_PAGO_ACCESS_TOKEN: APP_USR-simulador
+      MERCADO_PAGO_CAIXA_ID: OFICINA01CAIXA01
     ports:
       - "3001:3000"
     depends_on:

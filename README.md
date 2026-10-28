@@ -50,7 +50,7 @@ Na Fase 4 a oficina foi dividida em **três microsserviços independentes**, cad
 | Serviço | Repositório | Responsabilidade | Banco |
 |---|---|---|---|
 | **OS Service** (este) | [`tech-challenge-fiap`](https://github.com/LucasValada/tech-challenge-fiap) | Abertura, status e histórico da OS; clientes, veículos, catálogo e estoque; **orquestra a Saga** | PostgreSQL (RDS) |
-| **Billing Service** | [`oficina-billing-service`](https://github.com/fiap-soat-oficina-tech-challenge/oficina-billing-service) | Orçamento, aprovação (cliente ou sistema externo), pagamento no Mercado Pago (Checkout Pro) e estorno | PostgreSQL (RDS próprio) |
+| **Billing Service** | [`oficina-billing-service`](https://github.com/fiap-soat-oficina-tech-challenge/oficina-billing-service) | Orçamento, aprovação (cliente ou sistema externo), pagamento no Mercado Pago (QR Code dinâmico) e estorno | PostgreSQL (RDS próprio) |
 | **Execution Service** | [`oficina-execution-service`](https://github.com/fiap-soat-oficina-tech-challenge/oficina-execution-service) | Fila de diagnóstico e reparo do mecânico | DynamoDB |
 
 A plataforma da Fase 3 continua: VPC e EKS ([`tc3-infra-k8s`](https://github.com/tiagostorch/tc3-infra-k8s)), o RDS do OS ([`tc3-infra-db`](https://github.com/tiagostorch/tc3-infra-db)) e o API Gateway com as Lambdas de autenticação e de e-mail ([`tc3-auth-lambda`](https://github.com/tiagostorch/tc3-auth-lambda)). Os três serviços rodam no mesmo cluster, cada um no seu namespace, atrás do mesmo ALB.
@@ -61,7 +61,7 @@ A plataforma da Fase 3 continua: VPC e EKS ([`tc3-infra-k8s`](https://github.com
 graph TB
     Cliente["Cliente / Funcionário / Mecânico"]
     Externo["Sistema externo<br/>(aprovação de orçamento)"]
-    MP["Mercado Pago<br/>(Checkout Pro)"]
+    MP["Mercado Pago<br/>(QR Code dinâmico)"]
 
     subgraph AWS["AWS"]
         GW["API Gateway<br/>/auth · /mail → Lambdas<br/>/#123;proxy+#125; → ALB"]
@@ -159,7 +159,7 @@ stateDiagram-v2
     CANCELADA --> [*]
 ```
 
-Toda passagem para `CANCELADA` é uma compensação: devolve o estoque e grava o motivo. Um pagamento recusado **não** cancela a OS: o link do Mercado Pago continua valendo, e o cliente pode tentar de novo.
+Toda passagem para `CANCELADA` é uma compensação: devolve o estoque e grava o motivo. Um pagamento recusado **não** cancela a OS: o QR Code do Mercado Pago continua valendo, e o cliente paga de novo por ele.
 
 ### Caminho feliz
 
@@ -183,10 +183,10 @@ sequenceDiagram
     OS-)BI: GerarOrcamento (cópia das linhas e preços)
     BI-)OS: OrcamentoEnviado → AGUARDANDO_APROVACAO
     C->>BI: POST /billing/orcamentos/{id}/aprovar
-    BI->>MP: cria o link de pagamento
+    BI->>MP: cria a cobrança (QR Code)
     BI-)OS: OrcamentoAprovado → AGUARDANDO_PAGAMENTO
-    C->>MP: paga pelo link
-    MP->>BI: aviso (webhook) · BI confirma em GET /v1/payments/{id}
+    C->>MP: paga lendo o QR Code no app
+    MP->>BI: aviso (webhook) · BI confirma em GET /v1/orders/{id}
     BI-)OS: PagamentoConfirmado → EM_EXECUCAO
     OS-)EX: IniciarReparo
     M->>EX: iniciar e concluir reparo
@@ -207,8 +207,7 @@ O que o orquestrador faz ao receber cada resposta (`docs/contratos.md`, seção 
 | `EM_DIAGNOSTICO` | `GeracaoOrcamentoFalhou` | **compensa:** devolve o estoque | `CANCELADA` |
 | `AGUARDANDO_APROVACAO` | `OrcamentoAprovado` | — | `AGUARDANDO_PAGAMENTO` |
 | `AGUARDANDO_APROVACAO` | `OrcamentoRecusado` | **compensa:** devolve o estoque | `CANCELADA` |
-| `AGUARDANDO_APROVACAO` ou `AGUARDANDO_PAGAMENTO` | Cancelamento pelo funcionário (REST) | **compensa:** publica `CancelarOrcamento` (o Billing expira o link e estorna, se houver pagamento) e devolve o estoque | `CANCELADA` |
-| `AGUARDANDO_PAGAMENTO` | `PagamentoRecusado` | registra no histórico; o cliente tenta de novo | `AGUARDANDO_PAGAMENTO` |
+| `AGUARDANDO_APROVACAO` ou `AGUARDANDO_PAGAMENTO` | Cancelamento pelo funcionário (REST) | **compensa:** publica `CancelarOrcamento` (o Billing cancela a cobrança e estorna, se houver pagamento) e devolve o estoque | `CANCELADA` |
 | `AGUARDANDO_PAGAMENTO` | `PagamentoConfirmado` | publica `IniciarReparo` | `EM_EXECUCAO` |
 | `EM_EXECUCAO` | `ReparoConcluido` | e-mail de finalização | `FINALIZADA` |
 | `RECEBIDA` ou `EM_DIAGNOSTICO` | `ExecucaoFalhou` (diagnóstico) | **compensa:** devolve o estoque | `CANCELADA` |
@@ -794,7 +793,7 @@ As notificações por e-mail são enviadas por uma **Lambda serverless** — ver
 
 ## Notificações por e-mail (Lambda)
 
-O envio de e-mail (finalização e entrega; na Fase 4 o orçamento e o link de pagamento são enviados pelo Billing) **não é feito pelo app**: ele faz um `POST` autenticado para a **Lambda de notificações** — que fica no repositório [`tc3-auth-lambda`](https://github.com/tiagostorch/tc3-auth-lambda), **o mesmo da autenticação por CPF** (as duas Lambdas convivem lá, atrás do mesmo API Gateway) —, na rota `/mail`, e ela cuida do SMTP. O envio é **best-effort** — uma falha é registrada no log e **não bloqueia** a transição de status da OS (com timeout de 15s).
+O envio de e-mail (finalização e entrega; na Fase 4 o orçamento e o QR Code de pagamento são enviados pelo Billing) **não é feito pelo app**: ele faz um `POST` autenticado para a **Lambda de notificações** — que fica no repositório [`tc3-auth-lambda`](https://github.com/tiagostorch/tc3-auth-lambda), **o mesmo da autenticação por CPF** (as duas Lambdas convivem lá, atrás do mesmo API Gateway) —, na rota `/mail`, e ela cuida do SMTP. O envio é **best-effort** — uma falha é registrada no log e **não bloqueia** a transição de status da OS (com timeout de 15s).
 
 Duas variáveis controlam a integração:
 
@@ -917,7 +916,7 @@ curl https://<api-gateway>/billing/orcamentos?osId=<osId> \
   -H 'Authorization: Bearer <jwt-cliente>'
 curl -X POST https://<api-gateway>/billing/orcamentos/<orcamentoId>/aprovar \
   -H 'Authorization: Bearer <jwt-cliente>'
-# → 200 com o linkPagamento do Mercado Pago | 403 token admin | 404 orçamento de outro cliente
+# → 200 com o qrCode do Mercado Pago (conteúdo e imagem) | 403 token admin | 404 orçamento de outro cliente
 ```
 
 > A distinção admin/cliente é feita na `JwtStrategy` (pela presença de `tipo: "cliente"` vs `email` no payload) e o controle de acesso no `JwtAuthGuard` + decorator `@Roles`. Ver a [RFC-001](docs/rfc/RFC-001-estrategia-autenticacao.md) para a estratégia completa — alternativas consideradas, consequências e riscos.

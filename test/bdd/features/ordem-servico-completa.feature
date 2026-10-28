@@ -25,7 +25,7 @@ Funcionalidade: Ciclo completo de uma ordem de serviço entre os microsserviços
     E a OS fica "AGUARDANDO_APROVACAO"
 
     Quando o cliente aprova o orçamento
-    Então o cliente recebe o link de pagamento do Mercado Pago
+    Então o cliente recebe o QR Code de pagamento do Mercado Pago
     E a OS fica "AGUARDANDO_PAGAMENTO"
 
     Quando o Mercado Pago avisa que o pagamento foi aprovado

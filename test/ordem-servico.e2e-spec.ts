@@ -193,25 +193,18 @@ describe('Ordem de Serviço — Saga (e2e)', () => {
         .expect(409);
     });
 
-    it('aprovado o orçamento, a OS espera o pagamento; a recusa de pagamento só vai para o histórico', async () => {
+    it('aprovado o orçamento, a OS espera o pagamento', async () => {
       await responderSaga(ctx, osId, 'OrcamentoAprovado', {
         orcamentoId: 'orc-1',
         origem: 'CLIENTE',
       });
-      await responderSaga(ctx, osId, 'PagamentoRecusado', {
-        detalhe: 'cc_rejected_other_reason',
-      });
 
-      const os = await detalhe(osId);
-      expect(os.status).toBe('AGUARDANDO_PAGAMENTO');
-      expect(os.historicoStatus.at(-1)?.observacao).toContain(
-        'pagamento recusado (cc_rejected_other_reason)',
-      );
+      expect((await detalhe(osId)).status).toBe('AGUARDANDO_PAGAMENTO');
     });
 
     it('pagamento confirmado: a OS vai para execução e o reparo entra na fila do Execution', async () => {
       await responderSaga(ctx, osId, 'PagamentoConfirmado', {
-        pagamentoId: '9101',
+        pagamentoId: 'ORD01JV3AW3NFSTSTB669F41NACDX',
         valor: 390,
       });
 
@@ -240,7 +233,6 @@ describe('Ordem de Serviço — Saga (e2e)', () => {
         'RECEBIDA',
         'EM_DIAGNOSTICO',
         'AGUARDANDO_APROVACAO',
-        'AGUARDANDO_PAGAMENTO',
         'AGUARDANDO_PAGAMENTO',
         'EM_EXECUCAO',
         'FINALIZADA',

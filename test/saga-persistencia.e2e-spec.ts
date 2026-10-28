@@ -238,14 +238,14 @@ describe('Saga — persistência da OS (e2e)', () => {
     await repositorio.registrarNoHistorico(
       osId,
       await criador(),
-      'Billing: pagamento recusado (cc_rejected_other_reason)',
+      'Execution: diagnóstico iniciado pelo mecânico',
     );
 
     const os = await detalhe();
     expect(os.status).toBe('EM_DIAGNOSTICO');
     expect(os.historicoStatus.at(-1)).toMatchObject({
       status: 'EM_DIAGNOSTICO',
-      observacao: 'Billing: pagamento recusado (cc_rejected_other_reason)',
+      observacao: 'Execution: diagnóstico iniciado pelo mecânico',
     });
   });
 
