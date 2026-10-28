@@ -23,7 +23,6 @@ export const RESPOSTAS = {
   orcamentoAprovado: 'OrcamentoAprovado',
   orcamentoRecusado: 'OrcamentoRecusado',
   pagamentoConfirmado: 'PagamentoConfirmado',
-  pagamentoRecusado: 'PagamentoRecusado',
   pagamentoEstornado: 'PagamentoEstornado',
   reparoConcluido: 'ReparoConcluido',
   execucaoFalhou: 'ExecucaoFalhou',

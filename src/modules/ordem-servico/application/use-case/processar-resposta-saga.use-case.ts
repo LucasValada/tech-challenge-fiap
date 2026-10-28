@@ -55,7 +55,6 @@ export class ProcessarRespostaSagaUseCase {
     [RESPOSTAS.orcamentoAprovado]: (o, e) => this.orcamentoAprovado(o, e),
     [RESPOSTAS.orcamentoRecusado]: (o, e) => this.orcamentoRecusado(o, e),
     [RESPOSTAS.pagamentoConfirmado]: (o, e) => this.pagamentoConfirmado(o, e),
-    [RESPOSTAS.pagamentoRecusado]: (o, e) => this.pagamentoRecusado(o, e),
     [RESPOSTAS.reparoConcluido]: (o, e) => this.reparoConcluido(o, e),
     [RESPOSTAS.execucaoFalhou]: (o, e) => this.execucaoFalhou(o, e),
     [RESPOSTAS.pagamentoEstornado]: (o, e) => this.pagamentoEstornado(o, e),
@@ -202,20 +201,6 @@ export class ProcessarRespostaSagaUseCase {
         antesDoCommit: (gravada) =>
           this.publicador.publicar(iniciarReparo(gravada, detalhes)),
       },
-    );
-  }
-
-  /**
-   * Pagamento recusado é informativo (contratos v1.1): o link continua valendo
-   * e o cliente pode tentar de novo. Só fica registrado no histórico.
-   */
-  private async pagamentoRecusado(ordem: OrdemServico, envelope: Envelope) {
-    if (!this.noStatus(ordem, envelope, ['AGUARDANDO_PAGAMENTO'])) return;
-    const detalhe = texto(envelope.payload.detalhe) ?? 'sem detalhe';
-    await this.repositorio.registrarNoHistorico(
-      this.idDa(ordem),
-      ordem.usuarioCriadorId,
-      `Billing: pagamento recusado (${detalhe}); o cliente pode tentar de novo pelo mesmo link`,
     );
   }
 

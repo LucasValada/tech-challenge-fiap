@@ -59,7 +59,7 @@ export class MundoOficina extends World {
   osId = '';
   correlationId = '';
   orcamentoId = '';
-  linkPagamento = '';
+  qrCode = { conteudo: '', imagem: '' };
 
   async requisitar(
     metodo: string,

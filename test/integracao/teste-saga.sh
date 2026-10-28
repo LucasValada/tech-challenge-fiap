@@ -73,35 +73,36 @@ acao_mecanico() {
     -H "$AUTH_FUNC" -H 'Content-Type: application/json' -d "$corpo"
 }
 
-# Cadastra no simulador o pagamento que o Mercado Pago devolveria e manda o
-# aviso ao webhook do Billing, como o Mercado Pago faria.
+# Cadastra no simulador a order do orçamento como o Mercado Pago a devolveria
+# (o simulador cria a order com o id ORD-<id do orçamento>) e manda o aviso ao
+# webhook do Billing, como o Mercado Pago faria. `processed` é paga; `created`
+# é a order ainda aberta, como fica depois de uma tentativa recusada.
 pagamento_mp() {
-  local id="$1" status="$2" detalhe="$3" orcamento_id="$4" valor="$5"
+  local orcamento_id="$1" status="$2" detalhe="$3"
   curl -s -X POST "$MP/__admin/mappings" -d "{
-    \"request\": {\"method\": \"GET\", \"urlPath\": \"/v1/payments/$id\"},
+    \"request\": {\"method\": \"GET\", \"urlPath\": \"/v1/orders/ORD-$orcamento_id\"},
     \"response\": {\"status\": 200, \"headers\": {\"Content-Type\": \"application/json\"}, \"jsonBody\": {
-      \"id\": $id, \"status\": \"$status\", \"status_detail\": \"$detalhe\",
-      \"external_reference\": \"$orcamento_id\", \"transaction_amount\": $valor,
-      \"date_approved\": \"2026-10-20T14:30:00.000-03:00\"}}}" >/dev/null
+      \"id\": \"ORD-$orcamento_id\", \"type\": \"qr\", \"status\": \"$status\", \"status_detail\": \"$detalhe\",
+      \"external_reference\": \"$orcamento_id\", \"total_amount\": \"150.20\", \"total_paid_amount\": \"150.20\",
+      \"last_updated_date\": \"2026-10-20T17:30:00.000Z\"}}}" >/dev/null
   curl -s -X POST "$BILLING/webhooks/mercado-pago" -H 'Content-Type: application/json' \
-    -d "{\"type\": \"payment\", \"action\": \"payment.updated\", \"data\": {\"id\": \"$id\"}}" |
+    -d "{\"type\": \"order\", \"action\": \"order.processed\", \"data\": {\"id\": \"ORD-$orcamento_id\"}}" |
     campo resultado
 }
 
 # Leva uma OS recém-aberta até o reparo começar: diagnóstico pelo mecânico,
 # orçamento aprovado pelo cliente e pago no Mercado Pago.
 ate_o_reparo() {
-  local os="$1" pagamento="$2" tarefa_id orcamento_id valor
+  local os="$1" tarefa_id orcamento_id
   espera "  [$os] diagnóstico na fila do mecânico" PENDENTE tarefa "$os" DIAGNOSTICO status
   tarefa_id=$(tarefa "$os" DIAGNOSTICO id)
   acao_mecanico "$tarefa_id" iniciar >/dev/null
   acao_mecanico "$tarefa_id" concluir >/dev/null
   espera "  [$os] orçamento enviado" AGUARDANDO_APROVACAO status_os "$os"
   orcamento_id=$(orcamento "$os" id)
-  valor=$(orcamento "$os" valorTotal)
   curl -s -X POST "$BILLING/orcamentos/$orcamento_id/aprovar" -H "$AUTH_CLIENTE" >/dev/null
   espera "  [$os] aguardando pagamento" AGUARDANDO_PAGAMENTO status_os "$os"
-  pagamento_mp "$pagamento" approved accredited "$orcamento_id" "$valor" >/dev/null
+  pagamento_mp "$orcamento_id" processed accredited >/dev/null
   espera "  [$os] em execução" EM_EXECUCAO status_os "$os"
 }
 
@@ -152,17 +153,16 @@ confere "linhas da OS travadas depois do diagnóstico" \
     -H 'Content-Type: application/json' -d "{\"servicoId\":\"$SERVICO\",\"quantidade\":1}")" 409
 
 ORC1=$(orcamento "$OS1" id)
-LINK=$(curl -s -X POST "$BILLING/orcamentos/$ORC1/aprovar" -H "$AUTH_CLIENTE" | campo linkPagamento)
-confere "cliente aprova e recebe o link de pagamento" "$LINK" "http://localhost:8089/sandbox/checkout/pref-$ORC1"
+QR=$(curl -s -X POST "$BILLING/orcamentos/$ORC1/aprovar" -H "$AUTH_CLIENTE" | campo qrCode conteudo)
+confere "cliente aprova e recebe o QR Code de pagamento" "$(echo "$QR" | grep -c "SIMULADOR-$ORC1")" 1
 espera "OS aguardando pagamento" AGUARDANDO_PAGAMENTO status_os "$OS1"
 
-confere "Mercado Pago: pagamento recusado" "$(pagamento_mp 7101 rejected cc_rejected_other_reason "$ORC1" 150.2)" PAGAMENTO_RECUSADO
-espera "recusa registrada no histórico da OS" \
-  "Billing: pagamento recusado (cc_rejected_other_reason); o cliente pode tentar de novo pelo mesmo link" \
-  ultimo_historico "$OS1"
+# Uma tentativa recusada deixa a order aberta e o Mercado Pago não avisa; um
+# aviso que chegasse mesmo assim não mudaria nada.
+confere "Mercado Pago: order ainda aberta (tentativa recusada)" "$(pagamento_mp "$ORC1" created created)" IGNORADO
 confere "OS continua aguardando pagamento" "$(status_os "$OS1")" AGUARDANDO_PAGAMENTO
 
-confere "Mercado Pago: segunda tentativa aprovada" "$(pagamento_mp 7102 approved accredited "$ORC1" 150.2)" PAGAMENTO_CONFIRMADO
+confere "Mercado Pago: pagamento pelo mesmo QR Code" "$(pagamento_mp "$ORC1" processed accredited)" PAGAMENTO_CONFIRMADO
 espera "OS em execução" EM_EXECUCAO status_os "$OS1"
 espera "Execution: reparo na fila do mecânico" PENDENTE tarefa "$OS1" REPARO status
 T2=$(tarefa "$OS1" REPARO id)
@@ -179,14 +179,15 @@ confere "estoque continua baixado (o reparo usou as peças)" "$(estoque)" 8
 
 echo "== 2. Compensação: o reparo falha depois do pagamento"
 OS2=$(abrir_os INT1A02 fluxo-integracao-2)
-ate_o_reparo "$OS2" 7201
+ate_o_reparo "$OS2"
+ORC2=$(orcamento "$OS2" id)
 T3=$(tarefa "$OS2" REPARO id)
 confere "mecânico registra a falha" \
   "$(acao_mecanico "$T3" falhar '{"motivo":"Peça indisponível no fornecedor"}')" 200
 espera "OS cancelada" CANCELADA status_os "$OS2"
 espera "estoque devolvido" 8 estoque
 espera "Billing: pagamento estornado" ESTORNADO status_pagamento "$OS2"
-espera "estorno registrado no histórico da OS" "Billing: pagamento 7201 estornado ao cliente" \
+espera "estorno registrado no histórico da OS" "Billing: pagamento ORD-$ORC2 estornado ao cliente" \
   ultimo_historico "$OS2"
 
 echo "== 3. Compensação: o funcionário cancela a OS esperando o pagamento"
@@ -204,8 +205,8 @@ confere "funcionário cancela" \
     -H 'Content-Type: application/json' -d '{"motivo":"Cliente desistiu do pagamento"}')" 200
 espera "estoque devolvido" 8 estoque
 espera "Billing: orçamento cancelado" CANCELADO orcamento "$OS3" status
-confere "Billing: link de pagamento expirado no Mercado Pago" \
-  "$(curl -s "$MP/__admin/requests" | python3 -c "import json,sys;print(any(r['request']['method']=='PUT' and r['request']['url']=='/checkout/preferences/pref-$ORC3' for r in json.load(sys.stdin)['requests']))")" \
+confere "Billing: cobrança cancelada no Mercado Pago" \
+  "$(curl -s "$MP/__admin/requests" | python3 -c "import json,sys;print(any(r['request']['method']=='POST' and r['request']['url']=='/v1/orders/ORD-$ORC3/cancel' for r in json.load(sys.stdin)['requests']))")" \
   True
 
 echo "== 4. Rastreamento: o correlationId da abertura aparece nos logs dos três serviços"

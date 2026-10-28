@@ -365,21 +365,6 @@ describe('ProcessarRespostaSagaUseCase', () => {
       expect(publicador.publicar).not.toHaveBeenCalled();
     });
 
-    it('PagamentoRecusado é informativo: registra no histórico e a OS continua aguardando pagamento', async () => {
-      repositorio.findById.mockResolvedValue(ordemEm('AGUARDANDO_PAGAMENTO'));
-
-      await useCase.execute(
-        resposta('PagamentoRecusado', { detalhe: 'cc_rejected_other_reason' }),
-      );
-
-      expect(repositorio.registrarNoHistorico).toHaveBeenCalledWith(
-        OS_ID,
-        'criador-1',
-        'Billing: pagamento recusado (cc_rejected_other_reason); o cliente pode tentar de novo pelo mesmo link',
-      );
-      expect(repositorio.transicionarStatus).not.toHaveBeenCalled();
-    });
-
     it('PagamentoEstornado numa OS cancelada: registra no histórico', async () => {
       repositorio.findById.mockResolvedValue(ordemEm('CANCELADA'));
 
@@ -502,7 +487,6 @@ describe('ProcessarRespostaSagaUseCase', () => {
       ['GeracaoOrcamentoFalhou', 'CANCELADA'],
       ['OrcamentoAprovado', 'AGUARDANDO_PAGAMENTO'],
       ['OrcamentoRecusado', 'CANCELADA'],
-      ['PagamentoRecusado', 'EM_EXECUCAO'],
       ['ReparoConcluido', 'FINALIZADA'],
     ])(
       '%s repetida ou atrasada (OS em %s) é descartada sem erro',

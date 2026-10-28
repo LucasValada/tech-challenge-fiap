@@ -21,11 +21,11 @@ export const STATUS_CANCELAVEIS_PELO_FUNCIONARIO: StatusOrdemServico[] = [
 
 /**
  * Cancelamento pelo funcionário de uma OS parada esperando o cliente: ele não
- * aprovou, desistiu ou o link de pagamento expirou — o Mercado Pago não avisa
- * quando isso acontece (docs/contratos.md, seção 6).
+ * aprovou, desistiu ou o QR Code de pagamento expirou — a Saga não encerra a OS
+ * sozinha por isso (docs/contratos.md, seção 6).
  *
  * Compensa o que a Saga já fez: devolve o estoque e manda o Billing cancelar o
- * orçamento (que expira o link e estorna, se o cliente tiver pago no meio). Nos
+ * orçamento (que cancela a cobrança e estorna, se o cliente tiver pago no meio). Nos
  * status em que o mecânico atua, a OS é cancelada pela rota `falhar` do
  * Execution.
  */

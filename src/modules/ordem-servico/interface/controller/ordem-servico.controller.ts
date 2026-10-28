@@ -348,7 +348,7 @@ export class OrdemServicoController {
     summary: 'Cancelar OS que espera o cliente (aprovação ou pagamento)',
     description:
       'Compensação da Saga: devolve o estoque e manda o Billing cancelar o ' +
-      'orçamento, que expira o link de pagamento e estorna se o cliente tiver ' +
+      'orçamento, que cancela a cobrança (QR Code) e estorna se o cliente tiver ' +
       'pago no meio. Nos status em que o mecânico atua, a OS é cancelada pela ' +
       'rota falhar do Execution.',
   })
