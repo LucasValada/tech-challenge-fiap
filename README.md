@@ -53,7 +53,7 @@ Na Fase 4 a oficina foi dividida em **três microsserviços independentes**, cad
 | **Billing Service** | [`oficina-billing-service`](https://github.com/fiap-soat-oficina-tech-challenge/oficina-billing-service) | Orçamento, aprovação (cliente ou sistema externo), pagamento no Mercado Pago (QR Code dinâmico) e estorno | PostgreSQL (RDS próprio) |
 | **Execution Service** | [`oficina-execution-service`](https://github.com/fiap-soat-oficina-tech-challenge/oficina-execution-service) | Fila de diagnóstico e reparo do mecânico | DynamoDB |
 
-A plataforma da Fase 3 continua: VPC e EKS ([`tc3-infra-k8s`](https://github.com/tiagostorch/tc3-infra-k8s)), o RDS do OS ([`tc3-infra-db`](https://github.com/tiagostorch/tc3-infra-db)) e o API Gateway com as Lambdas de autenticação e de e-mail ([`tc3-auth-lambda`](https://github.com/tiagostorch/tc3-auth-lambda)). Os três serviços rodam no mesmo cluster, cada um no seu namespace, atrás do mesmo ALB.
+A plataforma da Fase 3 continua: VPC e EKS ([`tc3-infra-k8s`](https://github.com/tiagostorch/tc3-infra-k8s)) e o API Gateway com as Lambdas de autenticação e de e-mail ([`tc3-auth-lambda`](https://github.com/tiagostorch/tc3-auth-lambda)). Cada serviço traz a própria infraestrutura na pasta `terraform/` do seu repositório: a do OS tem a fila de respostas da Saga e o RDS PostgreSQL do OS (ver [`terraform/README.md`](terraform/README.md)). Os três serviços rodam no mesmo cluster, cada um no seu namespace, atrás do mesmo ALB.
 
 ### Diagrama geral
 
@@ -298,7 +298,7 @@ A Fase 3 exigiu a segregação da solução em **quatro repositórios git indepe
 |---|---|---|---|
 | 1 | [`tc3-auth-lambda`](https://github.com/tiagostorch/tc3-auth-lambda) | **Duas** Functions Serverless no mesmo repo, atrás de um único **API Gateway**: **autenticação por CPF** (`POST /auth`) e **notificações por e-mail** (`POST /mail`) | AWS Lambda (Node), API Gateway HTTP v2, `pg`, `nodemailer` |
 | 2 | [`tc3-infra-k8s`](https://github.com/tiagostorch/tc3-infra-k8s) | Terraform do **cluster EKS** (VPC, EKS, node group, ECR, ALB Controller, OIDC, budget) + observabilidade New Relic (agente, dashboard, alertas) | Terraform, módulos AWS |
-| 3 | [`tc3-infra-db`](https://github.com/tiagostorch/tc3-infra-db) | Terraform do **RDS PostgreSQL** gerenciado (+ publicação dos segredos no SSM) | Terraform, RDS |
+| 3 | [`tc3-infra-db`](https://github.com/tiagostorch/tc3-infra-db) | Terraform do **RDS PostgreSQL** gerenciado (+ publicação dos segredos no SSM). Na Fase 4 esse Terraform passou para a pasta `terraform/` deste repositório, e o `tc3-infra-db` foi desativado | Terraform, RDS |
 | 4 | [**`tech-challenge-fiap`**](https://github.com/LucasValada/tech-challenge-fiap) **(este repo)** | **Aplicação principal** NestJS rodando no EKS | NestJS 11, Prisma 7, PostgreSQL |
 
 Os repositórios se integram por **rede privada (VPC)**, **SSM Parameter Store** (segredos compartilhados, incl. o `JWT_SECRET` que a Lambda e a app usam) e **`terraform_remote_state`**. Por que AWS e como cada peça se encaixa: ver **[RFC-002 — Escolha da nuvem](docs/rfc/RFC-002-escolha-da-nuvem.md)**.
@@ -591,7 +591,7 @@ O ambiente da AWS só existe nas janelas de integração e demonstração. Sem o
 
 Na Fase 3 o banco passou de Postgres-em-cluster para **RDS PostgreSQL gerenciado** (subnet privada, TLS obrigatório, backups e métricas geridos pela AWS), provisionado no repositório [`tc3-infra-db`](https://github.com/tiagostorch/tc3-infra-db). A modelagem também foi **melhorada** (campo `status` em `Cliente`, snapshots imutáveis nas linhas da OS, numeração sequencial anual e políticas de exclusão explícitas).
 
-Na Fase 4 este PostgreSQL passou a ser **só do OS Service**. O Billing tem o próprio PostgreSQL e o Execution usa DynamoDB; nenhum serviço lê o banco de outro (ver [Fase 4](#fase-4-microsserviços-e-saga)).
+Na Fase 4 este PostgreSQL passou a ser **só do OS Service**, e o Terraform dele veio para a pasta [`terraform/`](terraform/README.md) deste repositório (RDS `oficina-os-db`). O Billing tem o próprio PostgreSQL e o Execution usa DynamoDB; nenhum serviço lê o banco de outro (ver [Fase 4](#fase-4-microsserviços-e-saga)).
 
 > **Justificativa formal completa + ajustes no modelo relacional:** ver **[RFC-003 — Escolha do banco de dados](docs/rfc/RFC-003-escolha-do-banco.md)**.
 
