@@ -11,6 +11,17 @@ data "terraform_remote_state" "k8s" {
 
 data "aws_caller_identity" "atual" {}
 
+# Buscado pelo nome em vez de vir pelo state remoto: o certificado do cluster não
+# é output de tc3-infra-k8s. Usado pelo provider kubernetes (versions.tf).
+data "aws_eks_cluster" "principal" {
+  name = local.cluster_name
+}
+
+# Publicada por tc3-infra-k8s; o agente do banco a usa para enviar as métricas.
+data "aws_ssm_parameter" "newrelic_license_key" {
+  name = "${local.ssm_prefix}/NEW_RELIC_LICENSE_KEY"
+}
+
 # Os pods recebem permissão de AWS pela role dos nós do EKS. Ela não é output de
 # tc3-infra-k8s, e mudar aquele repositório dispara apply no cluster; como o
 # cluster tem um único node group, a role é descoberta a partir dele.
@@ -27,6 +38,10 @@ locals {
   cluster_name   = data.terraform_remote_state.k8s.outputs.cluster_name
   node_role_name = basename(data.aws_eks_node_group.principal.node_role_arn)
   ssm_prefix     = "/${var.project_name}/${var.environment}"
+
+  vpc_id                 = data.terraform_remote_state.k8s.outputs.vpc_id
+  private_subnet_ids     = data.terraform_remote_state.k8s.outputs.private_subnet_ids
+  node_security_group_id = data.terraform_remote_state.k8s.outputs.node_security_group_id
 
   # Filas de outros serviços para as quais este publica. O ARN é montado pelo
   # nome (fixado em docs/contratos.md) para não acoplar os states dos serviços.
